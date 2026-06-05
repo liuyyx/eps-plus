@@ -1,0 +1,50 @@
+{
+  "required": true,
+  "package": "com.github.epsilon.mixins",
+  "compatibilityLevel": "JAVA_25",
+  "client": [
+    "MixinAvatarRenderer",
+    "MixinBlockCollisions",
+    "MixinCamera",
+    "MixinChatComponent",
+    "MixinClientPacketListener",
+    "MixinConnection",
+    "MixinDataComponentInitializerEntry",
+    "MixinEntity",
+    "MixinEntityRenderer",
+    "MixinEquipmentLayerRenderer",
+    "MixinFireworkRocketEntity",
+    "MixinFlowingFluid",
+    "MixinGlDebug",
+    "MixinGui",
+    "MixinGuiRenderer",
+    "MixinHumanoidMobRenderer",
+    "MixinItem",
+    "MixinItemInHandRenderer",
+    "MixinKeyboardHandler",
+    "MixinKeyboardInput",
+    "MixinLevelRenderer",
+    "MixinLightmap",
+    "MixinLivingEntity",
+    "MixinLivingEntityRenderer",
+    "MixinLocalPlayer",
+    "MixinMain",
+    "MixinMinecraft",
+    "MixinMobEffectFogEnvironment",
+    "MixinMouseHandler",
+    "MixinMultiPlayerGameMode",
+    "MixinParticleManager",
+    "MixinPlayer",
+    "MixinProjection",
+    "MixinScreenEffectRenderer",
+    "MixinTitleScreen",
+    "MixinWebBlock",
+    "MixinWindow"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "overwrites": {
+    "requireAnnotations": true
+  }
+}

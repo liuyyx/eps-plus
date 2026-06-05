@@ -1,0 +1,556 @@
+package com.github.epsilon.gui.panel.panel;
+
+import com.github.epsilon.assets.holders.TranslateHolder;
+import com.github.epsilon.assets.i18n.EpsilonTranslateComponent;
+import com.github.epsilon.assets.i18n.TranslateComponent;
+import com.github.epsilon.graphics.renderers.RectRenderer;
+import com.github.epsilon.graphics.renderers.RoundRectRenderer;
+import com.github.epsilon.graphics.renderers.ShadowRenderer;
+import com.github.epsilon.graphics.renderers.TextRenderer;
+import com.github.epsilon.gui.panel.MD3Theme;
+import com.github.epsilon.gui.panel.PanelLayout;
+import com.github.epsilon.gui.panel.PanelState;
+import com.github.epsilon.gui.panel.adapter.SettingListController;
+import com.github.epsilon.gui.panel.component.PanelElements;
+import com.github.epsilon.gui.panel.component.setting.KeybindSettingRow;
+import com.github.epsilon.gui.panel.dsl.PanelUiCompiler;
+import com.github.epsilon.gui.panel.dsl.PanelUiTree;
+import com.github.epsilon.gui.panel.popup.PanelPopupHost;
+import com.github.epsilon.gui.panel.utils.PanelContentBuffer;
+import com.github.epsilon.gui.panel.utils.PanelContentInvalidationState;
+import com.github.epsilon.gui.panel.utils.ScrollBarDragState;
+import com.github.epsilon.gui.panel.utils.ScrollBarUtils;
+import com.github.epsilon.modules.Module;
+import com.github.epsilon.settings.Setting;
+import com.github.epsilon.settings.impl.KeybindSetting;
+import com.github.epsilon.utils.client.KeybindUtils;
+import com.github.epsilon.utils.render.animation.Animation;
+import com.github.epsilon.utils.render.animation.Easing;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.input.CharacterEvent;
+import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
+
+import java.awt.*;
+import java.util.*;
+import java.util.List;
+
+public class ModuleDetailPanel {
+
+    protected final PanelState state;
+    private final RoundRectRenderer roundRectRenderer;
+    private final RectRenderer rectRenderer;
+    private final TextRenderer textRenderer;
+    private final SettingListController settingListController;
+    private final PanelContentBuffer contentBuffer = new PanelContentBuffer();
+    private final PanelContentInvalidationState contentState = new PanelContentInvalidationState();
+    private PanelLayout.Rect bounds;
+    private int guiHeight;
+    private PanelLayout.Rect headerBounds;
+    private final Map<Setting<?>, Animation> hoverAnimations = new HashMap<>();
+    private float lastDetailScroll = Float.NaN;
+    private String lastModuleKey = "";
+    private List<String> lastVisibleSettings = List.of();
+    private final ScrollBarDragState scrollBarDrag = new ScrollBarDragState();
+    private float scrollVelocity = 0;
+    private final Animation bindModeAnimation = new Animation(Easing.EASE_OUT_CUBIC, 180L);
+    private final Animation bindModeHoverAnimation = new Animation(Easing.EASE_OUT_CUBIC, 120L);
+    private final Animation keybindHoverAnimation = new Animation(Easing.EASE_OUT_CUBIC, 120L);
+    private final Animation keybindFocusAnimation = new Animation(Easing.EASE_OUT_CUBIC, 150L);
+    private final Animation hiddenAnimation = new Animation(Easing.EASE_OUT_CUBIC, 180L);
+    private final Animation hiddenHoverAnimation = new Animation(Easing.EASE_OUT_CUBIC, 120L);
+    private long lastContentSignature = Long.MIN_VALUE;
+
+    private static final TranslateComponent toggleComponent = EpsilonTranslateComponent.create("keybind", "toggle");
+    private static final TranslateComponent holdComponent = EpsilonTranslateComponent.create("keybind", "hold");
+    private static final TranslateComponent noneComponent = EpsilonTranslateComponent.create("keybind", "none");
+    private static final TranslateComponent visibleComponent = EpsilonTranslateComponent.create("module", "visible");
+    private static final TranslateComponent hiddenComponent = EpsilonTranslateComponent.create("module", "hidden");
+    private static final TranslateComponent noModuleComponent = EpsilonTranslateComponent.create("gui", "no_module");
+
+    public ModuleDetailPanel(PanelState state, RoundRectRenderer roundRectRenderer, RectRenderer rectRenderer, ShadowRenderer shadowRenderer, TextRenderer textRenderer, PanelPopupHost popupHost) {
+        this.state = state;
+        this.roundRectRenderer = roundRectRenderer;
+        this.rectRenderer = rectRenderer;
+        this.textRenderer = textRenderer;
+        this.settingListController = new SettingListController(popupHost);
+        this.bindModeAnimation.setStartValue(0.0f);
+        this.bindModeHoverAnimation.setStartValue(0.0f);
+        this.keybindHoverAnimation.setStartValue(0.0f);
+        this.keybindFocusAnimation.setStartValue(0.0f);
+        this.hiddenAnimation.setStartValue(0.0f);
+        this.hiddenHoverAnimation.setStartValue(0.0f);
+    }
+
+    public void render(GuiGraphicsExtractor GuiGraphicsExtractor, PanelLayout.Rect bounds, int mouseX, int mouseY, float partialTick) {
+        this.bounds = bounds;
+        this.guiHeight = GuiGraphicsExtractor.guiHeight();
+
+        if (Math.abs(scrollVelocity) > 0.01f) {
+            state.scrollDetail(scrollVelocity * partialTick);
+            scrollVelocity *= 0.86f;
+            if (Math.abs(scrollVelocity) < 0.3f) {
+                scrollVelocity = 0;
+            }
+            markDirty();
+        }
+
+        boolean popupConsumesHover = settingListController.isPopupHovered(mouseX, mouseY);
+        int effectiveMouseX = popupConsumesHover ? Integer.MIN_VALUE : mouseX;
+        int effectiveMouseY = popupConsumesHover ? Integer.MIN_VALUE : mouseY;
+
+        Module module = state.getSelectedModule();
+        String detailTitle = module == null ? noModuleComponent.getTranslatedName() : module.getTranslatedName();
+        PanelUiTree headerTree = PanelUiTree.build(scope -> scope.text(detailTitle, bounds.x() + MD3Theme.PANEL_TITLE_INSET, bounds.y() + 10.0f, 0.78f, MD3Theme.TEXT_PRIMARY));
+        PanelUiCompiler.render(headerTree, roundRectRenderer, rectRenderer, textRenderer);
+
+        if (module == null) {
+            return;
+        }
+
+        headerBounds = new PanelLayout.Rect(bounds.x() + MD3Theme.PANEL_VIEWPORT_INSET, bounds.y() + 34.0f, bounds.width() - MD3Theme.PANEL_VIEWPORT_INSET * 2.0f, 36.0f);
+        PanelUiTree controlTree = PanelUiTree.build(scope -> {
+            scope.roundRect(headerBounds.x(), headerBounds.y(), headerBounds.width(), headerBounds.height(), MD3Theme.CARD_RADIUS, MD3Theme.SURFACE_CONTAINER);
+            buildKeybindControl(scope, module, mouseX, mouseY);
+            buildBindModeControl(scope, module, mouseX, mouseY);
+            buildHiddenControl(scope, module, mouseX, mouseY);
+        });
+        PanelUiCompiler.render(controlTree, roundRectRenderer, rectRenderer, textRenderer);
+
+        PanelLayout.Rect viewport = getViewport();
+        List<Setting<?>> settings = module.getSettings().stream().filter(Setting::isAvailable).toList();
+        float contentHeight = settingListController.getContentHeight(settings);
+        state.setMaxDetailScroll(contentHeight - viewport.height());
+        float maxDetailScroll = Math.max(0, contentHeight - viewport.height());
+        boolean hasScrollBar = maxDetailScroll > 0;
+        float rowWidth = hasScrollBar ? viewport.width() - ScrollBarUtils.TOTAL_WIDTH : viewport.width();
+        long contentSignature = buildContentSignature(module, settings);
+        boolean rebuildContent = shouldRebuildContent(bounds, mouseX, mouseY, module, settings, GuiGraphicsExtractor.guiHeight(), contentSignature);
+
+        if (rebuildContent) {
+            contentBuffer.clear();
+            contentState.beginRebuild();
+        }
+
+        PanelUiTree contentTree = PanelUiTree.build(scope -> scope.viewport(contentBuffer, viewport, guiHeight,
+                state.getDetailScroll(), maxDetailScroll, contentHeight, content -> {
+                    if (!rebuildContent) {
+                        return;
+                    }
+                    settingListController.layoutRows(settings, viewport, state.getDetailScroll(), rowWidth,
+                            content, textRenderer, effectiveMouseX, effectiveMouseY, (setting, row, rowBounds) -> {
+                                if (row instanceof KeybindSettingRow keybindRow) {
+                                    keybindRow.setListening(state.getListeningKeybindSetting() == keybindRow.getSetting());
+                                }
+                                Animation hoverAnimation = hoverAnimations.computeIfAbsent(setting, ignored -> new Animation(Easing.EASE_OUT_CUBIC, 120L));
+                                hoverAnimation.run(rowBounds.contains(effectiveMouseX, effectiveMouseY) ? 1.0f : 0.0f);
+                                row.buildUi(content, GuiGraphicsExtractor, textRenderer, rowBounds, hoverAnimation.getValue(), effectiveMouseX, effectiveMouseY, partialTick);
+                                contentState.noteAnimation(!hoverAnimation.isFinished() || row.hasActiveAnimation());
+                            });
+                    contentState.noteAnimation(settingListController.hasActiveAnimations());
+                }));
+        PanelUiCompiler.render(contentTree, roundRectRenderer, rectRenderer, textRenderer);
+
+        if (rebuildContent) {
+            rememberSnapshot(bounds, mouseX, mouseY, module, settings, GuiGraphicsExtractor.guiHeight(), contentSignature);
+        }
+    }
+
+    public boolean mouseClicked(MouseButtonEvent event, boolean isDoubleClick) {
+        if (bounds == null) {
+            return false;
+        }
+        scrollVelocity = 0;
+        Module module = state.getSelectedModule();
+        if (module == null || headerBounds == null) {
+            return false;
+        }
+
+        if (state.getListeningKeyBindModule() == module) {
+            PanelLayout.Rect keybindBounds = getKeybindBounds();
+            if (keybindBounds.contains(event.x(), event.y())) {
+                module.setKeyBind(KeybindUtils.encodeMouseButton(event.button()));
+                state.setListeningKeyBindModule(null);
+                markDirty();
+                return true;
+            }
+        }
+
+        KeybindSetting listeningKeybindSetting = state.getListeningKeybindSetting();
+        if (listeningKeybindSetting != null) {
+            listeningKeybindSetting.setValue(KeybindUtils.encodeMouseButton(event.button()));
+            state.setListeningKeybindSetting(null);
+            markDirty();
+            return true;
+        }
+
+        if (event.button() != 0) {
+            return false;
+        }
+
+        // Scrollbar drag
+        PanelLayout.Rect viewport = getViewport();
+        float maxScroll = state.getMaxDetailScroll();
+        if (scrollBarDrag.mouseClicked(event.x(), event.y(), viewport, state.getDetailScroll(), maxScroll)) {
+            float newScroll = scrollBarDrag.mouseDragged(event.y(), viewport, maxScroll);
+            if (newScroll >= 0) {
+                state.setDetailScroll(newScroll);
+            }
+            markDirty();
+            return true;
+        }
+
+        PanelLayout.Rect keybindBounds = getKeybindBounds();
+        if (keybindBounds.contains(event.x(), event.y())) {
+            state.setListeningKeyBindModule(module);
+            markDirty();
+            return true;
+        } else if (state.getListeningKeyBindModule() == module) {
+            state.setListeningKeyBindModule(null);
+            markDirty();
+        }
+
+        PanelLayout.Rect bindModeBounds = getBindModeBounds();
+        if (bindModeBounds.contains(event.x(), event.y())) {
+            float midpoint = bindModeBounds.centerX();
+            module.setBindMode(event.x() < midpoint ? Module.BindMode.Toggle : Module.BindMode.Hold);
+            markDirty();
+            return true;
+        }
+
+        PanelLayout.Rect hiddenBounds = getHiddenBounds();
+        if (hiddenBounds.contains(event.x(), event.y())) {
+            float midpoint = hiddenBounds.centerX();
+            module.setHidden(event.x() >= midpoint);
+            markDirty();
+            return true;
+        }
+
+        if (settingListController.mouseClicked(event, isDoubleClick, bounds, (row, rowBounds, clickEvent, doubleClick) -> {
+            if (row instanceof KeybindSettingRow keybindRow && row.mouseClicked(rowBounds, clickEvent, doubleClick)) {
+                state.setListeningKeybindSetting(keybindRow.getSetting());
+                return true;
+            }
+            return false;
+        })) {
+            markDirty();
+            return true;
+        }
+        return false;
+    }
+
+    public boolean mouseReleased(MouseButtonEvent event) {
+        if (scrollBarDrag.mouseReleased()) {
+            markDirty();
+            return true;
+        }
+        if (settingListController.mouseReleased(event)) {
+            markDirty();
+            return true;
+        }
+        return false;
+    }
+
+    public boolean mouseDragged(MouseButtonEvent event, double mouseX, double mouseY) {
+        if (scrollBarDrag.isDragging()) {
+            PanelLayout.Rect viewport = getViewport();
+            float newScroll = scrollBarDrag.mouseDragged(event.y(), viewport, state.getMaxDetailScroll());
+            if (newScroll >= 0) {
+                state.setDetailScroll(newScroll);
+            }
+            markDirty();
+            return true;
+        }
+        if (settingListController.mouseDragged(event, mouseX, mouseY)) {
+            markDirty();
+            return true;
+        }
+        return false;
+    }
+
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+        PanelLayout.Rect viewport = getViewport();
+        if (bounds != null && viewport.contains(mouseX, mouseY)) {
+            scrollVelocity -= (float) scrollY * 24f;
+            markDirty();
+            return true;
+        }
+        return false;
+    }
+
+    public boolean keyPressed(KeyEvent event) {
+        KeybindSetting listeningSetting = state.getListeningKeybindSetting();
+        if (listeningSetting != null) {
+            if (event.key() == 256) {
+                state.setListeningKeybindSetting(null);
+                markDirty();
+                return true;
+            }
+            if (event.key() == 259 || event.key() == 261) {
+                listeningSetting.setValue(-1);
+                state.setListeningKeybindSetting(null);
+                markDirty();
+                return true;
+            }
+            listeningSetting.setValue(event.key());
+            state.setListeningKeybindSetting(null);
+            markDirty();
+            return true;
+        }
+        Module module = state.getSelectedModule();
+        if (module != null && state.getListeningKeyBindModule() == module) {
+            if (event.key() == 256) {
+                state.setListeningKeyBindModule(null);
+                markDirty();
+                return true;
+            }
+            if (event.key() == 259 || event.key() == 261) {
+                module.setKeyBind(-1);
+                state.setListeningKeyBindModule(null);
+                markDirty();
+                return true;
+            }
+            module.setKeyBind(event.key());
+            state.setListeningKeyBindModule(null);
+            markDirty();
+            return true;
+        }
+        if (settingListController.keyPressed(event)) {
+            markDirty();
+            return true;
+        }
+        return false;
+    }
+
+    public boolean charTyped(CharacterEvent event) {
+        if (settingListController.charTyped(event)) {
+            markDirty();
+            return true;
+        }
+        return false;
+    }
+
+    private PanelLayout.Rect getViewport() {
+        if (bounds == null) {
+            return new PanelLayout.Rect(0, 0, 0, 0);
+        }
+        if (headerBounds == null) {
+            return new PanelLayout.Rect(bounds.x(), bounds.y(), bounds.width(), bounds.height());
+        }
+        return new PanelLayout.Rect(bounds.x() + MD3Theme.PANEL_VIEWPORT_INSET, headerBounds.bottom() + 6.0f, bounds.width() - MD3Theme.PANEL_VIEWPORT_INSET * 2.0f, bounds.bottom() - headerBounds.bottom() - 10.0f);
+    }
+
+    private PanelLayout.Rect getBindModeBounds() {
+        return new PanelLayout.Rect(getHeaderControlGroupLeftX() + getKeybindControlSize() + getHeaderControlGap(), getHeaderControlsY(), getBindModeControlWidth(), getHeaderControlHeight());
+    }
+
+    private PanelLayout.Rect getKeybindBounds() {
+        return new PanelLayout.Rect(getHeaderControlGroupLeftX(), getHeaderControlsY(), getKeybindControlSize(), getKeybindControlSize());
+    }
+
+    private float getHeaderControlGroupLeftX() {
+        return headerBounds.x() + getHeaderContentInset();
+    }
+
+    private float getHeaderControlGroupRightX() {
+        return headerBounds.right() - getHeaderContentInset() - getHeaderControlGroupWidth();
+    }
+
+    private float getHeaderControlGroupWidth() {
+        return getKeybindControlSize() + getHeaderControlGap() + getBindModeControlWidth() + getHeaderControlGap() + getHiddenControlWidth();
+    }
+
+    private float getHeaderContentInset() {
+        return MD3Theme.PANEL_TITLE_INSET + 2.0f;
+    }
+
+    private float getHeaderContentInsetX() {
+        return headerBounds.x() + getHeaderContentInset();
+    }
+
+    private float getHeaderControlHeight() {
+        return MD3Theme.CONTROL_HEIGHT;
+    }
+
+    private float getKeybindControlSize() {
+        return getHeaderControlHeight();
+    }
+
+    private float getBindModeControlWidth() {
+        return 72.0f;
+    }
+
+    private float getHiddenControlWidth() {
+        return 72.0f;
+    }
+
+    private PanelLayout.Rect getHiddenBounds() {
+        return new PanelLayout.Rect(getHeaderControlGroupRightX() + getKeybindControlSize() + getHeaderControlGap() + getBindModeControlWidth() + getHeaderControlGap(), getHeaderControlsY(), getHiddenControlWidth(), getHeaderControlHeight());
+    }
+
+    private float getHeaderControlGap() {
+        return 6.0f;
+    }
+
+    private float getHeaderControlRadius() {
+        return MD3Theme.CONTROL_RADIUS;
+    }
+
+    private float getKeybindControlRadius() {
+        return 8.0f;
+    }
+
+    private float getHeaderControlsY() {
+        return headerBounds.y() + (headerBounds.height() - getHeaderControlHeight()) / 2.0f;
+    }
+
+    private void buildBindModeControl(PanelUiTree.Scope scope, Module module, int mouseX, int mouseY) {
+        PanelLayout.Rect bindModeBounds = getBindModeBounds();
+        float bindProgress = scope.animate(bindModeAnimation, module.getBindMode() == Module.BindMode.Hold);
+        float hoverProgress = scope.animate(bindModeHoverAnimation, bindModeBounds.contains(mouseX, mouseY));
+        PanelElements.buildSegmentedControl(scope, textRenderer, bindModeBounds,
+                toggleComponent.getTranslatedName(), holdComponent.getTranslatedName(),
+                bindProgress, hoverProgress);
+    }
+
+    private void buildKeybindControl(PanelUiTree.Scope scope, Module module, int mouseX, int mouseY) {
+        PanelLayout.Rect keybindBounds = getKeybindBounds();
+        boolean listening = state.getListeningKeyBindModule() == module;
+        float hoverProgress = scope.animate(keybindHoverAnimation, keybindBounds.contains(mouseX, mouseY));
+        float focusProgress = scope.animate(keybindFocusAnimation, listening);
+        float radius = getKeybindControlRadius();
+        float haloInset = 1.5f * focusProgress;
+        if (haloInset > 0.01f) {
+            scope.roundRect(keybindBounds.x() - haloInset, keybindBounds.y() - haloInset, keybindBounds.width() + haloInset * 2.0f, keybindBounds.height() + haloInset * 2.0f, radius + haloInset, MD3Theme.withAlpha(MD3Theme.PRIMARY, (int) (28 * focusProgress)));
+        }
+
+        Color background = MD3Theme.lerp(MD3Theme.SECONDARY_CONTAINER, MD3Theme.PRIMARY_CONTAINER, focusProgress);
+        Color foreground = MD3Theme.lerp(MD3Theme.ON_SECONDARY_CONTAINER, MD3Theme.ON_PRIMARY_CONTAINER, focusProgress);
+        scope.roundRect(keybindBounds.x(), keybindBounds.y(), keybindBounds.width(), keybindBounds.height(), radius, background);
+        if (hoverProgress > 0.01f) {
+            scope.roundRect(keybindBounds.x(), keybindBounds.y(), keybindBounds.width(), keybindBounds.height(), radius,
+                    MD3Theme.stateLayer(foreground, hoverProgress, listening ? 18 : 12));
+        }
+
+        String label = listening ? "..." : formatCompactKeybind(module.getKeyBind());
+        float scale = label.length() >= 3 ? 0.42f : 0.5f;
+        float textWidth = textRenderer.getWidth(label, scale);
+        float textHeight = textRenderer.getHeight(scale);
+        float textX = keybindBounds.x() + (keybindBounds.width() - textWidth) / 2.0f;
+        float textY = keybindBounds.y() + (keybindBounds.height() - textHeight) / 2.0f - 1.0f;
+        scope.text(label, textX, textY, scale, foreground);
+    }
+
+    private void buildHiddenControl(PanelUiTree.Scope scope, Module module, int mouseX, int mouseY) {
+        PanelLayout.Rect hiddenBounds = getHiddenBounds();
+        float hiddenProgress = scope.animate(hiddenAnimation, module.isHidden());
+        float hoverProgress = scope.animate(hiddenHoverAnimation, hiddenBounds.contains(mouseX, mouseY));
+        PanelElements.buildSegmentedControl(scope, textRenderer, hiddenBounds,
+                visibleComponent.getTranslatedName(), hiddenComponent.getTranslatedName(),
+                hiddenProgress, hoverProgress);
+    }
+
+    private String formatCompactKeybind(int keyCode) {
+        if (keyCode == KeybindUtils.NONE) {
+            return noneComponent.getTranslatedName();
+        }
+        if (KeybindUtils.isMouseButton(keyCode)) {
+            return "M" + (KeybindUtils.decodeMouseButton(keyCode) + 1);
+        }
+        String label = formatKeybind(keyCode).trim();
+        if (label.isEmpty()) {
+            return "?";
+        }
+
+        String[] parts = label.split("[^A-Za-z0-9]+");
+        StringBuilder initials = new StringBuilder();
+        for (String part : parts) {
+            if (!part.isEmpty() && Character.isLetterOrDigit(part.charAt(0))) {
+                initials.append(Character.toUpperCase(part.charAt(0)));
+            }
+            if (initials.length() == 3) {
+                break;
+            }
+        }
+        if (initials.length() >= 2) {
+            return initials.toString();
+        }
+
+        String compact = label.replaceAll("[^A-Za-z0-9]", "").toUpperCase(Locale.ROOT);
+        if (!compact.isEmpty()) {
+            return compact.length() > 3 ? compact.substring(0, 3) : compact;
+        }
+        // Symbol-only keys (e.g. ";", "[", "/"): fall back to the raw label so we never show "?".
+        return label.length() > 3 ? label.substring(0, 3) : label;
+    }
+
+    private String formatKeybind(int keyCode) {
+        return KeybindUtils.format(keyCode);
+    }
+
+    public void flushContent() {
+        contentBuffer.flush();
+    }
+
+    public void markDirty() {
+        contentState.markDirty();
+    }
+
+    public boolean hasActiveAnimations() {
+        return contentState.hasActiveAnimations()
+                || settingListController.hasActiveAnimations()
+                || !keybindHoverAnimation.isFinished()
+                || !keybindFocusAnimation.isFinished()
+                || !bindModeAnimation.isFinished()
+                || !bindModeHoverAnimation.isFinished()
+                || !hiddenAnimation.isFinished()
+                || !hiddenHoverAnimation.isFinished();
+    }
+
+    private boolean shouldRebuildContent(PanelLayout.Rect bounds, int mouseX, int mouseY, Module module, List<Setting<?>> settings, int currentGuiHeight, long contentSignature) {
+        if (contentState.needsRebuild(bounds, mouseX, mouseY, currentGuiHeight, contentSignature)) {
+            return true;
+        }
+        if (Float.compare(lastDetailScroll, state.getDetailScroll()) != 0) {
+            return true;
+        }
+        if (!Objects.equals(lastModuleKey, module.getName() + ":" + module.getBindMode() + ":" + module.getKeyBind() + ":" + module.isHidden())) {
+            return true;
+        }
+        List<String> visibleSettings = settings.stream().map(Setting::getName).toList();
+        if (!Objects.equals(lastVisibleSettings, visibleSettings)) {
+            return true;
+        }
+        return lastContentSignature != contentSignature;
+    }
+
+    private void rememberSnapshot(PanelLayout.Rect bounds, int mouseX, int mouseY, Module module, List<Setting<?>> settings, int currentGuiHeight, long contentSignature) {
+        contentState.rememberSnapshot(bounds, mouseX, mouseY, currentGuiHeight, contentSignature);
+        lastDetailScroll = state.getDetailScroll();
+        lastModuleKey = module.getName() + ":" + module.getBindMode() + ":" + module.getKeyBind() + ":" + module.isHidden();
+        lastVisibleSettings = settings.stream().map(Setting::getName).toList();
+        lastContentSignature = contentSignature;
+    }
+
+    private long buildContentSignature(Module module, List<Setting<?>> settings) {
+        long signature = 17L;
+        signature = signature * 31L + TranslateHolder.INSTANCE.getRevision();
+        signature = signature * 31L + module.getName().hashCode();
+        signature = signature * 31L + module.getBindMode().ordinal();
+        signature = signature * 31L + module.getKeyBind();
+        signature = signature * 31L + (module.isHidden() ? 1 : 0);
+        signature = signature * 31L + Float.floatToIntBits(state.getDetailScroll());
+        KeybindSetting listening = state.getListeningKeybindSetting();
+        signature = signature * 31L + (listening == null ? 0 : listening.getName().hashCode());
+        for (Setting<?> setting : settings) {
+            signature = signature * 31L + setting.getName().hashCode();
+            signature = signature * 31L + (setting.isAvailable() ? 1 : 0);
+            if (setting.getGroup() != null) {
+                signature = signature * 31L + setting.getGroup().getName().hashCode();
+                signature = signature * 31L + (setting.getGroup().isCollapsed() ? 1 : 0);
+            }
+        }
+        return signature;
+    }
+
+}

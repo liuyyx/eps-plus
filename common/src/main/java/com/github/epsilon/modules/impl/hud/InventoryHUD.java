@@ -1,0 +1,110 @@
+package com.github.epsilon.modules.impl.hud;
+
+import com.github.epsilon.graphics.renderers.RoundRectRenderer;
+import com.github.epsilon.graphics.renderers.ShadowRenderer;
+import com.github.epsilon.graphics.shaders.BlurShader;
+import com.github.epsilon.modules.Category;
+import com.github.epsilon.modules.HudModule;
+import com.github.epsilon.settings.impl.BoolSetting;
+import com.github.epsilon.settings.impl.ColorSetting;
+import com.github.epsilon.settings.impl.DoubleSetting;
+import com.github.epsilon.settings.impl.IntSetting;
+import com.google.common.base.Suppliers;
+import net.minecraft.client.DeltaTracker;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.world.item.ItemStack;
+
+import java.awt.*;
+import java.util.function.Supplier;
+
+public class InventoryHUD extends HudModule {
+
+    public static final InventoryHUD INSTANCE = new InventoryHUD();
+
+    private InventoryHUD() {
+        super("Inventory HUD", Category.HUD, 0f, 0f, 180f, 80f);
+    }
+
+    private final DoubleSetting scale = doubleSetting("Scale", 1.0, 0.5, 2.0, 0.1);
+    private final DoubleSetting cornerRadius = doubleSetting("Corner Radius", 5.0, 0.0, 14.0, 0.5);
+    private final ColorSetting backgroundColor = colorSetting("Background Color", new Color(15, 15, 15, 200));
+    private final ColorSetting slotColor = colorSetting("Slot Color", new Color(0, 0, 0, 120));
+    private final BoolSetting drawShadow = boolSetting("Drop Shadow", true);
+    private final DoubleSetting shadowBlur = doubleSetting("Shadow Blur", 4.5, 0.1, 32.0, 0.5, drawShadow::getValue);
+    private final ColorSetting shadowColor = colorSetting("Shadow Color", new Color(0, 0, 0, 150), drawShadow::getValue);
+    private final BoolSetting backgroundBlur = boolSetting("Background Blur", true);
+    private final IntSetting blurStrength = intSetting("Blur Strength", 8, 1, 16, 1);
+
+    private final BoolSetting showCount = boolSetting("Show Count", true);
+
+    private final Supplier<RoundRectRenderer> roundRectRendererSupplier = Suppliers.memoize(RoundRectRenderer::create);
+    private final Supplier<ShadowRenderer> shadowRendererSupplier = Suppliers.memoize(ShadowRenderer::create);
+
+    private static final float SLOT_SIZE = 18.0f;
+    private static final float SLOT_GAP = 2.0f;
+    private static final float PADDING = 6.0f;
+
+    @Override
+    public void render(GuiGraphicsExtractor graphics, DeltaTracker deltaTracker) {
+        if (nullCheck()) return;
+
+        RoundRectRenderer roundRectRenderer = roundRectRendererSupplier.get();
+        ShadowRenderer shadowRenderer = shadowRendererSupplier.get();
+
+        float scale = this.scale.getValue().floatValue();
+        float slotSize = SLOT_SIZE * scale;
+        float gap = SLOT_GAP * scale;
+        float padding = PADDING * scale;
+        float radius = cornerRadius.getValue().floatValue() * scale;
+        float slotRadius = 2.0f * scale;
+
+        float totalWidth = padding * 2f + 9 * slotSize + (9 - 1) * gap;
+        float totalHeight = padding * 2f + 3 * slotSize + (3 - 1) * gap;
+
+        if (backgroundBlur.getValue()) {
+            BlurShader.INSTANCE.render(this.x, this.y, totalWidth, totalHeight, radius, blurStrength.getValue());
+        }
+
+        if (drawShadow.getValue()) {
+            shadowRenderer.addShadow(this.x, this.y, totalWidth, totalHeight, radius, shadowBlur.getValue().floatValue(), shadowColor.getValue());
+        }
+        roundRectRenderer.addRoundRect(this.x, this.y, totalWidth, totalHeight, radius, backgroundColor.getValue());
+
+        for (int row = 0; row < 3; row++) {
+            for (int col = 0; col < 9; col++) {
+                float slotX = this.x + padding + col * (slotSize + gap);
+                float slotY = this.y + padding + row * (slotSize + gap);
+                roundRectRenderer.addRoundRect(slotX, slotY, slotSize, slotSize, slotRadius, slotColor.getValue());
+            }
+        }
+
+        if (drawShadow.getValue()) shadowRenderer.drawAndClear();
+        roundRectRenderer.drawAndClear();
+
+        for (int row = 0; row < 3; row++) {
+            for (int col = 0; col < 9; col++) {
+                int slotIndex = 9 + row * 9 + col;
+                ItemStack stack = mc.player.getInventory().getItem(slotIndex);
+                if (!stack.isEmpty()) {
+                    float slotX = this.x + padding + col * (slotSize + gap);
+                    float slotY = this.y + padding + row * (slotSize + gap);
+                    drawItems(graphics, stack, slotX, slotY, scale);
+                }
+            }
+        }
+
+        setBounds(totalWidth, totalHeight);
+    }
+
+    private void drawItems(GuiGraphicsExtractor graphics, ItemStack stack, float slotX, float slotY, float scale) {
+        graphics.pose().pushMatrix();
+        graphics.pose().translate(slotX + scale, slotY + scale);
+        graphics.pose().scale(scale, scale);
+        graphics.item(stack, 0, 0);
+        if (showCount.getValue() && stack.getCount() > 1) {
+            graphics.itemDecorations(mc.font, stack, 0, 0, String.valueOf(stack.getCount()));
+        }
+        graphics.pose().popMatrix();
+    }
+
+}
