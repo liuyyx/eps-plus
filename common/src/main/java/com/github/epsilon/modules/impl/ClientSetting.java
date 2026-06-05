@@ -2,6 +2,7 @@ package com.github.epsilon.modules.impl;
 
 import com.github.epsilon.assets.holders.TextureCacheHolder;
 import com.github.epsilon.assets.holders.TranslateHolder;
+import com.github.epsilon.assets.resources.ResourceLocationUtils;
 import com.github.epsilon.gui.dropdown.DropdownScreen;
 import com.github.epsilon.gui.hudeditor.HudEditorScreen;
 import com.github.epsilon.gui.panel.PanelScreen;
@@ -12,6 +13,7 @@ import com.github.epsilon.settings.SettingGroup;
 import com.github.epsilon.settings.impl.*;
 import com.mojang.blaze3d.platform.IconSet;
 import net.minecraft.SharedConstants;
+import net.minecraft.resources.Identifier;
 import org.lwjgl.glfw.GLFW;
 
 import java.awt.*;
@@ -45,6 +47,15 @@ public class ClientSetting extends Module {
     public enum ThemeMode {
         Dark,
         Light
+    }
+
+    public enum ScreenBackground {
+        Vanilla,
+        Jello,
+        Miku,
+        KrulTepes,
+        Shiroko,
+        BlueArchive
     }
 
     private final SettingGroup sgGeneral = settingGroup("General");
@@ -96,6 +107,8 @@ public class ClientSetting extends Module {
 
     public final EnumSetting<MainMenuScreen.Background> mainMenuBackground = enumSetting("MainMenu Background", MainMenuScreen.Background.PLANET, useMainMenu::getValue).group(sgAppearance);
 
+    public final EnumSetting<ScreenBackground> screenBackground = enumSetting("Screen Background", ScreenBackground.BlueArchive).group(sgAppearance);
+
     // Notification
     public final BoolSetting soundNotify = boolSetting("Sound Notify", true).group(sgNotification);
 
@@ -111,6 +124,24 @@ public class ClientSetting extends Module {
 
     public double getScale() {
         return renderScale.getValue();
+    }
+
+    public BackgroundTexture getTexture() {
+        return switch (ClientSetting.INSTANCE.screenBackground.getValue()) {
+            case Vanilla -> null;
+            case Jello -> getTexture("jello", 1920, 1080);
+            case Miku -> getTexture("miku", 1904, 1080);
+            case KrulTepes -> getTexture("krultepes", 1920, 1080);
+            case Shiroko -> getTexture("shiroko", 1920, 1080);
+            case BlueArchive -> getTexture("bluearchive", 2880, 1620);
+        };
+    }
+
+    private BackgroundTexture getTexture(String name, int width, int height) {
+        return new BackgroundTexture(ResourceLocationUtils.getIdentifier("textures/background/" + name + ".png"), width, height);
+    }
+
+    public record BackgroundTexture(Identifier id, int width, int height) {
     }
 
 }
