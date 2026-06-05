@@ -33,18 +33,18 @@ jobs:
         run: |
           echo "BUILD_TIME=$(TZ='Asia/Shanghai' date +'%Y-%m-%d %H:%M')" >> $GITHUB_ENV
 
-      - name: Upload NeoForge Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: neoforge-artifacts
-          path: neoforge/build/libs/*.jar
-          if-no-files-found: warn
+      - name: Prepare CI Artifacts
+        run: |
+          mkdir -p build/ci-artifacts
+          find fabric/build/libs -maxdepth 1 -type f -name '*.jar' ! -name '*-sources.jar' -exec cp {} build/ci-artifacts/ \;
+          find neoforge/build/libs -maxdepth 1 -type f -name '*.jar' ! -name '*-sources.jar' -exec cp {} build/ci-artifacts/ \;
+          find common/build/libs -maxdepth 1 -type f -name '*.jar' -exec cp {} build/ci-artifacts/ \;
 
-      - name: Upload Fabric Artifacts
+      - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: fabric-artifacts
-          path: fabric/build/libs/*.jar
+          name: build-artifacts
+          path: build/ci-artifacts/*.jar
           if-no-files-found: warn
 
       - uses: "marvinpinto/action-automatic-releases@latest"
@@ -55,5 +55,22 @@ jobs:
           title: "Nightly Build (${{ env.BUILD_TIME }})"
           prerelease: true
           files: |
-            neoforge/build/libs/*.jar
-            fabric/build/libs/*.jar
+            build/ci-artifacts/*.jar
+
+      - name: Update Nightly Release Notes
+        if: ${{ runner.os == 'Linux' }}
+        env:
+          GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+        run: |
+          {
+            echo "Nightly Build (${{ env.BUILD_TIME }})"
+            echo
+            echo "English:"
+            echo "Regular users only need to download the non-sources Fabric or NeoForge jar for their runtime environment."
+            echo "The common artifacts are intended for addon development."
+            echo
+            echo "中文："
+            echo "普通用户只需要根据自己的运行环境下载不带 sources 的 Fabric 或 NeoForge 版本。"
+            echo "common 产物用于 addon 开发。"
+          } > "$RUNNER_TEMP/nightly-release-notes.md"
+          gh release edit nightly --notes-file "$RUNNER_TEMP/nightly-release-notes.md"

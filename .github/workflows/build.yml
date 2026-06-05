@@ -27,16 +27,16 @@ jobs:
       - name: Build with Gradle
         run: ./gradlew build
 
-      - name: Upload NeoForge Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: neoforge-artifacts
-          path: neoforge/build/libs/*.jar
-          if-no-files-found: warn
+      - name: Prepare CI Artifacts
+        run: |
+          mkdir -p build/ci-artifacts
+          find fabric/build/libs -maxdepth 1 -type f -name '*.jar' ! -name '*-sources.jar' -exec cp {} build/ci-artifacts/ \;
+          find neoforge/build/libs -maxdepth 1 -type f -name '*.jar' ! -name '*-sources.jar' -exec cp {} build/ci-artifacts/ \;
+          find common/build/libs -maxdepth 1 -type f -name '*.jar' -exec cp {} build/ci-artifacts/ \;
 
-      - name: Upload Fabric Artifacts
+      - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: fabric-artifacts
-          path: fabric/build/libs/*.jar
+          name: build-artifacts
+          path: build/ci-artifacts/*.jar
           if-no-files-found: warn
