@@ -30,11 +30,11 @@ public class Module {
 
     private BindMode bindMode = BindMode.Toggle;
 
-    private boolean hidden = false;
+    private boolean hidden = true;
 
     private boolean enabled;
 
-    private boolean defaultHidden = false;
+    private boolean defaultHidden = true;
 
     private boolean defaultEnabled = false;
 
