@@ -26,8 +26,7 @@ public class MixinPanorama {
     @Inject(method = "extractRenderState", at = @At("HEAD"), cancellable = true)
     private void onExtractRenderState(GuiGraphicsExtractor graphics, int width, int height, boolean shouldSpin, CallbackInfo ci) {
         if (ClientSetting.INSTANCE.screenBackground.getValue()) {
-            int textureWidth = 2880;
-            int textureHeight = 1620;
+            int textureWidth = 2880, textureHeight = 1620;
             int padding = EPSILON_PARALLAX_PADDING * 2;
             float scale = Math.max((float) (width + padding) / textureWidth, (float) (height + padding) / textureHeight);
             int drawWidth = Math.round(textureWidth * scale);

@@ -37,108 +37,104 @@ public class ModuleManager {
 
     public static final ModuleManager INSTANCE = new ModuleManager();
 
-    private List<Module> modules;
-
     private ModuleManager() {
         EventBus.INSTANCE.subscribe(this);
     }
 
+    private final List<Module> modules = new ArrayList<>();
+
     public void initModules() {
-        modules = new ArrayList<>(List.of(
+        addModule(ClientSetting.INSTANCE);
 
-                ClientSetting.INSTANCE,
+        // Combat
+        addModule(AimAssist.INSTANCE);
+        addModule(AnchorBlast.INSTANCE);
+        addModule(AntiBot.INSTANCE);
+        addModule(AutoClicker.INSTANCE);
+        addModule(AutoDtap.INSTANCE);
+        addModule(AutoHitCrystal.INSTANCE);
+        addModule(AutoMend.INSTANCE);
+        addModule(AutoTotem.INSTANCE);
+        addModule(AutoWeapon.INSTANCE);
+        addModule(ZealotCrystalPlus.INSTANCE);
+        addModule(CrystalAura.INSTANCE);
+        addModule(CrystalBlocker.INSTANCE);
+        addModule(FeetTrap.INSTANCE);
+        addModule(DoubleAnchor.INSTANCE);
+        addModule(HoverTotem.INSTANCE);
+        addModule(KillAura.INSTANCE);
+        addModule(KeyPearl.INSTANCE);
+        addModule(MaceAura.INSTANCE);
+        addModule(PacketMine.INSTANCE);
+        addModule(SafeAnchor.INSTANCE);
+        addModule(SafeCrystal.INSTANCE);
+        addModule(SilentAim.INSTANCE);
+        addModule(SpearKill.INSTANCE);
+        addModule(TriggerBot.INSTANCE);
 
-                // Combat
-                AimAssist.INSTANCE,
-                AnchorBlast.INSTANCE,
-                AntiBot.INSTANCE,
-                AutoClicker.INSTANCE,
-                AutoDtap.INSTANCE,
-                AutoHitCrystal.INSTANCE,
-                AutoMend.INSTANCE,
-                AutoTotem.INSTANCE,
-                AutoWeapon.INSTANCE,
-                ZealotCrystalPlus.INSTANCE,
-                CrystalAura.INSTANCE,
-                CrystalBlocker.INSTANCE,
-                FeetTrap.INSTANCE,
-                DoubleAnchor.INSTANCE,
-                HoverTotem.INSTANCE,
-                KillAura.INSTANCE,
-                KeyPearl.INSTANCE,
-                MaceAura.INSTANCE,
-                PacketMine.INSTANCE,
-                SafeAnchor.INSTANCE,
-                SafeCrystal.INSTANCE,
-                SilentAim.INSTANCE,
-                SpearKill.INSTANCE,
-                TriggerBot.INSTANCE,
+        // Player
+        addModule(AutoFirework.INSTANCE);
+        addModule(AutoKouZi.INSTANCE);
+        addModule(AutoTool.INSTANCE);
+        addModule(BreakCooldown.INSTANCE);
+        addModule(Disabler.INSTANCE);
+        addModule(ElytraSwap.INSTANCE);
+        addModule(FakePlayer.INSTANCE);
+        addModule(GhostHand.INSTANCE);
+        addModule(InvManager.INSTANCE);
+        addModule(JumpCooldown.INSTANCE);
+        addModule(MultiTask.INSTANCE);
+        addModule(NoRotate.INSTANCE);
+        addModule(PacketEat.INSTANCE);
+        addModule(SoundFX.INSTANCE);
+        addModule(Stealer.INSTANCE);
+        addModule(UseCooldown.INSTANCE);
 
-                // Player
-                AutoFirework.INSTANCE,
-                AutoKouZi.INSTANCE,
-                AutoTool.INSTANCE,
-                BreakCooldown.INSTANCE,
-                Disabler.INSTANCE,
-                ElytraSwap.INSTANCE,
-                FakePlayer.INSTANCE,
-                GhostHand.INSTANCE,
-                InvManager.INSTANCE,
-                JumpCooldown.INSTANCE,
-                MultiTask.INSTANCE,
-                NoRotate.INSTANCE,
-                PacketEat.INSTANCE,
-                SoundFX.INSTANCE,
-                Stealer.INSTANCE,
-                UseCooldown.INSTANCE,
+        // Movement
+        addModule(AutoSprint.INSTANCE);
+        addModule(Blink.INSTANCE);
+        addModule(ElytraFly.INSTANCE);
+        addModule(FastWeb.INSTANCE);
+        addModule(GUIMove.INSTANCE);
+        addModule(MovementFix.INSTANCE);
+        addModule(NoFall.INSTANCE);
+        addModule(NoSlow.INSTANCE);
+        addModule(Phase.INSTANCE);
+        addModule(SafeWalk.INSTANCE);
+        addModule(Scaffold.INSTANCE);
+        addModule(Stuck.INSTANCE);
+        addModule(VClip.INSTANCE);
+        addModule(Velocity.INSTANCE);
 
-                // Movement
-                AutoSprint.INSTANCE,
-                Blink.INSTANCE,
-                ElytraFly.INSTANCE,
-                FastWeb.INSTANCE,
-                GUIMove.INSTANCE,
-                MovementFix.INSTANCE,
-                NoFall.INSTANCE,
-                NoSlow.INSTANCE,
-                Phase.INSTANCE,
-                SafeWalk.INSTANCE,
-                Scaffold.INSTANCE,
-                Stuck.INSTANCE,
-                VClip.INSTANCE,
-                Velocity.INSTANCE,
+        // Render
+        addModule(AntiAlias.INSTANCE);
+        addModule(AspectRatio.INSTANCE);
+        addModule(CameraClip.INSTANCE);
+        addModule(Chams.INSTANCE);
+        addModule(ESP.INSTANCE);
+        addModule(Filter.INSTANCE);
+        addModule(Fullbright.INSTANCE);
+        addModule(HandsView.INSTANCE);
+        addModule(Hat.INSTANCE);
+        addModule(NameTags.INSTANCE);
+        addModule(NoRender.INSTANCE);
+        addModule(Xray.INSTANCE);
 
-                // Render
-                AntiAlias.INSTANCE,
-                AspectRatio.INSTANCE,
-                CameraClip.INSTANCE,
-                Chams.INSTANCE,
-                ESP.INSTANCE,
-                Filter.INSTANCE,
-                Fullbright.INSTANCE,
-                HandsView.INSTANCE,
-                Hat.INSTANCE,
-                NameTags.INSTANCE,
-                NoRender.INSTANCE,
-                //PopChams.INSTANCE,
+        // Hud
+        addModule(NotificationsHUD.INSTANCE);
+        addModule(BPSHUD.INSTANCE);
+        addModule(InventoryHUD.INSTANCE);
+        addModule(ModuleListHUD.INSTANCE);
+        addModule(PotionHUD.INSTANCE);
+        addModule(ScaffoldBlockHUD.INSTANCE);
+        addModule(TargetHUD.INSTANCE);
+        addModule(WatermarkHUD.INSTANCE);
+    }
 
-                // Hud
-                NotificationsHUD.INSTANCE,
-                BPSHUD.INSTANCE,
-                InventoryHUD.INSTANCE,
-                ModuleListHUD.INSTANCE,
-                PotionHUD.INSTANCE,
-                ScaffoldBlockHUD.INSTANCE,
-                TargetHUD.INSTANCE,
-                WatermarkHUD.INSTANCE
-
-        ));
-
-        // Initialize i18n for all epsilon modules
-        for (Module module : modules) {
-            module.setAddonId("epsilon");
-            module.initI18n(EpsilonTranslateComponent.create("modules", module.getName().toLowerCase()));
-        }
+    private void addModule(Module module) {
+        modules.add(module);
+        module.setAddonId("epsilon");
+        module.initI18n(EpsilonTranslateComponent.create("modules", module.getName().toLowerCase()));
     }
 
     public void registerAddonModule(String addonId, Module module, TranslateComponent moduleComponent) {
