@@ -21,7 +21,7 @@ public class MixinEntity {
     @WrapOperation(method = "getViewVector", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/Entity;calculateViewVector(FF)Lnet/minecraft/world/phys/Vec3;"))
     private Vec3 redirectGetViewYRot(Entity instance, float xRot, float yRot, Operation<Vec3> original) {
         if (instance == mc.player) {
-            RaytraceEvent event = EventBus.INSTANCE.post(new RaytraceEvent(instance, yRot, xRot));
+            RaytraceEvent event = EventBus.INSTANCE.post(new RaytraceEvent(yRot, xRot));
             return original.call(instance, event.getPitch(), event.getYaw());
         }
         return original.call(instance, xRot, yRot);

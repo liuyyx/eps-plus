@@ -245,7 +245,7 @@ public class RotationManager {
 
     @EventHandler
     private void onRaytrace(RaytraceEvent event) {
-        if (rotations != null && event.getEntity() == mc.player && active && ClientSetting.INSTANCE.modifyCrosshair.getValue()) {
+        if (rotations != null && active && ClientSetting.INSTANCE.modifyCrosshair.getValue()) {
             event.setYaw(rotations.getYaw());
             event.setPitch(rotations.getPitch());
         }
