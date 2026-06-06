@@ -32,14 +32,20 @@ public class MixinLivingEntity {
 
     @ModifyExpressionValue(method = "jumpFromGround", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/LivingEntity;getYRot()F"))
     private float modifyJumpYaw(float original) {
-        JumpEvent event = EventBus.INSTANCE.post(new JumpEvent(original));
-        return event.getYaw();
+        if ((Object) this == mc.player) {
+            JumpEvent event = EventBus.INSTANCE.post(new JumpEvent(original));
+            return event.getYaw();
+        }
+        return original;
     }
 
     @ModifyExpressionValue(method = "updateFallFlyingMovement", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/LivingEntity;getXRot()F"))
     private float modifyFallFlyingPitch(float original) {
-        FallFlyingEvent event = EventBus.INSTANCE.post(new FallFlyingEvent(original));
-        return event.getPitch();
+        if ((Object) this == mc.player) {
+            FallFlyingEvent event = EventBus.INSTANCE.post(new FallFlyingEvent(original));
+            return event.getPitch();
+        }
+        return original;
     }
 
     @WrapOperation(method = "aiStep", at = @At(value = "FIELD", target = "Lnet/minecraft/world/entity/LivingEntity;noJumpDelay:I", opcode = Opcodes.PUTFIELD, ordinal = 1))

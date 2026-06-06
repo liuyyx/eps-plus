@@ -1,14 +1,14 @@
 package com.github.epsilon.graphics.text.ttf;
 
 import com.github.epsilon.graphics.LuminTexture;
-import net.minecraft.client.Minecraft;
-import net.minecraft.resources.Identifier;
 import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.textures.AddressMode;
 import com.mojang.blaze3d.textures.FilterMode;
 import com.mojang.blaze3d.textures.GpuTexture;
 import com.mojang.blaze3d.textures.TextureFormat;
+import net.minecraft.client.Minecraft;
+import net.minecraft.resources.Identifier;
 import org.lwjgl.system.MemoryUtil;
 
 import java.nio.ByteBuffer;

@@ -1,7 +1,7 @@
 package com.github.epsilon.mixins;
 
-import com.github.epsilon.graphics.text.minecraft.EpsilonFontMetrics;
 import com.github.epsilon.graphics.text.minecraft.EpsilonFontGlyph;
+import com.github.epsilon.graphics.text.minecraft.EpsilonFontMetrics;
 import com.github.epsilon.modules.impl.ClientSetting;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.font.glyphs.BakedGlyph;
@@ -58,4 +58,5 @@ public class MixinFont {
             }
         }
     }
+
 }

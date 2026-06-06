@@ -10,13 +10,18 @@ import net.minecraft.world.phys.Vec3;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 
+import static com.github.epsilon.Constants.mc;
+
 @Mixin(FireworkRocketEntity.class)
 public class MixinFireworkRocketEntity {
 
     @WrapOperation(method = "tick", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/LivingEntity;getLookAngle()Lnet/minecraft/world/phys/Vec3;"))
     private Vec3 redirectMovement(LivingEntity instance, Operation<Vec3> original) {
-        FireworkUpdateEvent event = EventBus.INSTANCE.post(new FireworkUpdateEvent(instance.getYRot(), instance.getXRot()));
-        return instance.calculateViewVector(event.getPitch(), event.getYaw());
+        if (instance == mc.player) {
+            FireworkUpdateEvent event = EventBus.INSTANCE.post(new FireworkUpdateEvent(instance.getYRot(), instance.getXRot()));
+            return instance.calculateViewVector(event.getPitch(), event.getYaw());
+        }
+        return original.call(instance);
     }
 
 }

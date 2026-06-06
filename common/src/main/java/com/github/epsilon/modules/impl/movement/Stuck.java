@@ -33,10 +33,8 @@ public class Stuck extends Module {
 
     @Override
     protected void onDisable() {
-        if (mode.is(Mode.NoPacket)) {
-            if (mc.player != null && !mc.player.onGround()) {
-                PacketUtils.sendSilently(new ServerboundMovePlayerPacket.PosRot(mc.player.getX() + 1337, mc.player.getY(), mc.player.getZ() + 1337, mc.player.getYRot() + 0.01f, mc.player.getXRot(), mc.player.onGround(), mc.player.horizontalCollision));
-            }
+        if (!nullCheck() && mode.is(Mode.NoPacket) && !mc.player.onGround()) {
+            PacketUtils.sendSilently(new ServerboundMovePlayerPacket.PosRot(mc.player.getX() + 1337, mc.player.getY(), mc.player.getZ() + 1337, mc.player.getYRot() + 0.01f, mc.player.getXRot(), mc.player.onGround(), mc.player.horizontalCollision));
         }
     }
 
@@ -47,13 +45,13 @@ public class Stuck extends Module {
     }
 
     @EventHandler
-    private void onPacket(PacketEvent.Send e) {
+    private void onPacket(PacketEvent.Send event) {
         if (mode.is(Mode.NoPacket)) {
-            if (e.getPacket() instanceof ServerboundMovePlayerPacket || (e.getPacket() instanceof ClientboundSetEntityMotionPacket setEntityMotionPacket && setEntityMotionPacket.id() == mc.player.getId())) {
-                e.setCancelled(true);
+            if (event.getPacket() instanceof ServerboundMovePlayerPacket || (event.getPacket() instanceof ClientboundSetEntityMotionPacket setEntityMotionPacket && setEntityMotionPacket.id() == mc.player.getId())) {
+                event.setCancelled(true);
             }
         }
-        if (e.getPacket() instanceof ClientboundPlayerPositionPacket) {
+        if (event.getPacket() instanceof ClientboundPlayerPositionPacket) {
             toggle();
         }
     }
@@ -61,7 +59,7 @@ public class Stuck extends Module {
     @EventHandler
     private void onTravel(TravelEvent event) {
         if (mode.is(Mode.CancelMove) && mc.player.positionReminder < 19) {
-                event.setCancelled(true);
+            event.setCancelled(true);
         }
     }
 
