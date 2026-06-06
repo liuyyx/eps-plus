@@ -70,8 +70,9 @@ public abstract class MixinChatComponentHash implements ChatComponentAccessor {
         if (previous != null) {
             int previousIndex = this.allMessages.indexOf(previous);
             if (previousIndex != -1) {
-                this.allMessages.set(previousIndex, guiMessage);
+                this.allMessages.remove(previousIndex);
                 this.logChatMessage(guiMessage);
+                this.addMessageToQueue(guiMessage);
                 this.refreshTrimmedMessages();
                 this.epsilon$pruneMissingHashedMessages();
                 return;
