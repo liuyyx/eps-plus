@@ -1,25 +1,36 @@
 package com.github.epsilon.graphics.text.ttf;
 
 import com.github.epsilon.graphics.LuminTexture;
+import net.minecraft.client.Minecraft;
+import net.minecraft.resources.Identifier;
 import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.textures.AddressMode;
 import com.mojang.blaze3d.textures.FilterMode;
 import com.mojang.blaze3d.textures.GpuTexture;
 import com.mojang.blaze3d.textures.TextureFormat;
+import org.lwjgl.system.MemoryUtil;
 
+import java.nio.ByteBuffer;
 import java.util.OptionalDouble;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class TtfGlyphAtlas {
 
     private static final int SIZE = 512;
+    private static final int GLYPH_GUTTER = 2;
+    private static final int UV_INSET = 1;
+    private static final AtomicInteger NEXT_TEXTURE_ID = new AtomicInteger();
     private final LuminTexture texture;
+    private final Identifier textureId;
 
     private int currentX = 0;
     private int currentY = 0;
     private int currentRowHeight = 0;
 
     public TtfGlyphAtlas(int atlasId) {
+        this.textureId = Identifier.fromNamespaceAndPath("epsilon", "ttf_atlas/" + NEXT_TEXTURE_ID.getAndIncrement());
+
         final var texture = RenderSystem.getDevice().createTexture(
                 () -> "Lumin-TtfGlyphAtlas",
                 GpuTexture.USAGE_TEXTURE_BINDING | GpuTexture.USAGE_COPY_DST,
@@ -36,6 +47,26 @@ public class TtfGlyphAtlas {
         );
 
         this.texture = new LuminTexture(texture, textureView, sampler);
+        clearTexture(texture);
+        Minecraft.getInstance().getTextureManager().register(this.textureId, this.texture);
+    }
+
+    private static void clearTexture(GpuTexture texture) {
+        ByteBuffer zeros = MemoryUtil.memCalloc(SIZE * SIZE);
+        try {
+            RenderSystem.getDevice().createCommandEncoder().writeToTexture(
+                    texture,
+                    zeros,
+                    NativeImage.Format.LUMINANCE,
+                    0,
+                    0,
+                    0, 0,
+                    SIZE,
+                    SIZE
+            );
+        } finally {
+            MemoryUtil.memFree(zeros);
+        }
     }
 
     /**
@@ -46,16 +77,22 @@ public class TtfGlyphAtlas {
     public GlyphUV appendGlyph(TtfGlyph glyph) {
         if (glyph.glyphData() == null) return null;
 
-        if (currentX + glyph.width() >= SIZE) {
+        int cellWidth = glyph.width() + GLYPH_GUTTER * 2;
+        int cellHeight = glyph.height() + GLYPH_GUTTER * 2;
+
+        if (currentX + cellWidth >= SIZE) {
             currentX = 0;
             currentY += currentRowHeight;
             currentRowHeight = 0;
         }
 
         // Return null if glyph atlas is full
-        if (currentY + glyph.height() >= SIZE) {
+        if (currentY + cellHeight >= SIZE) {
             return null;
         }
+
+        int glyphX = currentX + GLYPH_GUTTER;
+        int glyphY = currentY + GLYPH_GUTTER;
 
         RenderSystem.getDevice().createCommandEncoder().writeToTexture(
                 this.texture.getTexture(),
@@ -63,22 +100,20 @@ public class TtfGlyphAtlas {
                 NativeImage.Format.LUMINANCE,
                 0,
                 0,
-                currentX, currentY,
+                glyphX, glyphY,
                 glyph.width(),
                 glyph.height()
         );
 
-        int spacePixel = 1;
-
         GlyphUV uv = new GlyphUV(
-                (float) (currentX + spacePixel) / SIZE,
-                (float) (currentY + spacePixel) / SIZE,
-                (float) (currentX + glyph.width() - 2 * spacePixel) / SIZE,
-                (float) (currentY + glyph.height() - 2 * spacePixel) / SIZE
+                (float) (glyphX + UV_INSET) / SIZE,
+                (float) (glyphY + UV_INSET) / SIZE,
+                (float) (glyphX + glyph.width() - UV_INSET) / SIZE,
+                (float) (glyphY + glyph.height() - UV_INSET) / SIZE
         );
 
-        currentX += glyph.width();
-        currentRowHeight = Math.max(currentRowHeight, glyph.height());
+        currentX += cellWidth;
+        currentRowHeight = Math.max(currentRowHeight, cellHeight);
 
         return uv;
     }
@@ -87,8 +122,12 @@ public class TtfGlyphAtlas {
         return texture;
     }
 
+    public Identifier getTextureId() {
+        return textureId;
+    }
+
     public void destroy() {
-        texture.close();
+        Minecraft.getInstance().getTextureManager().release(this.textureId);
     }
 
     public record GlyphUV(float u0, float v0, float u1, float v1) {
