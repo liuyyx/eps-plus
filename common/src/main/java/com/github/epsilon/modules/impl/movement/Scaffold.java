@@ -35,7 +35,6 @@ import net.minecraft.world.InteractionResult;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.StandingAndWallBlockItem;
-import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.*;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
@@ -315,10 +314,10 @@ public class Scaffold extends Module {
         }
 
         rotation = getRotation(blockPos, direction);
-        int speed = rotateSpeed.getValue();
+        double speed = rotateSpeed.getValue();
 
         if (rotationMode.is(RotationMode.Hypixel)) {
-            speed = airTicks <= 1 ? 127 : 35;
+            speed = airTicks <= 1 ? 7.055 : 1.944;
         }
 
         RotationManager.INSTANCE.setRotations(rotation, speed);
@@ -373,7 +372,7 @@ public class Scaffold extends Module {
     }
 
     private int getYLevel() {
-        if (!mc.options.keyJump.isDown() && MoveUtils.isMoving() && mc.player.fallDistance <= 0.25F && mode.is(Mode.TellyBridge)) {
+        if (!mc.options.keyJump.isDown() && MoveUtils.isMoving() && mc.player.fallDistance <= 0.25f && mode.is(Mode.TellyBridge)) {
             return yLevel;
         }
         return Mth.floor(mc.player.getY()) - 1;
@@ -417,31 +416,33 @@ public class Scaffold extends Module {
         }
     }
 
-    private boolean isSolidAndNonInteractive(BlockState state, Level level, BlockPos pos) {
-        return !state.getCollisionShape(level, pos).isEmpty() && state.getMenuProvider(level, pos) == null;
-    }
-
     private boolean checkBlock(Vec3 baseVec, BlockPos pos) {
-        if (!onAir()) {
+        if (!onAir() || pos.getY() > getYLevel()) {
             return false;
         }
 
-        if (pos.getY() > getYLevel()) {
-            return false;
-        }
-
+        Vec3 center = pos.getBottomCenter();
         for (Direction dir : Direction.values()) {
-            BlockPos baseBlockPos = pos.relative(dir);
-            if (!isSolidAndNonInteractive(mc.level.getBlockState(baseBlockPos), mc.level, baseBlockPos)) continue;
-
             Vec3 normal = dir.getUnitVec3();
-            Vec3 relevant = pos.getBottomCenter().relative(dir, 0.5).subtract(baseVec);
-            Direction placeDirection = dir.getOpposite();
-            if (relevant.lengthSqr() > 4.5D * 4.5D || relevant.dot(normal) < 0.0D) continue;
-            if (placeDirection == Direction.UP && MoveUtils.isMoving() && !mc.options.keyJump.isDown()) continue;
+            Vec3 hit = center.add(normal.scale(0.5));
+            BlockPos baseBlockPos = pos.relative(dir);
+
+            BlockState state = mc.level.getBlockState(baseBlockPos);
+            if (state.getCollisionShape(mc.level, baseBlockPos).isEmpty() || state.getMenuProvider(mc.level, baseBlockPos) != null) {
+                continue;
+            }
+
+            Direction face = dir.getOpposite();
+            if (hit.distanceToSqr(baseVec) > 4.5 * 4.5 || hit.subtract(baseVec).dot(normal) < 0.0) {
+                continue;
+            }
+
+            if (face == Direction.UP && MoveUtils.isMoving() && !mc.options.keyJump.isDown()) {
+                continue;
+            }
 
             blockPos = baseBlockPos;
-            direction = placeDirection;
+            direction = face;
             return true;
         }
 

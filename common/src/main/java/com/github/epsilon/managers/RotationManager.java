@@ -72,7 +72,7 @@ public class RotationManager {
         }
 
         this.targetRotations = rotations;
-        this.rotationSpeed = rotationSpeed * 18;
+        this.rotationSpeed = rotationSpeed * 18.0;
         this.raytrace = raytrace;
         this.priority = priority.priority;
         this.callback = callback;
