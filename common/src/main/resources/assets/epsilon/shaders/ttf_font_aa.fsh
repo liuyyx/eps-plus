@@ -19,7 +19,7 @@ void main() {
     vec2 dx = dFdx(v_TexCoord);
     vec2 dy = dFdy(v_TexCoord);
 
-    float aa = clamp(fwidth(distance) * 0.5, 0.0008, 0.25);
+    float aa = clamp(fwidth(distance) * 0.5, 0.0008, 0.5);
 
     const vec2 o0 = vec2(0.125, 0.375);
     const vec2 o1 = vec2(0.375, -0.125);
