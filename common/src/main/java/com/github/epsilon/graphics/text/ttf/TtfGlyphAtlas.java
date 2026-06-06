@@ -47,16 +47,17 @@ public class TtfGlyphAtlas {
         );
 
         this.texture = new LuminTexture(texture, textureView, sampler);
-        clearTexture(texture);
+        fillTextureWithTransparentDistance(texture);
         Minecraft.getInstance().getTextureManager().register(this.textureId, this.texture);
     }
 
-    private static void clearTexture(GpuTexture texture) {
-        ByteBuffer zeros = MemoryUtil.memCalloc(SIZE * SIZE);
+    private static void fillTextureWithTransparentDistance(GpuTexture texture) {
+        ByteBuffer transparent = MemoryUtil.memAlloc(SIZE * SIZE);
         try {
+            MemoryUtil.memSet(MemoryUtil.memAddress(transparent), 0xFF, SIZE * SIZE);
             RenderSystem.getDevice().createCommandEncoder().writeToTexture(
                     texture,
-                    zeros,
+                    transparent,
                     NativeImage.Format.LUMINANCE,
                     0,
                     0,
@@ -65,7 +66,7 @@ public class TtfGlyphAtlas {
                     SIZE
             );
         } finally {
-            MemoryUtil.memFree(zeros);
+            MemoryUtil.memFree(transparent);
         }
     }
 
