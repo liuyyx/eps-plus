@@ -3,9 +3,9 @@ package com.github.epsilon.mixins;
 import com.github.epsilon.Constants;
 import com.github.epsilon.events.bus.EventBus;
 import com.github.epsilon.events.impl.ClickEvent;
+import com.github.epsilon.events.impl.ClientTickEvent;
 import com.github.epsilon.events.impl.LevelUpdateEvent;
 import com.github.epsilon.events.impl.StartUseItemEvent;
-import com.github.epsilon.events.impl.TickEvent;
 import com.github.epsilon.graphics.LuminRenderSystem;
 import com.github.epsilon.modules.impl.ClientSetting;
 import com.github.epsilon.modules.impl.player.MultiTask;
@@ -35,12 +35,12 @@ public class MixinMinecraft {
 
     @Inject(method = "tick", at = @At("HEAD"))
     private void onPreTick(CallbackInfo info) {
-        EventBus.INSTANCE.post(new TickEvent.Pre());
+        EventBus.INSTANCE.post(new ClientTickEvent.Pre());
     }
 
     @Inject(method = "tick", at = @At("TAIL"))
     private void onPostTick(CallbackInfo info) {
-        EventBus.INSTANCE.post(new TickEvent.Post());
+        EventBus.INSTANCE.post(new ClientTickEvent.Post());
     }
 
     @ModifyArg(method = "updateTitle", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/platform/Window;setTitle(Ljava/lang/String;)V"))

@@ -2,7 +2,7 @@ package com.github.epsilon.modules.impl.player;
 
 import com.github.epsilon.events.bus.EventHandler;
 import com.github.epsilon.events.impl.PacketEvent;
-import com.github.epsilon.events.impl.TickEvent;
+import com.github.epsilon.events.impl.PlayerTickEvent;
 import com.github.epsilon.modules.Category;
 import com.github.epsilon.modules.Module;
 import net.minecraft.core.component.DataComponents;
@@ -20,8 +20,7 @@ public class PacketEat extends Module {
     private ItemStack item;
 
     @EventHandler
-    private void onPostTick(TickEvent.Post event) {
-        if (nullCheck()) return;
+    private void onPostTick(PlayerTickEvent.Post event) {
         if (mc.player.isUsingItem()) {
             item = mc.player.getUseItem();
         }

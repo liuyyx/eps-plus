@@ -2,7 +2,7 @@ package com.github.epsilon.managers.target;
 
 import com.github.epsilon.events.bus.EventBus;
 import com.github.epsilon.events.bus.EventHandler;
-import com.github.epsilon.events.impl.TickEvent;
+import com.github.epsilon.events.impl.ClientTickEvent;
 import com.github.epsilon.managers.FriendManager;
 import com.github.epsilon.modules.impl.combat.AntiBot;
 import com.github.epsilon.utils.rotation.RotationUtils;
@@ -31,7 +31,7 @@ public class TargetManager {
     }
 
     @EventHandler
-    private void onTick(TickEvent.Pre event) {
+    private void onTick(ClientTickEvent.Pre event) {
         if (mc.player == null || mc.level == null) {
             sharedTarget = null;
             return;
