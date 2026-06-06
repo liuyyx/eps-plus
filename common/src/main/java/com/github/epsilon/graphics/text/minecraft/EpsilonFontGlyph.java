@@ -24,6 +24,9 @@ import java.util.Map;
 
 public final class EpsilonFontGlyph implements BakedGlyph {
 
+    private static final float SHADOW_OFFSET = 0.45f;
+    private static final float BOLD_OFFSET = 0.45f;
+
     private static final Map<TtfGlyphAtlas, RenderType> AA_RENDER_TYPES = new IdentityHashMap<>();
     private static final Map<TtfGlyphAtlas, RenderType> NO_AA_RENDER_TYPES = new IdentityHashMap<>();
 
@@ -36,7 +39,7 @@ public final class EpsilonFontGlyph implements BakedGlyph {
         this.codepoint = codepoint;
         this.font = font;
         this.descriptor = descriptor;
-        this.info = GlyphInfo.simple(EpsilonFontMetrics.advance(codepoint, Style.EMPTY, font));
+        this.info = new EpsilonGlyphInfo(EpsilonFontMetrics.advance(codepoint, Style.EMPTY, font));
     }
 
     public static @Nullable EpsilonFontGlyph create(int codepoint) {
@@ -101,6 +104,10 @@ public final class EpsilonFontGlyph implements BakedGlyph {
         return x;
     }
 
+    private static float extraThickness(boolean bold) {
+        return bold ? 0.06f : 0.0f;
+    }
+
     private float top(float y) {
         if (this.descriptor == null) {
             return y;
@@ -114,7 +121,7 @@ public final class EpsilonFontGlyph implements BakedGlyph {
         }
         float right = x + this.descriptor.width() * scale();
         if (hasShadow) right += shadowOffset;
-        if (bold) right += 0.1f;
+        if (bold) right += extraThickness(true);
         if (italic) right += 1.0f;
         return right;
     }
@@ -122,7 +129,7 @@ public final class EpsilonFontGlyph implements BakedGlyph {
     private float bottom(float y, boolean hasShadow, float shadowOffset, boolean bold) {
         float bottom = top(y) + this.descriptor.height() * scale();
         if (hasShadow) bottom += shadowOffset;
-        if (bold) bottom += 0.1f;
+        if (bold) bottom += extraThickness(true);
         return bottom;
     }
 
@@ -134,7 +141,7 @@ public final class EpsilonFontGlyph implements BakedGlyph {
         float x1 = x0 + this.descriptor.width() * scale();
         float y0 = top(instance.y) + offsetY;
         float y1 = y0 + this.descriptor.height() * scale();
-        float extraThickness = bold ? 0.1f : 0.0f;
+        float extraThickness = extraThickness(bold);
 
         float shearTop = instance.style.isItalic() ? 1.0f - 0.25f * (y0 - instance.y) : 0.0f;
         float shearBottom = instance.style.isItalic() ? 1.0f - 0.25f * (y1 - instance.y) : 0.0f;
@@ -228,6 +235,23 @@ public final class EpsilonFontGlyph implements BakedGlyph {
         @Override
         public float bottom() {
             return this.glyph.bottom(this.y, this.hasShadow(), this.shadowOffset, this.style.isBold());
+        }
+    }
+
+    private record EpsilonGlyphInfo(float advance) implements GlyphInfo {
+        @Override
+        public float getAdvance() {
+            return this.advance;
+        }
+
+        @Override
+        public float getBoldOffset() {
+            return BOLD_OFFSET;
+        }
+
+        @Override
+        public float getShadowOffset() {
+            return SHADOW_OFFSET;
         }
     }
 }
