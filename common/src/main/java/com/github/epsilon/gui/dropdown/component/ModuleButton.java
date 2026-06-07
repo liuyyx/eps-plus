@@ -152,10 +152,7 @@ public class ModuleButton extends Component {
         Color textColor = MD3Theme.lerp(DropdownTheme.moduleTextDisabled(hover), DropdownTheme.moduleTextEnabled(), toggle);
         float textY = y + (DropdownTheme.MODULE_HEIGHT - renderer.text().getHeight(DropdownTheme.MODULE_TEXT_SCALE)) * 0.5f;
         float leftX = x + DropdownTheme.MODULE_PADDING_X;
-        float hiddenButtonW = 18.0f;
-        float controlsLeftX = x + width - DropdownTheme.MODULE_PADDING_X - DropdownTheme.KEYBIND_WIDTH - 4.0f - hiddenButtonW;
-        float nameMaxWidth = Math.max(12.0f, controlsLeftX - leftX - DropdownTheme.MODULE_ADDON_GAP);
-        renderer.text().addText(trimToWidth(module.getTranslatedName(), DropdownTheme.MODULE_TEXT_SCALE, nameMaxWidth, renderer), leftX, textY, DropdownTheme.MODULE_TEXT_SCALE, textColor);
+        renderer.text().addText(module.getTranslatedName(), leftX, textY, DropdownTheme.MODULE_TEXT_SCALE, textColor);
 
         drawKeybindButton(renderer, mouseX, mouseY, toggle);
         drawHiddenButton(renderer, mouseX, mouseY);
@@ -208,7 +205,6 @@ public class ModuleButton extends Component {
 
         float scale = DropdownTheme.MODULE_ADDON_INFO_TEXT_SCALE;
         String addonLabel = fromComponent.getTranslatedName() + " " + getAddonLabel();
-        addonLabel = trimToWidth(addonLabel, scale, infoW - DropdownTheme.SETTING_PADDING_X * 2.0f, renderer);
         float textY = infoY + (infoH - renderer.text().getHeight(scale)) * 0.5f - 0.5f;
         renderer.text().addText(addonLabel, infoX + DropdownTheme.SETTING_PADDING_X, textY, scale, DropdownTheme.moduleAddonInfoText());
     }
@@ -231,7 +227,7 @@ public class ModuleButton extends Component {
         float headerRadius = DropdownTheme.BUTTON_RADIUS;
         renderer.roundRect().addRoundRect(headerX, sectionY, headerW, headerH, headerRadius, headerBg);
 
-        String label = trimToWidth(group.getDisplayName(), DropdownTheme.GROUP_HEADER_TEXT_SCALE, headerW - 74.0f, renderer);
+        String label = group.getDisplayName();
         float labelY = sectionY + (headerH - renderer.text().getHeight(DropdownTheme.GROUP_HEADER_TEXT_SCALE)) * 0.5f;
         renderer.text().addText(label, headerX + DropdownTheme.SETTING_PADDING_X, labelY, DropdownTheme.GROUP_HEADER_TEXT_SCALE, DropdownTheme.groupText());
 
@@ -266,19 +262,6 @@ public class ModuleButton extends Component {
         Animation anim = new Animation(Easing.EASE_OUT_CUBIC, duration);
         anim.setStartValue(startValue);
         return anim;
-    }
-
-    private String trimToWidth(String value, float scale, float maxWidth, DropdownRenderer renderer) {
-        if (value == null || value.isEmpty()) return "";
-        if (renderer.text().getWidth(value, scale) <= maxWidth) return value;
-        String ellipsis = "...";
-        float ellipsisWidth = renderer.text().getWidth(ellipsis, scale);
-        if (ellipsisWidth >= maxWidth) return ellipsis;
-        for (int len = value.length() - 1; len >= 0; len--) {
-            String candidate = value.substring(0, len) + ellipsis;
-            if (renderer.text().getWidth(candidate, scale) <= maxWidth) return candidate;
-        }
-        return ellipsis;
     }
 
     private String getAddonLabel() {
