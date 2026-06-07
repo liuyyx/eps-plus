@@ -144,10 +144,10 @@ public class CategoryPanel extends AbstractDropdownPanel {
     private Comparator<ModuleButton> getComparator(ClientSetting.ModuleSort sortMode) {
         Comparator<ModuleButton> nameComparator = Comparator.comparing(button -> normalizedName(button.getModule()), String.CASE_INSENSITIVE_ORDER);
         return switch (sortMode) {
-            case EnabledFirst -> Comparator.comparing((ModuleButton button) -> button.getModule().isEnabled()).reversed()
-                    .thenComparing(nameComparator);
-            case Addon -> Comparator.comparing((ModuleButton button) -> normalizedAddon(button.getModule()), String.CASE_INSENSITIVE_ORDER)
-                    .thenComparing(nameComparator);
+            case EnabledFirst ->
+                    Comparator.comparing((ModuleButton button) -> button.getModule().isEnabled()).reversed().thenComparing(nameComparator);
+            case Addon ->
+                    Comparator.comparing((ModuleButton button) -> normalizedAddon(button.getModule()), String.CASE_INSENSITIVE_ORDER).thenComparing(nameComparator);
             case Name -> nameComparator;
         };
     }

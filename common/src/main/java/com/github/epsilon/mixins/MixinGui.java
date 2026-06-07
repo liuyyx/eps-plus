@@ -1,7 +1,7 @@
 package com.github.epsilon.mixins;
 
-import com.github.epsilon.modules.impl.render.NoRender;
 import com.github.epsilon.modules.impl.render.GameAnimation;
+import com.github.epsilon.modules.impl.render.NoRender;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.gui.Gui;
 import net.minecraft.client.gui.GuiGraphicsExtractor;

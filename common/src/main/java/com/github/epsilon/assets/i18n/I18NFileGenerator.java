@@ -83,6 +83,9 @@ public class I18NFileGenerator {
         root.addProperty(PREFIX + "gui.dropdown.status.deleted", "");
         root.addProperty(PREFIX + "gui.dropdown.status.switched", "");
         root.addProperty(PREFIX + "gui.dropdown.status.created", "");
+        root.addProperty(PREFIX + "gui.dropdown.hint.search", "");
+        root.addProperty(PREFIX + "gui.dropdown.hint.panels", "");
+        root.addProperty(PREFIX + "gui.dropdown.hint.drag", "");
 
         root.addProperty(PREFIX + "gui.modules", "");
 

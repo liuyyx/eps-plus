@@ -15,11 +15,7 @@ public class AntiAlias extends Module {
     }
 
     @EventHandler
-    public void onAfterRender3D(AfterRender3DEvent event) {
-        if (nullCheck()) {
-            return;
-        }
-
+    private void onAfterRender3D(AfterRender3DEvent event) {
         FXAAShader.INSTANCE.renderMainTarget();
     }
 

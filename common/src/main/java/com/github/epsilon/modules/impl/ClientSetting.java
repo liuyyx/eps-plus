@@ -94,6 +94,8 @@ public class ClientSetting extends Module {
 
     public final BoolSetting closeOnOutside = boolSetting("Close Gui On Outside", false, () -> guiMode.is(GuiMode.Panel)).group(sgGeneral);
 
+    public final BoolSetting dropdownHints = boolSetting("Dropdown Hints", true, () -> guiMode.is(GuiMode.Dropdown)).group(sgGeneral);
+
     // Anti Cheat
     public final BoolSetting modifyCrosshair = boolSetting("Modify Crosshair", false).group(sgAntiCheat);
 

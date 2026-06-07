@@ -30,7 +30,7 @@ public class Chams extends Module {
         super("Chams", Category.RENDER);
     }
 
-    private SettingGroup sgGlow = settingGroup("Glow");
+    private final SettingGroup sgGlow = settingGroup("Glow");
 
     public final BoolSetting noDepth = boolSetting("No Depth", true);
 

@@ -8,8 +8,10 @@ import com.github.epsilon.gui.dropdown.widget.DropdownTextField;
 import com.github.epsilon.gui.panel.MD3Theme;
 import com.github.epsilon.gui.panel.utils.IMEFocusHelper;
 import com.github.epsilon.modules.Category;
+import com.github.epsilon.modules.impl.ClientSetting;
 import com.github.epsilon.utils.render.animation.Animation;
 import com.github.epsilon.utils.render.animation.Easing;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.IMEPreeditOverlay;
 import net.minecraft.client.gui.screens.Screen;
@@ -19,6 +21,7 @@ import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.input.PreeditEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
+import org.lwjgl.glfw.GLFW;
 
 import java.awt.*;
 import java.util.ArrayList;
@@ -28,6 +31,9 @@ public class DropdownScreen extends Screen {
 
     public static final DropdownScreen INSTANCE = new DropdownScreen();
     private static final TranslateComponent searchComponent = EpsilonTranslateComponent.create("gui", "search");
+    private static final TranslateComponent searchHintComponent = EpsilonTranslateComponent.create("gui", "dropdown.hint.search");
+    private static final TranslateComponent panelHintComponent = EpsilonTranslateComponent.create("gui", "dropdown.hint.panels");
+    private static final TranslateComponent dragHintComponent = EpsilonTranslateComponent.create("gui", "dropdown.hint.drag");
 
     private final List<DropdownPanel> panels = new ArrayList<>();
     private final DropdownRenderer renderer = new DropdownRenderer();
@@ -155,7 +161,33 @@ public class DropdownScreen extends Screen {
         float searchX = getSearchX();
         float searchY = getSearchY();
         searchField.draw(renderer, searchX, searchY, getSearchWidth(), getSearchHeight(), mouseX, mouseY, searchComponent.getTranslatedName(), 0.58f);
+        drawHints();
         renderer.flush();
+    }
+
+    private void drawHints() {
+        if (ClientSetting.INSTANCE.dropdownHints.getValue()) {
+            float scale = 0.62f;
+            float lineGap = 5.0f;
+            float lineHeight = renderer.text().getLineHeight(scale);
+            String[] hints = {
+                    searchHintComponent.getTranslatedName(),
+                    panelHintComponent.getTranslatedName(),
+                    dragHintComponent.getTranslatedName()
+            };
+            float xRight = LuminRenderSystem.getScaledWidth() - DropdownTheme.PANEL_MARGIN_X;
+            float y = LuminRenderSystem.getScaledHeight() - DropdownTheme.PANEL_MARGIN_Y - hints.length * lineHeight - (hints.length - 1) * lineGap;
+            int alpha = (int) (255 * scrimAnim.getValue());
+            if (alpha <= 0) {
+                return;
+            }
+            Color color = MD3Theme.withAlpha(Color.WHITE, alpha);
+            for (String hint : hints) {
+                float x = xRight - renderer.text().getWidth(hint, scale);
+                renderer.text().addText(hint, x, y, scale, color);
+                y += lineHeight + lineGap;
+            }
+        }
     }
 
     @Override
@@ -228,6 +260,10 @@ public class DropdownScreen extends Screen {
 
     @Override
     public boolean keyPressed(KeyEvent event) {
+        if (event.key() == GLFW.GLFW_KEY_F && InputConstants.isKeyDown(minecraft.getWindow(), GLFW.GLFW_KEY_LEFT_CONTROL)) {
+            searchField.focus();
+            return true;
+        }
         if (searchField.isFocused()) {
             if (event.isEscape()) {
                 searchField.blur();

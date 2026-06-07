@@ -54,10 +54,14 @@ public class DropdownTextField {
         if (mouseX < x || mouseX > x + width || mouseY < y || mouseY > y + height) {
             return false;
         }
+        focus();
+        return true;
+    }
+
+    public void focus() {
         focused = true;
         cursor = text.length();
         IMEFocusHelper.activate();
-        return true;
     }
 
     public void blur() {
