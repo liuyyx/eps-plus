@@ -138,7 +138,7 @@ public class RotationManager {
                 }
             }
 
-            rotations = RotationUtils.smooth(new Rot2f(targetYaw, targetPitch), rotationSpeed + Math.random());
+            rotations = RotationUtils.smooth(new Rot2f(targetYaw, targetPitch), Math.ceil(rotationSpeed) + Math.random());
         }
 
         smoothed = true;

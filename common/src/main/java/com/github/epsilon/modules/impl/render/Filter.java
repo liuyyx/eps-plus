@@ -6,8 +6,8 @@ import com.github.epsilon.events.impl.AfterRender3DEvent;
 import com.github.epsilon.graphics.shaders.FilterShader;
 import com.github.epsilon.modules.Category;
 import com.github.epsilon.modules.Module;
-import com.github.epsilon.settings.impl.EnumSetting;
 import com.github.epsilon.settings.impl.ColorSetting;
+import com.github.epsilon.settings.impl.EnumSetting;
 
 import java.awt.*;
 
