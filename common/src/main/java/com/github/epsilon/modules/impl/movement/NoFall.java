@@ -7,7 +7,6 @@ import com.github.epsilon.modules.Category;
 import com.github.epsilon.modules.Module;
 import com.github.epsilon.settings.impl.DoubleSetting;
 import com.github.epsilon.settings.impl.EnumSetting;
-import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 
 public class NoFall extends Module {
 
@@ -19,7 +18,6 @@ public class NoFall extends Module {
 
     private enum Mode {
         GroundSpoof,
-        Packet,
         GrimSimulation
     }
 
@@ -40,7 +38,6 @@ public class NoFall extends Module {
         if (flag && mc.player.onGround()) {
             switch (mode.getValue()) {
                 case GroundSpoof -> event.setOnGround(false);
-                case Packet -> mc.getConnection().send(new ServerboundMovePlayerPacket.StatusOnly(false, false));
                 case GrimSimulation -> {
                     event.setY(event.getY() + 0.1);
                     jump = true;
@@ -51,7 +48,7 @@ public class NoFall extends Module {
     }
 
     @EventHandler
-    private void onMovementInputEvent(KeyboardInputEvent event) {
+    private void onKeyboardInput(KeyboardInputEvent event) {
         if (jump) {
             event.setJump(true);
             jump = false;
