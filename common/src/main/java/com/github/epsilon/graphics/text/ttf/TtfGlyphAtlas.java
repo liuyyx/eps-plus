@@ -1,9 +1,11 @@
 package com.github.epsilon.graphics.text.ttf;
 
+import com.github.epsilon.graphics.LuminRenderSystem;
 import com.github.epsilon.graphics.LuminTexture;
 import com.mojang.blaze3d.GpuFormat;
 import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
+import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.systems.CommandEncoder;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.textures.AddressMode;
@@ -68,31 +70,46 @@ public class TtfGlyphAtlas {
         int byteCount = width * height * texture.getFormat().blockSize();
         long uploadSize = roundToward(byteCount, TEXTURE_UPLOAD_ALIGNMENT);
         CommandEncoder encoder = RenderSystem.getDevice().createCommandEncoder();
-        // 不直接使用 CommandEncoder.writeToTexture：26.2 的 Vulkan 后端会以 1 字节对齐分配 staging，
-        // 连续上传 R8 字体 atlas 后可能让后续 RGBA 纹理拷贝的 bufferOffset 不是 4 字节对齐，触发 validation layer 错误。
-        try (GpuBufferSlice.MappedView staging = encoder.transientMemory().allocateStaging(
-                uploadSize,
-                TEXTURE_UPLOAD_ALIGNMENT,
-                GpuBuffer.USAGE_COPY_SRC,
-                uploadSize,
-                TEXTURE_UPLOAD_ALIGNMENT
-        )) {
-            MemoryUtil.memCopy(MemoryUtil.memAddress(source), MemoryUtil.memAddress(staging.data()), byteCount);
-            encoder.copyBufferToTexture(
-                    staging.slice(),
-                    0,
-                    0,
-                    width,
-                    height,
+
+        if (LuminRenderSystem.isVulkan()) {
+            // 不使用 CommandEncoder.writeToTexture 因为 26.2 的 Vulkan 后端会以 1 字节对齐分配 staging，
+            // 连续上传 R8 字体 atlas 后可能让后续 RGBA 纹理拷贝的 bufferOffset 不是 4 字节对齐，触发错误导致其他纹理无法上传。
+            try (GpuBufferSlice.MappedView staging = encoder.transientMemory().allocateStaging(
+                    uploadSize,
+                    TEXTURE_UPLOAD_ALIGNMENT,
+                    GpuBuffer.USAGE_COPY_SRC,
+                    uploadSize,
+                    TEXTURE_UPLOAD_ALIGNMENT
+            )) {
+                MemoryUtil.memCopy(MemoryUtil.memAddress(source), MemoryUtil.memAddress(staging.data()), byteCount);
+                encoder.copyBufferToTexture(
+                        staging.slice(),
+                        0,
+                        0,
+                        width,
+                        height,
+                        texture,
+                        destX,
+                        destY,
+                        width,
+                        height,
+                        0,
+                        0
+                );
+            }
+        } else {
+            RenderSystem.getDevice().createCommandEncoder().writeToTexture(
                     texture,
-                    destX,
-                    destY,
-                    width,
-                    height,
+                    source,
                     0,
-                    0
+                    0,
+                    destX, destY,
+                    width,
+                    height
             );
         }
+
+
     }
 
     private static long roundToward(long value, long alignment) {

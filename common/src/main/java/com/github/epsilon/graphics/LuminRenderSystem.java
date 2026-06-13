@@ -14,6 +14,7 @@ import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.textures.*;
+import com.mojang.blaze3d.vulkan.VulkanDevice;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.renderer.Projection;
@@ -46,6 +47,10 @@ public class LuminRenderSystem {
 
     public static void setActiveTarget(@Nullable LuminRenderTarget target) {
         activeTarget = target;
+    }
+
+    public static boolean isVulkan() {
+        return RenderSystem.getDevice().backend instanceof VulkanDevice;
     }
 
     public static void destroyAll() {
