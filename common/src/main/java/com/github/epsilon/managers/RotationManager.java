@@ -195,8 +195,9 @@ public class RotationManager {
 
     @EventHandler
     private void onRespawn(RespawnEvent event) {
-        lastRotations = null;
+        offset.set(0, 0);
         rotations = null;
+        lastRotations = new Rot2f(0, 0);
         targetRotations = null;
         animationRotation = null;
         lastAnimationRotation = null;
@@ -207,7 +208,6 @@ public class RotationManager {
         raytrace = null;
         randomAngle = 0;
         s08 = false;
-        offset.set(0, 0);
         hitResult = null;
         crosshairPickEntity = null;
     }
