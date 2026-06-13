@@ -1,12 +1,14 @@
 package com.github.epsilon.graphics.text.ttf;
 
 import com.github.epsilon.graphics.LuminTexture;
-import com.mojang.blaze3d.platform.NativeImage;
+import com.mojang.blaze3d.GpuFormat;
+import com.mojang.blaze3d.buffers.GpuBuffer;
+import com.mojang.blaze3d.buffers.GpuBufferSlice;
+import com.mojang.blaze3d.systems.CommandEncoder;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.textures.AddressMode;
 import com.mojang.blaze3d.textures.FilterMode;
 import com.mojang.blaze3d.textures.GpuTexture;
-import com.mojang.blaze3d.textures.TextureFormat;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.Identifier;
 import org.lwjgl.system.MemoryUtil;
@@ -20,6 +22,7 @@ public class TtfGlyphAtlas {
     private static final int SIZE = 512;
     private static final int GLYPH_GUTTER = 2;
     private static final int UV_INSET = 1;
+    private static final long TEXTURE_UPLOAD_ALIGNMENT = 4L;
     private static final AtomicInteger NEXT_TEXTURE_ID = new AtomicInteger();
     private final LuminTexture texture;
     private final Identifier textureId;
@@ -34,7 +37,7 @@ public class TtfGlyphAtlas {
         final var texture = RenderSystem.getDevice().createTexture(
                 () -> "Lumin-TtfGlyphAtlas",
                 GpuTexture.USAGE_TEXTURE_BINDING | GpuTexture.USAGE_COPY_DST,
-                TextureFormat.RED8,
+                GpuFormat.R8_UNORM,
                 SIZE, SIZE,
                 1, 1
         );
@@ -55,19 +58,46 @@ public class TtfGlyphAtlas {
         ByteBuffer transparent = MemoryUtil.memAlloc(SIZE * SIZE);
         try {
             MemoryUtil.memSet(MemoryUtil.memAddress(transparent), 0xFF, SIZE * SIZE);
-            RenderSystem.getDevice().createCommandEncoder().writeToTexture(
-                    texture,
-                    transparent,
-                    NativeImage.Format.LUMINANCE,
-                    0,
-                    0,
-                    0, 0,
-                    SIZE,
-                    SIZE
-            );
+            uploadTexture(texture, transparent, 0, 0, SIZE, SIZE);
         } finally {
             MemoryUtil.memFree(transparent);
         }
+    }
+
+    private static void uploadTexture(GpuTexture texture, ByteBuffer source, int destX, int destY, int width, int height) {
+        int byteCount = width * height * texture.getFormat().blockSize();
+        long uploadSize = roundToward(byteCount, TEXTURE_UPLOAD_ALIGNMENT);
+        CommandEncoder encoder = RenderSystem.getDevice().createCommandEncoder();
+        // 不直接使用 CommandEncoder.writeToTexture：26.2 的 Vulkan 后端会以 1 字节对齐分配 staging，
+        // 连续上传 R8 字体 atlas 后可能让后续 RGBA 纹理拷贝的 bufferOffset 不是 4 字节对齐，触发 validation layer 错误。
+        try (GpuBufferSlice.MappedView staging = encoder.transientMemory().allocateStaging(
+                uploadSize,
+                TEXTURE_UPLOAD_ALIGNMENT,
+                GpuBuffer.USAGE_COPY_SRC,
+                uploadSize,
+                TEXTURE_UPLOAD_ALIGNMENT
+        )) {
+            MemoryUtil.memCopy(MemoryUtil.memAddress(source), MemoryUtil.memAddress(staging.data()), byteCount);
+            encoder.copyBufferToTexture(
+                    staging.slice(),
+                    0,
+                    0,
+                    width,
+                    height,
+                    texture,
+                    destX,
+                    destY,
+                    width,
+                    height,
+                    0,
+                    0
+            );
+        }
+    }
+
+    private static long roundToward(long value, long alignment) {
+        long remainder = value % alignment;
+        return remainder == 0 ? value : value + alignment - remainder;
     }
 
     /**
@@ -95,12 +125,9 @@ public class TtfGlyphAtlas {
         int glyphX = currentX + GLYPH_GUTTER;
         int glyphY = currentY + GLYPH_GUTTER;
 
-        RenderSystem.getDevice().createCommandEncoder().writeToTexture(
+        uploadTexture(
                 this.texture.getTexture(),
                 glyph.glyphData(),
-                NativeImage.Format.LUMINANCE,
-                0,
-                0,
                 glyphX, glyphY,
                 glyph.width(),
                 glyph.height()

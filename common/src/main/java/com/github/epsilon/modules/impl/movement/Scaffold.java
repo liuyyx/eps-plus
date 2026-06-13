@@ -421,7 +421,7 @@ public class Scaffold extends Module {
             return false;
         }
 
-        Vec3 center = pos.getBottomCenter();
+        Vec3 center = Vec3.atBottomCenterOf(pos);
         for (Direction dir : Direction.values()) {
             Vec3 normal = dir.getUnitVec3();
             Vec3 hit = center.add(normal.scale(0.5));

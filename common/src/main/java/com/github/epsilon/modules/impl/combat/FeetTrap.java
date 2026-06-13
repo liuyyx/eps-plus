@@ -269,7 +269,7 @@ public class FeetTrap extends Module {
         VoxelShape shape = state.getShape(mc.level, pos);
 
         if (shape.isEmpty()) {
-            return pos.getCenter().add(side.getStepX() * 0.5, side.getStepY() * 0.5, side.getStepZ() * 0.5);
+            return Vec3.atCenterOf(pos).add(side.getStepX() * 0.5, side.getStepY() * 0.5, side.getStepZ() * 0.5);
         }
 
         AABB bounds = shape.bounds();

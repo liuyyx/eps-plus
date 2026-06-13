@@ -87,7 +87,6 @@ public final class EpsilonFontGlyph implements BakedGlyph {
                 name,
                 RenderSetup.builder(pipeline)
                         .withTexture("Sampler0", atlas.getTextureId(), () -> atlas.getTexture().getSampler())
-                        .bufferSize(RenderType.SMALL_BUFFER_SIZE)
                         .createRenderSetup()
         ));
     }

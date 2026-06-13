@@ -6,12 +6,15 @@ import com.github.epsilon.graphics.LuminRenderPipelines;
 import com.github.epsilon.graphics.LuminRenderSystem;
 import com.github.epsilon.graphics.LuminTexture;
 import com.github.epsilon.graphics.buffer.LuminRingBuffer;
+import com.mojang.blaze3d.GpuFormat;
+import com.mojang.blaze3d.PrimitiveTopology;
 import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.systems.RenderPass;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.textures.*;
+import com.mojang.blaze3d.vertex.VertexFormat;
 import net.minecraft.client.renderer.rendertype.TextureTransform;
 import net.minecraft.client.renderer.texture.AbstractTexture;
 import net.minecraft.client.renderer.texture.MissingTextureAtlasSprite;
@@ -25,8 +28,8 @@ import java.awt.*;
 import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.OptionalDouble;
-import java.util.OptionalInt;
 
 import static com.github.epsilon.Constants.mc;
 
@@ -143,11 +146,11 @@ public class TextureRenderer implements IRenderer {
         GpuTextureView colorView = LuminRenderSystem.resolveColorView();
         if (colorView == null) return;
 
-        GpuBufferSlice dynamicUniforms = LuminRenderSystem.writeTransform(
-                RenderSystem.getModelViewMatrix(),
+        GpuBufferSlice dynamicUniforms = RenderSystem.getDynamicUniforms().writeTransform(
+                RenderSystem.getModelViewMatrixCopy(),
                 new Vector4f(1, 1, 1, 1),
                 new Vector3f(0, 0, 0),
-                TextureTransform.DEFAULT_TEXTURING.getMatrix()
+                TextureTransform.DEFAULT_TEXTURING.createMatrix()
         );
 
         for (Map.Entry<Object, Batch> entry : batches.entrySet()) {
@@ -160,7 +163,8 @@ public class TextureRenderer implements IRenderer {
             }
 
             int indexCount = (batch.vertexCount / 4) * 6;
-            GpuBuffer ibo = LuminRenderSystem.getQuadIndexBuffer(indexCount);
+            RenderSystem.AutoStorageIndexBuffer autoIndices = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS);
+            GpuBuffer ibo = autoIndices.getBuffer(indexCount);
 
             LuminTexture texture;
             if (textureKey instanceof Identifier id) {
@@ -175,7 +179,7 @@ public class TextureRenderer implements IRenderer {
 
             try (RenderPass pass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(
                     () -> "Rounded Texture Draw",
-                    colorView, OptionalInt.empty(),
+                    colorView, Optional.empty(),
                     null, OptionalDouble.empty())
             ) {
                 pass.setPipeline(LuminRenderPipelines.TEXTURE);
@@ -183,12 +187,11 @@ public class TextureRenderer implements IRenderer {
                 RenderSystem.bindDefaultUniforms(pass);
                 pass.setUniform("DynamicTransforms", dynamicUniforms);
 
-                // 使用 RingBuffer 当前指向的 GpuBuffer
-                pass.setVertexBuffer(0, batch.buffer.getGpuBuffer());
-                pass.setIndexBuffer(ibo, LuminRenderSystem.getQuadIndexType());
+                pass.setVertexBuffer(0, new GpuBufferSlice(batch.buffer.getGpuBuffer(), 0, batch.buffer.getGpuBuffer().size()));
+                pass.setIndexBuffer(ibo, autoIndices.type());
                 pass.bindTexture("Sampler0", texture.getTextureView(), texture.getSampler());
 
-                pass.drawIndexed(0, 0, indexCount, 1);
+                pass.drawIndexed(indexCount, 1, 0, 0, 0);
             }
         }
     }
@@ -215,7 +218,7 @@ public class TextureRenderer implements IRenderer {
         }
 
         var device = RenderSystem.getDevice();
-        GpuTexture texture = device.createTexture(identifier.toString(), GpuTexture.USAGE_COPY_DST | GpuTexture.USAGE_TEXTURE_BINDING, TextureFormat.RGBA8, image.getWidth(), image.getHeight(), 1, 1);
+        GpuTexture texture = device.createTexture(identifier.toString(), GpuTexture.USAGE_COPY_DST | GpuTexture.USAGE_TEXTURE_BINDING, GpuFormat.RGBA8_UNORM, image.getWidth(), image.getHeight(), 1, 1);
 
         device.createCommandEncoder().writeToTexture(texture, image);
 

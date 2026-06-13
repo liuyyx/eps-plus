@@ -1,8 +1,9 @@
 package com.github.epsilon.graphics.shaders;
 
 import com.github.epsilon.assets.resources.ResourceLocationUtils;
-import com.github.epsilon.graphics.LuminRenderSystem;
+import com.mojang.blaze3d.GpuFormat;
 import com.mojang.blaze3d.buffers.GpuBuffer;
+import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.buffers.Std140Builder;
 import com.mojang.blaze3d.buffers.Std140SizeCalculator;
 import com.mojang.blaze3d.pipeline.*;
@@ -15,7 +16,7 @@ import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.resources.Identifier;
 
 import java.awt.*;
-import java.util.OptionalInt;
+import java.util.Optional;
 
 import static com.github.epsilon.Constants.mc;
 
@@ -23,7 +24,7 @@ public class BlurShader {
 
     public static final BlurShader INSTANCE = new BlurShader();
 
-    private static final Identifier BLUR_PATH = ResourceLocationUtils.getIdentifier("blur");
+    private static final Identifier identifier = ResourceLocationUtils.getIdentifier("blur");
 
     private static final int UNIFORMS_SIZE = new Std140SizeCalculator()
             .putVec3()
@@ -43,10 +44,10 @@ public class BlurShader {
         if (this.pipeline == null) {
             this.pipeline = RenderPipeline.builder(RenderPipelines.POST_PROCESSING_SNIPPET)
                     .withLocation(ResourceLocationUtils.getIdentifier("pipeline/blur"))
-                    .withVertexShader(BLUR_PATH)
-                    .withFragmentShader(BLUR_PATH)
-                    .withUniform("BlurUniforms", UniformType.UNIFORM_BUFFER)
-                    .withSampler("InputSampler")
+                    .withVertexShader(identifier)
+                    .withFragmentShader(identifier)
+                    .withBindGroupLayout(BindGroupLayout.builder().withUniform("BlurUniforms", UniformType.UNIFORM_BUFFER).build())
+                    .withBindGroupLayout(BindGroupLayout.builder().withSampler("InputSampler").build())
                     .withColorTargetState(new ColorTargetState(BlendFunction.TRANSLUCENT))
                     .withCull(false)
                     .build();
@@ -56,7 +57,7 @@ public class BlurShader {
     public void render(float x, float y, float width, float height, float rTL, float rTR, float rBR, float rBL, Color color, float blurStrength) {
         this.ensureProgram();
 
-        RenderTarget fb = mc.getMainRenderTarget();
+        RenderTarget fb = mc.gameRenderer.mainRenderTarget();
         if (fb.getColorTexture() == null || fb.getColorTextureView() == null) {
             return;
         }
@@ -65,19 +66,18 @@ public class BlurShader {
         int fbHeight = mc.getWindow().getHeight();
 
         if (input == null) {
-            input = new TextureTarget("Lumin Blur Input", fbWidth, fbHeight, false);
+            input = new TextureTarget("Lumin Blur Input", fbWidth, fbHeight, false, GpuFormat.RGBA8_UNORM);
         }
 
         if (this.input.width != fbWidth || this.input.height != fbHeight) {
             this.input.resize(fbWidth, fbHeight);
         }
 
-        LuminRenderSystem.ScissorRect blurRect = LuminRenderSystem.toFramebufferScissor(x, y, width, height);
-        float scale = (float) LuminRenderSystem.getGuiScale();
-        float pxX = blurRect.x();
-        float pxY = blurRect.y();
-        float pxW = blurRect.width();
-        float pxH = blurRect.height();
+        float scale = (float) mc.getWindow().getGuiScale();
+        float pxX = x * scale;
+        float pxY = (-y + mc.getWindow().getGuiScaledHeight() - height) * scale;
+        float pxW = width * scale;
+        float pxH = height * scale;
 
         float rTLPx = Math.max(0.0f, rTL * scale);
         float rTRPx = Math.max(0.0f, rTR * scale);
@@ -94,7 +94,7 @@ public class BlurShader {
                 fb.width, fb.height
         );
 
-        try (GpuBuffer.MappedView view = encoder.mapBuffer(this.uniforms, false, true)) {
+        try (GpuBufferSlice.MappedView view = this.uniforms.map(false, true)) {
             Std140Builder builder = Std140Builder.intoBuffer(view.data());
             builder.putVec3(fb.width, fb.height, quality);
             builder.putVec4(pxW, pxH, pxX, pxY);
@@ -105,14 +105,14 @@ public class BlurShader {
         try (RenderPass renderPass = encoder.createRenderPass(
                 () -> "Lumin Blur",
                 fb.getColorTextureView(),
-                OptionalInt.empty()
+                Optional.empty()
         )) {
             renderPass.setPipeline(pipeline);
             renderPass.enableScissor((int) pxX, (int) pxY, Math.max(0, (int) pxW), Math.max(0, (int) pxH));
             RenderSystem.bindDefaultUniforms(renderPass);
             renderPass.setUniform("BlurUniforms", this.uniforms);
             renderPass.bindTexture("InputSampler", input.getColorTextureView(), RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR));
-            renderPass.draw(0, 3);
+            renderPass.draw(3, 1, 0, 0);
         }
     }
 

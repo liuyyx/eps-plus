@@ -6,8 +6,6 @@ import com.github.epsilon.utils.render.EpsilonGuiRenderer;
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.render.GuiRenderer;
-import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.feature.FeatureRenderDispatcher;
 import net.minecraft.client.renderer.state.gui.GuiRenderState;
 import org.spongepowered.asm.mixin.Final;
@@ -22,14 +20,6 @@ import static com.github.epsilon.Constants.mc;
 
 @Mixin(GuiRenderer.class)
 public class MixinGuiRenderer {
-
-    @Shadow
-    @Final
-    private MultiBufferSource.BufferSource bufferSource;
-
-    @Shadow
-    @Final
-    private SubmitNodeCollector submitNodeCollector;
 
     @Shadow
     @Final
@@ -48,18 +38,45 @@ public class MixinGuiRenderer {
     private EpsilonGuiRenderer epsilon$guiRenderer;
 
     @Inject(method = "draw", at = @At("HEAD"))
-    private void onDrawHead(GpuBufferSlice fogBuffer, CallbackInfo ci) {
-        // 只在原版主 GuiRenderer 上运行，避免被 MeteorClient 继承的自定义 GuiRenderer 重复触发
-        if (((GuiRenderer) (Object) this).getClass() != GuiRenderer.class) {
-            return;
-        }
+    private void onDrawHead(CallbackInfo ci) {
+        epsilon$ensureRenderers();
 
+        int mouseX = (int) mc.mouseHandler.getScaledXPos(mc.getWindow());
+        int mouseY = (int) mc.mouseHandler.getScaledYPos(mc.getWindow());
+
+        GuiGraphicsExtractor levelGuiGraphics = new GuiGraphicsExtractor(mc, epsilon$levelRenderState, mouseX, mouseY);
+        EventBus.INSTANCE.post(new Render2DEvent.Level(levelGuiGraphics));
+        epsilon$levelGuiRenderer.render();
+        epsilon$levelGuiRenderer.endFrame();
+
+        GuiGraphicsExtractor guiGraphics = new GuiGraphicsExtractor(mc, epsilon$renderState, mouseX, mouseY);
+        EventBus.INSTANCE.post(new Render2DEvent.HUD(guiGraphics));
+
+        epsilon$guiRenderer.render();
+
+        epsilon$guiRenderer.endFrame();
+    }
+
+    @Inject(method = "close", at = @At("HEAD"))
+    private void onClose(CallbackInfo ci) {
+        if (epsilon$levelGuiRenderer != null) {
+            epsilon$levelGuiRenderer.close();
+            epsilon$levelGuiRenderer = null;
+            epsilon$levelRenderState = null;
+        }
+        if (epsilon$guiRenderer != null) {
+            epsilon$guiRenderer.close();
+            epsilon$guiRenderer = null;
+            epsilon$renderState = null;
+        }
+    }
+
+    @Unique
+    private void epsilon$ensureRenderers() {
         if (epsilon$levelRenderState == null || epsilon$levelGuiRenderer == null) {
             this.epsilon$levelRenderState = new GuiRenderState();
             this.epsilon$levelGuiRenderer = new EpsilonGuiRenderer(
                     this.epsilon$levelRenderState,
-                    this.bufferSource,
-                    this.submitNodeCollector,
                     this.featureRenderDispatcher
             );
         }
@@ -67,26 +84,9 @@ public class MixinGuiRenderer {
             this.epsilon$renderState = new GuiRenderState();
             this.epsilon$guiRenderer = new EpsilonGuiRenderer(
                     this.epsilon$renderState,
-                    this.bufferSource,
-                    this.submitNodeCollector,
                     this.featureRenderDispatcher
             );
         }
-
-        int mouseX = (int) mc.mouseHandler.getScaledXPos(mc.getWindow());
-        int mouseY = (int) mc.mouseHandler.getScaledYPos(mc.getWindow());
-
-        GuiGraphicsExtractor levelGuiGraphics = new GuiGraphicsExtractor(mc, epsilon$levelRenderState, mouseX, mouseY);
-        EventBus.INSTANCE.post(new Render2DEvent.Level(levelGuiGraphics));
-        epsilon$levelGuiRenderer.render(fogBuffer);
-        epsilon$levelGuiRenderer.endFrame();
-
-        GuiGraphicsExtractor guiGraphics = new GuiGraphicsExtractor(mc, epsilon$renderState, mouseX, mouseY);
-        EventBus.INSTANCE.post(new Render2DEvent.HUD(guiGraphics));
-
-        epsilon$guiRenderer.render(fogBuffer);
-
-        epsilon$guiRenderer.endFrame();
     }
 
 }

@@ -6,14 +6,15 @@ import com.github.epsilon.graphics.LuminRenderSystem;
 import com.github.epsilon.graphics.buffer.LuminRingBuffer;
 import com.github.epsilon.graphics.elements.RectElement;
 import com.mojang.blaze3d.buffers.GpuBuffer;
+import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.systems.RenderPass;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.util.ARGB;
 import org.lwjgl.system.MemoryUtil;
 
 import java.awt.*;
+import java.util.Optional;
 import java.util.OptionalDouble;
-import java.util.OptionalInt;
 
 public class RectRenderer implements IRenderer {
 
@@ -36,33 +37,23 @@ public class RectRenderer implements IRenderer {
     }
 
     public void addRect(float x, float y, float width, float height, Color color) {
-        addRectGradient(x, y, width, height, color, color, color, color);
+        addRawRect(x, y, width, height, color, color, color, color);
     }
 
     public void addVerticalGradient(float x, float y, float width, float height, Color top, Color bottom) {
-        addRectGradient(x, y, width, height, top, bottom, bottom, top);
+        addRawRect(x, y, width, height, top, bottom, bottom, top);
     }
 
     public void addHorizontalGradient(float x, float y, float width, float height, Color left, Color right) {
-        addRectGradient(x, y, width, height, left, left, right, right);
+        addRawRect(x, y, width, height, left, left, right, right);
     }
 
-    public void addRectGradient(float x, float y, float w, float h, Color c1, Color c2, Color c3, Color c4) {
-        buffer.tryMap();
-
-        int argb1 = ARGB.toABGR(c1.getRGB());
-        int argb2 = ARGB.toABGR(c2.getRGB());
-        int argb3 = ARGB.toABGR(c3.getRGB());
-        int argb4 = ARGB.toABGR(c4.getRGB());
-
-        addVertex(x, y, argb1);
-        addVertex(x, y + h, argb2);
-        addVertex(x + w, y + h, argb3);
-        addVertex(x + w, y, argb4);
+    public void addRectGradient(float x, float y, float width, float height, Color topLeft, Color bottomLeft, Color bottomRight, Color topRight) {
+        addRawRect(x, y, width, height, topLeft, bottomLeft, bottomRight, topRight);
     }
 
     public void addElement(RectElement element) {
-        addRectGradient(
+        addRawRect(
                 element.x(),
                 element.y(),
                 element.width(),
@@ -78,6 +69,20 @@ public class RectRenderer implements IRenderer {
         for (RectElement element : elements) {
             addElement(element);
         }
+    }
+
+    public void addRawRect(float x, float y, float w, float h, Color c1, Color c2, Color c3, Color c4) {
+        buffer.tryMap();
+
+        int argb1 = ARGB.toABGR(c1.getRGB());
+        int argb2 = ARGB.toABGR(c2.getRGB());
+        int argb3 = ARGB.toABGR(c3.getRGB());
+        int argb4 = ARGB.toABGR(c4.getRGB());
+
+        addVertex(x, y, argb1);
+        addVertex(x, y + h, argb2);
+        addVertex(x + w, y + h, argb3);
+        addVertex(x + w, y, argb4);
     }
 
     private void addVertex(float vx, float vy, int color) {
@@ -97,7 +102,7 @@ public class RectRenderer implements IRenderer {
     }
 
     public void setScissor(int x, int y, int width, int height) {
-        if (x < 0 || y < 0) {
+        if (x < 0 || y < 0 || width <= 0 || height <= 0) {
             return;
         }
 
@@ -125,7 +130,7 @@ public class RectRenderer implements IRenderer {
 
         try (RenderPass pass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(
                 () -> "Rect Draw",
-                info.colorView(), OptionalInt.empty(),
+                info.colorView(), Optional.empty(),
                 info.depthView(), OptionalDouble.empty())
         ) {
             pass.setPipeline(LuminRenderPipelines.RECTANGLE);
@@ -136,9 +141,9 @@ public class RectRenderer implements IRenderer {
             RenderSystem.bindDefaultUniforms(pass);
             pass.setUniform("DynamicTransforms", info.dynamicUniforms());
 
-            pass.setVertexBuffer(0, buffer.getGpuBuffer());
-            pass.setIndexBuffer(info.ibo(), info.indexType());
-            pass.drawIndexed(0, 0, info.indexCount(), 1);
+            pass.setVertexBuffer(0, new GpuBufferSlice(buffer.getGpuBuffer(), 0, buffer.getGpuBuffer().size()));
+            pass.setIndexBuffer(info.ibo(), info.autoIndices().type());
+            pass.drawIndexed(info.indexCount(), 1, 0, 0, 0);
         }
     }
 

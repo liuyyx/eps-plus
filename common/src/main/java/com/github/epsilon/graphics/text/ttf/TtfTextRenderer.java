@@ -7,6 +7,7 @@ import com.github.epsilon.graphics.buffer.LuminRingBuffer;
 import com.github.epsilon.graphics.text.GlyphDescriptor;
 import com.github.epsilon.graphics.text.ITextRenderer;
 import com.github.epsilon.modules.impl.ClientSetting;
+import com.mojang.blaze3d.PrimitiveTopology;
 import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.systems.RenderPass;
@@ -21,8 +22,8 @@ import org.lwjgl.system.MemoryUtil;
 import java.awt.*;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.OptionalDouble;
-import java.util.OptionalInt;
 
 public class TtfTextRenderer implements ITextRenderer {
 
@@ -47,8 +48,7 @@ public class TtfTextRenderer implements ITextRenderer {
     @Override
     public void addText(String text, float x, float y, float scale, Color color, TtfFontLoader fontLoader) {
         final var finalScale = scale * DEFAULT_SCALE;
-        fontLoader.requestChars(text);
-        fontLoader.drainReadyGlyphs();
+        fontLoader.checkAndLoadChars(text);
         int argb = ARGB.toABGR(color.getRGB());
 
         float xOffset = 0f;
@@ -103,9 +103,9 @@ public class TtfTextRenderer implements ITextRenderer {
         GpuTextureView depthView = LuminRenderSystem.resolveDepthView();
         if (colorView == null) return;
 
-        GpuBufferSlice dynamicUniforms = LuminRenderSystem.writeTransform(
-                RenderSystem.getModelViewMatrix(), new Vector4f(1, 1, 1, 1),
-                new Vector3f(0, 0, 0), TextureTransform.DEFAULT_TEXTURING.getMatrix()
+        GpuBufferSlice dynamicUniforms = RenderSystem.getDynamicUniforms().writeTransform(
+                RenderSystem.getModelViewMatrixCopy(), new Vector4f(1, 1, 1, 1),
+                new Vector3f(0, 0, 0), TextureTransform.DEFAULT_TEXTURING.createMatrix()
         );
 
         for (Map.Entry<TtfGlyphAtlas, Batch> entry : batches.entrySet()) {
@@ -121,11 +121,13 @@ public class TtfTextRenderer implements ITextRenderer {
             int vertexCount = (int) (batch.offsetInAtlas / STRIDE);
             int indexCount = (vertexCount / 4) * 6;
 
-            GpuBuffer ibo = LuminRenderSystem.getQuadIndexBuffer(indexCount);
+            RenderSystem.AutoStorageIndexBuffer autoIndices =
+                    RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS);
+            GpuBuffer ibo = autoIndices.getBuffer(indexCount);
 
             try (RenderPass pass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(
                     () -> "Lumin TTF Draw",
-                    colorView, OptionalInt.empty(),
+                    colorView, Optional.empty(),
                     depthView, OptionalDouble.empty())
             ) {
                 pass.setPipeline(ClientSetting.INSTANCE.fontAntiAliasing.getValue()
@@ -138,11 +140,11 @@ public class TtfTextRenderer implements ITextRenderer {
                 RenderSystem.bindDefaultUniforms(pass);
                 pass.setUniform("DynamicTransforms", dynamicUniforms);
 
-                pass.setVertexBuffer(0, batch.buffer.getGpuBuffer());
-                pass.setIndexBuffer(ibo, LuminRenderSystem.getQuadIndexType());
+                pass.setVertexBuffer(0, new GpuBufferSlice(batch.buffer.getGpuBuffer(), 0, batch.buffer.getGpuBuffer().size()));
+                pass.setIndexBuffer(ibo, autoIndices.type());
                 pass.bindTexture("Sampler0", atlas.getTexture().getTextureView(), atlas.getTexture().getSampler());
 
-                pass.drawIndexed(0, 0, indexCount, 1);
+                pass.drawIndexed(indexCount, 1, 0, 0, 0);
             }
         }
     }

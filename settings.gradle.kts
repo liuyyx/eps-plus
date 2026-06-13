@@ -41,4 +41,4 @@ rootProject.name = "Epsilon"
 
 include("common")
 include("fabric")
-include("neoforge")
+//include("neoforge")

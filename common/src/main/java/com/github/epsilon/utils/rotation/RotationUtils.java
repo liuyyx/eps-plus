@@ -74,7 +74,7 @@ public class RotationUtils {
     }
 
     public static boolean canSee(BlockPos pos, Direction side) {
-        Vec3 testVec = pos.getCenter().add(side.getUnitVec3i().getX() * 0.5, side.getUnitVec3i().getY() * 0.5, side.getUnitVec3i().getZ() * 0.5);
+        Vec3 testVec = Vec3.atCenterOf(pos).add(side.getUnitVec3i().getX() * 0.5, side.getUnitVec3i().getY() * 0.5, side.getUnitVec3i().getZ() * 0.5);
         HitResult result = mc.level.clip(new ClipContext(mc.player.getEyePosition(), testVec, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, mc.player));
         return result.getType() == HitResult.Type.MISS;
     }
@@ -230,7 +230,7 @@ public class RotationUtils {
     }
 
     public static Rot2f calculate(BlockPos to) {
-        return calculate(mc.player.getEyePosition(), to.getCenter());
+        return calculate(mc.player.getEyePosition(), Vec3.atCenterOf(to));
     }
 
     public static Rot2f calculate(Vec3 to) {
