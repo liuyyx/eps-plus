@@ -155,6 +155,7 @@ public class MyModule extends Module {
 5. **@EventHandler 注解**：事件监听方法必须用 `@EventHandler` 标记，且必须是**实例方法**（非 static），访问修饰符任意
 6. **事件方法签名**：必须 `void` 返回，只有一个参数（事件类型），参数类型不能是原始类型
 7. **注册**：内部模块在 `ModuleManager.initModules()` 列表中注册；Addon 模块通过 `EpsilonAddon.registerModule()` 注册
+8. **i18n 翻译**：需要为模块名称和设置名称添加 i18n 翻译，详见后文 i18n 章节
 
 ### Module.Setting 可见性依赖（Dependency）
 
