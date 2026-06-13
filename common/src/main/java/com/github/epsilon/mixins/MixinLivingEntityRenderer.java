@@ -2,6 +2,7 @@ package com.github.epsilon.mixins;
 
 import com.github.epsilon.events.bus.EventBus;
 import com.github.epsilon.events.impl.RotationAnimationEvent;
+import com.github.epsilon.interfaces.EntityRenderStateAccessor;
 import com.github.epsilon.modules.impl.render.Chams;
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.llamalad7.mixinextras.injector.ModifyReturnValue;
@@ -12,6 +13,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.player.Player;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
@@ -29,7 +31,7 @@ public abstract class MixinLivingEntityRenderer<T extends LivingEntity, S extend
     @ModifyReturnValue(method = "getRenderType", at = @At("RETURN"))
     private RenderType modifyRenderType(RenderType original, S state, boolean isBodyVisible, boolean forceTransparent, boolean appearGlowing) {
         Chams chamsModule = Chams.INSTANCE;
-        if (chamsModule.isEnabled() && chamsModule.noDepth.getValue() && state.entityType == EntityType.PLAYER) {
+        if (chamsModule.isEnabled() && chamsModule.noDepth.getValue() && ((EntityRenderStateAccessor) state).epsilon$getEntity() instanceof Player player && player != mc.player) {
             return Chams.INSTANCE.getRenderType(getTextureLocation(state));
         }
         return original;
