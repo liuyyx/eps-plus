@@ -93,13 +93,15 @@ public class Module {
             this.enabled = enabled;
             if (enabled) {
                 EventBus.INSTANCE.subscribe(this);
-                if (!nullCheck())
+                if (!nullCheck()) {
                     NotificationManager.INSTANCE.moduleState(this.getTranslatedName(), getNotificationHash(), true);
+                }
                 onEnable();
             } else {
                 EventBus.INSTANCE.unsubscribe(this);
-                if (!nullCheck())
+                if (!nullCheck()) {
                     NotificationManager.INSTANCE.moduleState(this.getTranslatedName(), getNotificationHash(), false);
+                }
                 onDisable();
             }
         }
