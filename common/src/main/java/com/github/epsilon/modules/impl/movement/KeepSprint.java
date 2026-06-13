@@ -17,7 +17,7 @@ public class KeepSprint extends Module {
         super("Keep Sprint", Category.MOVEMENT);
     }
 
-    public final IntSetting slowdown = intSetting("Slowdown", 0, 100, 0, 1);
+    public final IntSetting slowdown = intSetting("Slowdown", 0, 0, 100, 1);
     private final BoolSetting groundOnly = boolSetting("Ground Only", false);
     private final BoolSetting prediction = boolSetting("Prediction", false);
     private final BoolSetting reachOnly = boolSetting("Reach Only", false);
