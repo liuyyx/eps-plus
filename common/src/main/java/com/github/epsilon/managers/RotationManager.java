@@ -22,7 +22,7 @@ public class RotationManager {
     public static final RotationManager INSTANCE = new RotationManager();
 
     private final Rot2f offset = new Rot2f(0, 0);
-    public Rot2f rotations;
+    public Rot2f rotations = new Rot2f(0, 0);
     public Rot2f lastRotations = new Rot2f(0, 0);
     public Rot2f targetRotations;
     public Rot2f animationRotation = null;
@@ -174,7 +174,7 @@ public class RotationManager {
     @EventHandler
     private void onRespawn(RespawnEvent event) {
         offset.set(0, 0);
-        rotations = null;
+        rotations = new Rot2f(0, 0);
         lastRotations = new Rot2f(0, 0);
         targetRotations = null;
         animationRotation = null;
