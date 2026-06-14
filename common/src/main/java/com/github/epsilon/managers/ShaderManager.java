@@ -1,8 +1,9 @@
 package com.github.epsilon.managers;
 
 import com.github.epsilon.assets.resources.ResourceLocationUtils;
+import com.github.epsilon.graphics.LuminRenderSystem;
 import com.github.epsilon.modules.impl.render.Shaders;
-import com.mojang.blaze3d.buffers.GpuBuffer;
+import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.buffers.Std140Builder;
 import com.mojang.blaze3d.buffers.Std140SizeCalculator;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
@@ -14,9 +15,14 @@ import com.mojang.blaze3d.systems.RenderPass;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.textures.FilterMode;
 import com.mojang.blaze3d.textures.GpuSampler;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.DynamicUniformStorage;
+import net.minecraft.client.renderer.OutlineBufferSource;
 import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.util.Util;
 
 import java.awt.*;
+import java.nio.ByteBuffer;
 import java.util.OptionalInt;
 
 /**
@@ -46,12 +52,19 @@ public class ShaderManager {
     private RenderPipeline snowPipeline;
     private RenderPipeline fadePipeline;
     private RenderPipeline copyPipeline;
-    private GpuBuffer uniforms;
     private RenderTarget shaderSwap;
     private RenderTarget handTarget;
+    private RenderTarget chestTarget;
+    private final OutlineBufferSource chestOutlineBufferSource = new OutlineBufferSource();
     private boolean renderingHands;
     private boolean capturedHands;
-    private float time;
+    private boolean renderingChests;
+    private boolean capturedChests;
+    private boolean preparedChests;
+
+    private final long startTimeMs = Util.getMillis();
+
+    public static final int EPSILON_CHEST_OUTLINE_MARKER = 0x01000001;
 
     private ShaderManager() {
     }
@@ -63,10 +76,10 @@ public class ShaderManager {
 
         ensureProgram();
         ensureSwap(target.width, target.height);
-        updateUniforms(target.width, target.height);
+        GpuBufferSlice shaderConfig = writeShaderConfig(target.width, target.height);
 
-        renderPass("epsilon_shader_effect", target, shaderSwap, pipeline(shader), true);
-        renderPass("epsilon_shader_copy", shaderSwap, target, copyPipeline, false);
+        renderPass("epsilon_shader_effect", target, shaderSwap, pipeline(shader), shaderConfig);
+        renderPass("epsilon_shader_copy", shaderSwap, target, copyPipeline, null);
     }
 
     public void beginHandOutlineCapture(int width, int height) {
@@ -91,6 +104,30 @@ public class ShaderManager {
         return renderingHands ? handTarget : null;
     }
 
+    public RenderTarget getChestOutlineTarget() {
+        return renderingChests ? chestTarget : null;
+    }
+
+    public OutlineBufferSource getChestOutlineBufferSource() {
+        if (!preparedChests) {
+            RenderTarget mainTarget = Minecraft.getInstance().getMainRenderTarget();
+            prepareChestOutlineTarget(mainTarget);
+            preparedChests = true;
+        }
+        capturedChests = true;
+        return chestOutlineBufferSource;
+    }
+
+    public void endChestOutlineBatch() {
+        if (!capturedChests || chestTarget == null) {
+            return;
+        }
+
+        renderingChests = true;
+        chestOutlineBufferSource.endOutlineBatch();
+        renderingChests = false;
+    }
+
     public void processHandOutlineTarget(RenderTarget mainTarget) {
         if (capturedHands) {
             capturedHands = false;
@@ -104,7 +141,31 @@ public class ShaderManager {
         }
     }
 
-    private void renderPass(String name, RenderTarget input, RenderTarget output, RenderPipeline pipeline, boolean customUniforms) {
+    public void prepareChestOutlineTarget(RenderTarget referenceTarget) {
+        if (referenceTarget == null || referenceTarget.width <= 0 || referenceTarget.height <= 0) {
+            return;
+        }
+
+        ensureChestTarget(referenceTarget.width, referenceTarget.height);
+        CommandEncoder encoder = RenderSystem.getDevice().createCommandEncoder();
+        encoder.clearColorAndDepthTextures(chestTarget.getColorTexture(), 0, chestTarget.getDepthTexture(), 1.0);
+    }
+
+    public void processChestOutlineTarget(RenderTarget mainTarget) {
+        if (capturedChests) {
+            capturedChests = false;
+
+            if (chestTarget == null || mainTarget == null || mainTarget.getColorTextureView() == null) {
+                return;
+            }
+
+            processEntityOutlineTarget(chestTarget, Shaders.INSTANCE.chestMode.getValue());
+            chestTarget.blitAndBlendToTexture(mainTarget.getColorTextureView());
+        }
+        preparedChests = false;
+    }
+
+    private void renderPass(String name, RenderTarget input, RenderTarget output, RenderPipeline pipeline, GpuBufferSlice shaderConfig) {
         if (input.getColorTextureView() == null || output.getColorTextureView() == null) {
             return;
         }
@@ -119,15 +180,15 @@ public class ShaderManager {
         )) {
             renderPass.setPipeline(pipeline);
             RenderSystem.bindDefaultUniforms(renderPass);
-            if (customUniforms) {
-                renderPass.setUniform("ShaderConfig", uniforms);
+            if (shaderConfig != null) {
+                renderPass.setUniform("ShaderConfig", shaderConfig);
             }
             renderPass.bindTexture("InputSampler", input.getColorTextureView(), sampler);
-            renderPass.draw(0, 6);
+            renderPass.draw(0, 3);
         }
     }
 
-    private void updateUniforms(int screenWidth, int screenHeight) {
+    private GpuBufferSlice writeShaderConfig(int screenWidth, int screenHeight) {
         Shaders shaders = Shaders.INSTANCE;
         float width = Math.max(1.0f, screenWidth);
         float height = Math.max(1.0f, screenHeight);
@@ -138,30 +199,35 @@ public class ShaderManager {
         Color smokeFill1 = shaders.fillColor2.getValue();
         Color smokeFill2 = shaders.fillColor3.getValue();
 
-        try (GpuBuffer.MappedView view = RenderSystem.getDevice().createCommandEncoder().mapBuffer(uniforms, false, true)) {
-            Std140Builder.intoBuffer(view.data())
-                    .putVec4(width, height, 1.0f / width, 1.0f / height)
-                    .putVec4(shaders.quality.getValue(), shaders.lineWidth.getValue(), shaders.glow.getValue() ? -1.0f : alpha(outline), shaders.fillAlpha.getValue() / 255.0f)
-                    .putVec4(shaders.alpha2.getValue() / 255.0f, time, shaders.factor.getValue().floatValue(), shaders.gradient.getValue().floatValue())
-                    .putVec4(shaders.octaves.getValue(), 0.0f, 0.0f, 0.0f)
-                    .putVec4(red(outline), green(outline), blue(outline), alpha(outline))
-                    .putVec4(red(smokeOutline1), green(smokeOutline1), blue(smokeOutline1), alpha(smokeOutline1))
-                    .putVec4(red(smokeOutline2), green(smokeOutline2), blue(smokeOutline2), alpha(smokeOutline2))
-                    .putVec4(red(fill), green(fill), blue(fill), alpha(fill))
-                    .putVec4(red(smokeFill1), green(smokeFill1), blue(smokeFill1), alpha(smokeFill1))
-                    .putVec4(red(smokeFill2), green(smokeFill2), blue(smokeFill2), alpha(smokeFill2));
-        }
-
-        time += 0.008f;
-        if (time > 1000.0f) {
-            time = 0.0f;
-        }
+        GpuBufferSlice shaderConfig = LuminRenderSystem.writeDynamicUniform(
+                "shader_config",
+                "Epsilon Shader Config UBO",
+                UNIFORMS_SIZE,
+                8,
+                new ShaderConfig(
+                        width,
+                        height,
+                        shaders.quality.getValue(),
+                        shaders.lineWidth.getValue(),
+                        shaders.glow.getValue() ? -1.0f : alpha(outline),
+                        shaders.fillAlpha.getValue() / 255.0f,
+                        shaders.alpha2.getValue() / 255.0f,
+                        ((Util.getMillis() - startTimeMs) % 1_000_000L) / 1000.0f,
+                        shaders.factor.getValue().floatValue(),
+                        shaders.gradient.getValue().floatValue(),
+                        shaders.octaves.getValue(),
+                        outline,
+                        smokeOutline1,
+                        smokeOutline2,
+                        fill,
+                        smokeFill1,
+                        smokeFill2
+                )
+        );
+        return shaderConfig;
     }
 
     private void ensureProgram() {
-        if (uniforms == null) {
-            uniforms = RenderSystem.getDevice().createBuffer(() -> "EpsilonShaderUniforms", GpuBuffer.USAGE_MAP_WRITE | GpuBuffer.USAGE_UNIFORM, UNIFORMS_SIZE);
-        }
         if (defaultPipeline == null) {
             defaultPipeline = pipeline("outline");
             smokePipeline = pipeline("smoke");
@@ -195,6 +261,16 @@ public class ShaderManager {
 
         if (handTarget.width != width || handTarget.height != height) {
             handTarget.resize(width, height);
+        }
+    }
+
+    private void ensureChestTarget(int width, int height) {
+        if (chestTarget == null) {
+            chestTarget = new TextureTarget("Epsilon Shader Chests", width, height, true);
+        }
+
+        if (chestTarget.width != width || chestTarget.height != height) {
+            chestTarget.resize(width, height);
         }
     }
 
@@ -241,6 +317,43 @@ public class ShaderManager {
         Gradient,
         Snow,
         Fade
+    }
+
+    private record ShaderConfig(
+            float width,
+            float height,
+            float quality,
+            float lineWidth,
+            float outlineAlpha,
+            float fillAlpha,
+            float gradientAlpha,
+            float time,
+            float gradientFactor,
+            float gradientScale,
+            float octaves,
+            Color outline,
+            Color smokeOutline1,
+            Color smokeOutline2,
+            Color fill,
+            Color smokeFill1,
+            Color smokeFill2
+    ) implements DynamicUniformStorage.DynamicUniform {
+
+        @Override
+        public void write(ByteBuffer buffer) {
+            Std140Builder.intoBuffer(buffer)
+                    .putVec4(width, height, 1.0f / width, 1.0f / height)
+                    .putVec4(quality, lineWidth, outlineAlpha, fillAlpha)
+                    .putVec4(gradientAlpha, time, gradientFactor, gradientScale)
+                    .putVec4(octaves, 0.0f, 0.0f, 0.0f)
+                    .putVec4(red(outline), green(outline), blue(outline), alpha(outline))
+                    .putVec4(red(smokeOutline1), green(smokeOutline1), blue(smokeOutline1), alpha(smokeOutline1))
+                    .putVec4(red(smokeOutline2), green(smokeOutline2), blue(smokeOutline2), alpha(smokeOutline2))
+                    .putVec4(red(fill), green(fill), blue(fill), alpha(fill))
+                    .putVec4(red(smokeFill1), green(smokeFill1), blue(smokeFill1), alpha(smokeFill1))
+                    .putVec4(red(smokeFill2), green(smokeFill2), blue(smokeFill2), alpha(smokeFill2));
+        }
+
     }
 
 }
