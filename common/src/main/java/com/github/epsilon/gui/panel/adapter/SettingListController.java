@@ -1,6 +1,7 @@
 package com.github.epsilon.gui.panel.adapter;
 
 import com.github.epsilon.graphics.renderers.TextRenderer;
+import com.github.epsilon.gui.dsl.PanelUiTree;
 import com.github.epsilon.gui.panel.MD3Theme;
 import com.github.epsilon.gui.panel.PanelLayout;
 import com.github.epsilon.gui.panel.component.SettingRow;
@@ -8,7 +9,6 @@ import com.github.epsilon.gui.panel.component.setting.ColorSettingRow;
 import com.github.epsilon.gui.panel.component.setting.DoubleSettingRow;
 import com.github.epsilon.gui.panel.component.setting.EnumSettingRow;
 import com.github.epsilon.gui.panel.component.setting.IntSettingRow;
-import com.github.epsilon.gui.dsl.PanelUiTree;
 import com.github.epsilon.gui.panel.popup.ColorPickerPopup;
 import com.github.epsilon.gui.panel.popup.EnumSelectPopup;
 import com.github.epsilon.gui.panel.popup.PanelPopupHost;
