@@ -18,7 +18,6 @@ import com.github.epsilon.utils.rotation.RotationUtils;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.network.protocol.game.ServerboundSwingPacket;
 import net.minecraft.world.InteractionHand;
-import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.phys.HitResult;
 
@@ -54,7 +53,7 @@ public class KillAura extends Module {
 
     private final EnumSetting<TargetMode> targetMode = enumSetting("Target Mode", TargetMode.Single);
 
-    private final DoubleSetting range = doubleSetting("Range", 3.0, 1.0, 6.0, 0.01);
+    private final DoubleSetting range = doubleSetting("Range", 4.0, 1.0, 6.0, 0.01);
     private final DoubleSetting aimRange = doubleSetting("Aim Range", 4.0, 1.0, 6.0, 0.1);
 
     private final IntSetting fov = intSetting("FOV", 360, 10, 360, 1);
@@ -162,21 +161,15 @@ public class KillAura extends Module {
     }
 
     private void clickTargets(List<LivingEntity> targets) {
-        boolean shouldCheckHitResult = !throughWalls.getValue();
-        HitResult hitResult = shouldCheckHitResult ? RotationManager.INSTANCE.getHitResult() : null;
-
         if (targetMode.is(TargetMode.Multiple)) {
             for (LivingEntity target : targets) {
-                if (RotationUtils.getEyeDistanceToEntity(target) <= range.getValue()
-                        && (!shouldCheckHitResult || hitResult.getType() == HitResult.Type.ENTITY)) {
+                if (RotationUtils.getEyeDistanceToEntity(target) <= range.getValue() && (throughWalls.getValue() || mc.hitResult.getType() == HitResult.Type.ENTITY)) {
                     doAttack(target);
                 }
             }
             switchIndex++;
         } else {
-            Entity crosshairPickEntity = shouldCheckHitResult ? RotationManager.INSTANCE.getCrosshairPickEntity() : null;
-            if (RotationUtils.getEyeDistanceToEntity(target) <= range.getValue()
-                    && (!shouldCheckHitResult || hitResult.getType() == HitResult.Type.ENTITY && crosshairPickEntity != null && crosshairPickEntity.is(target))) {
+            if (RotationUtils.getEyeDistanceToEntity(target) <= range.getValue() && (throughWalls.getValue() || (mc.hitResult.getType() == HitResult.Type.ENTITY && mc.crosshairPickEntity.is(target)))) {
                 doAttack(target);
             }
             if (targetMode.is(TargetMode.Switch)) {
