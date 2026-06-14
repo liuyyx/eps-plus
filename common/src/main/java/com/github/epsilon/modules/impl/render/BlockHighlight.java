@@ -82,7 +82,7 @@ public class BlockHighlight extends Module {
     }
 
     private void drawBlur(AABB aabb) {
-        if (blur.getValue()) BlurShader.INSTANCE.render3DBox(aabb, blurStrength.getValue().floatValue());
+        if (blur.getValue()) BlurShader.INSTANCE.render3DBox(aabb, blurStrength.getValue());
     }
 
 }

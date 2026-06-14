@@ -2,9 +2,11 @@ package com.github.epsilon.modules.impl.render;
 
 import com.github.epsilon.events.bus.EventHandler;
 import com.github.epsilon.events.impl.Render3DEvent;
+import com.github.epsilon.graphics.shaders.BlurShader;
 import com.github.epsilon.modules.Category;
 import com.github.epsilon.modules.Module;
 import com.github.epsilon.settings.impl.BoolSetting;
+import com.github.epsilon.settings.impl.ColorSetting;
 import com.github.epsilon.settings.impl.DoubleSetting;
 import com.github.epsilon.utils.render.Render3DUtils;
 import net.minecraft.core.BlockPos;
@@ -26,11 +28,12 @@ public class ESP extends Module {
 
     private final BoolSetting chests = boolSetting("Chests", true);
     private final DoubleSetting range = doubleSetting("Range", 64.0, 1.0, 128.0, 1.0);
+    private final ColorSetting color = colorSetting("Color", new Color(160, 210, 255, 30));
+    private final BoolSetting blur = boolSetting("Blur", true);
+    private final DoubleSetting blurStrength = doubleSetting("Blur Strength", 5.0, 0.0, 16.0, 0.5, blur::getValue);
 
     @EventHandler
     private void onRender3D(Render3DEvent event) {
-        if (nullCheck()) return;
-
         if (chests.getValue()) {
             double maxRange = range.getValue();
             int renderDistance = mc.options.renderDistance().get();
@@ -46,7 +49,10 @@ public class ESP extends Module {
                         BlockPos blockPos = entity.getBlockPos();
                         if (blockPos.distSqr(playerPos) > maxRange * maxRange) continue;
 
-                        Render3DUtils.drawFilledBox(getAABB(blockPos), getColor(entity));
+                        AABB box = getAABB(blockPos);
+
+                        if (blur.getValue()) BlurShader.INSTANCE.render3DBox(box, blurStrength.getValue());
+                        Render3DUtils.drawFilledBox(box, color.getValue());
                     }
                 }
             }
@@ -57,13 +63,6 @@ public class ESP extends Module {
     private AABB getAABB(BlockPos blockPos) {
         BlockState state = mc.level.getBlockState(blockPos);
         return state.getShape(mc.level, blockPos).bounds().move(blockPos);
-    }
-
-    public int getColor(BlockEntity blockEntity) {
-        if (blockEntity instanceof RandomizableContainerBlockEntity) {
-            return new Color(0, 255, 0, 100).getRGB();
-        }
-        return 0xFFFFFFFF;
     }
 
 }

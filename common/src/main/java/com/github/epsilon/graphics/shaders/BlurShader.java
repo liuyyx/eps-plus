@@ -152,7 +152,7 @@ public class BlurShader {
         render(x, y, width, height, radius, radius, radius, radius, blurStrength);
     }
 
-    public void render3DBox(AABB box, float blurStrength) {
+    public void render3DBox(AABB box, double blurStrength) {
         this.ensureBoxProgram();
 
         RenderTarget fb = mc.getMainRenderTarget();
@@ -184,7 +184,7 @@ public class BlurShader {
                 fb.width, fb.height
         );
 
-        float quality = Math.max(0.0f, blurStrength);
+        float quality = Math.max(0.0f, (float) blurStrength);
         try (GpuBuffer.MappedView view = encoder.mapBuffer(this.boxUniforms, false, true)) {
             Std140Builder.intoBuffer(view.data())
                     .putVec4(fb.width, fb.height, quality, 0.0f);
