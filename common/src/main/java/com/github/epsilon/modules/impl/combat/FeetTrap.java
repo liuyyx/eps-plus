@@ -14,12 +14,15 @@ import com.github.epsilon.settings.impl.EnumSetting;
 import com.github.epsilon.settings.impl.IntSetting;
 import com.github.epsilon.utils.player.FindItemResult;
 import com.github.epsilon.utils.player.InvUtils;
+import com.github.epsilon.utils.player.PlayerUtils;
 import com.github.epsilon.utils.render.Render3DUtils;
 import com.github.epsilon.utils.render.animation.Easing;
+import com.github.epsilon.utils.rotation.Priority;
 import com.github.epsilon.utils.rotation.RaytraceUtils;
 import com.github.epsilon.utils.rotation.Rot2f;
 import com.github.epsilon.utils.rotation.RotationUtils;
 import com.github.epsilon.utils.world.BlockUtils;
+import com.github.epsilon.utils.world.HoleUtils;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.protocol.game.ServerboundPlayerInputPacket;
@@ -29,18 +32,12 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Input;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
-import net.minecraft.world.phys.HitResult;
-import net.minecraft.world.phys.Vec3;
-import net.minecraft.world.phys.shapes.VoxelShape;
 
 import java.awt.*;
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Set;
 
 public class FeetTrap extends Module {
 
@@ -98,10 +95,12 @@ public class FeetTrap extends Module {
 
     private final EnumSetting<SwitchMode> switchMode = enumSetting("Switch", SwitchMode.Visible);
     private final EnumSetting<RotateMode> rotate = enumSetting("Rotate", RotateMode.Silent);
+    private final EnumSetting<PlayerUtils.HelperMode> helperMode = enumSetting("Helper Mode", PlayerUtils.HelperMode.Grim);
     private final IntSetting rotationSpeed = intSetting("Rotation Speed", 10, 1, 10, 1, () -> rotate.is(RotateMode.Silent));
     private final BoolSetting sideCheck = boolSetting("Side Check", false, () -> rotate.is(RotateMode.Silent));
     private final IntSetting blocksPerTick = intSetting("Blocks Per Tick", 2, 1, 8, 1);
     private final IntSetting delay = intSetting("Delay", 0, 0, 20, 1);
+    private final BoolSetting toggleOnYChange = boolSetting("Toggle On Y Change", true);
     private final BoolSetting toggleWhenDone = boolSetting("Toggle When Done", false);
 
     private final BoolSetting swingHand = boolSetting("Swing Hand", true);
@@ -113,188 +112,190 @@ public class FeetTrap extends Module {
     private final ColorSetting lineColor = colorSetting("Line Color", new Color(255, 105, 180), render::getValue);
 
     private int timer;
+    private double prevY;
+    private BlockPos pendingPos;
 
     private final List<RenderInfo> renderBoxes = new ArrayList<>();
 
     @Override
     protected void onEnable() {
+        if (nullCheck()) {
+            toggle();
+            return;
+        }
         timer = 0;
+        prevY = mc.player.getY();
+        pendingPos = null;
     }
 
     @Override
     protected void onDisable() {
+        pendingPos = null;
         InvUtils.swapBack();
     }
 
     @EventHandler
-    private void onTick(PlayerTickEvent.Pre event) {
+    private void onPlayerTick(PlayerTickEvent.Pre event) {
+        if (toggleOnYChange.getValue() && prevY != mc.player.getY()) {
+            toggle();
+            return;
+        }
+
+        prevY = mc.player.getY();
+
         if (timer > 0) {
             timer--;
+            pendingPos = null;
             return;
         }
 
-        Set<BlockPos> targets = getTargets();
-        if (targets.isEmpty()) {
-            if (toggleWhenDone.getValue()) setEnabled(false);
+        List<BlockPos> blocks = getBlocks();
+        if (blocks.isEmpty()) {
+            pendingPos = null;
+            if (toggleWhenDone.getValue()) toggle();
             return;
         }
 
-        FindItemResult obsidian = switchMode.is(SwitchMode.Silent) ? InvUtils.find(Items.OBSIDIAN) : InvUtils.findInHotbar(Items.OBSIDIAN);
+        FindItemResult obsidian = switchMode.is(SwitchMode.Silent) ? InvUtils.findInHotbar(Items.OBSIDIAN) : InvUtils.find(Items.OBSIDIAN);
         if (!obsidian.found()) return;
 
+        if (timer > 0) return;
+
         int placed = 0;
-        for (BlockPos target : targets) {
-            PlaceInfo placeInfo = getPlaceInfo(target);
-            if (placeInfo == null) continue;
-
-            if (rotate.is(RotateMode.Silent)) {
-                Rot2f rotation = RotationUtils.calculate(placeInfo.hitVec());
-                RotationManager.INSTANCE.setRotations(rotation, rotationSpeed.getValue());
-                if (!isLookingAtPlaceInfo(placeInfo)) {
-                    break;
-                }
-            }
-
-            if (placeBlock(placeInfo, obsidian)) {
+        while (placed < blocksPerTick.getValue()) {
+            BlockPos targetBlock = pendingPos != null && BlockUtils.canPlaceAt(pendingPos) ? pendingPos : getSequentialPos();
+            if (targetBlock == null) break;
+            if (placeBlock(targetBlock, obsidian)) {
+                pendingPos = null;
                 placed++;
-                if (placed >= blocksPerTick.getValue()) break;
+                timer = delay.getValue();
+            } else {
+                break;
             }
-        }
-
-        if (placed > 0) {
-            timer = delay.getValue();
         }
     }
 
-    private Set<BlockPos> getTargets() {
-        Set<BlockPos> feetPositions = new LinkedHashSet<>();
-        AABB box = mc.player.getBoundingBox().deflate(0.001);
-        int minX = BlockPos.containing(box.minX, mc.player.getY(), box.minZ).getX();
-        int maxX = BlockPos.containing(box.maxX, mc.player.getY(), box.maxZ).getX();
-        int minZ = BlockPos.containing(box.minX, mc.player.getY(), box.minZ).getZ();
-        int maxZ = BlockPos.containing(box.maxX, mc.player.getY(), box.maxZ).getZ();
+    private List<BlockPos> getBlocks() {
+        BlockPos playerPos = getPlayerPos();
+        List<BlockPos> offsets = new ArrayList<>();
 
-        Set<Integer> yLevels = new LinkedHashSet<>();
-        yLevels.add(BlockPos.containing(mc.player.position()).getY());
-        yLevels.add(BlockPos.containing(mc.player.getX(), mc.player.getY() + 0.8, mc.player.getZ()).getY());
+        int x;
+        int z;
+        double decimalX = Math.abs(mc.player.getX()) - Math.floor(Math.abs(mc.player.getX()));
+        double decimalZ = Math.abs(mc.player.getZ()) - Math.floor(Math.abs(mc.player.getZ()));
+        int lengthXPos = HoleUtils.calcLength(decimalX, false);
+        int lengthXNeg = HoleUtils.calcLength(decimalX, true);
+        int lengthZPos = HoleUtils.calcLength(decimalZ, false);
+        int lengthZNeg = HoleUtils.calcLength(decimalZ, true);
+        List<BlockPos> tempOffsets = new ArrayList<>();
+        offsets.addAll(getOverlapPos());
 
-        for (int y : yLevels) {
-            for (int x = minX; x <= maxX; x++) {
-                for (int z = minZ; z <= maxZ; z++) {
-                    feetPositions.add(new BlockPos(x, y, z));
-                }
+        for (x = 1; x < lengthXPos + 1; ++x) {
+            tempOffsets.add(HoleUtils.addToPlayer(playerPos, x, 0.0, 1 + lengthZPos));
+            tempOffsets.add(HoleUtils.addToPlayer(playerPos, x, 0.0, -(1 + lengthZNeg)));
+        }
+        for (x = 0; x <= lengthXNeg; ++x) {
+            tempOffsets.add(HoleUtils.addToPlayer(playerPos, -x, 0.0, 1 + lengthZPos));
+            tempOffsets.add(HoleUtils.addToPlayer(playerPos, -x, 0.0, -(1 + lengthZNeg)));
+        }
+        for (z = 1; z < lengthZPos + 1; ++z) {
+            tempOffsets.add(HoleUtils.addToPlayer(playerPos, 1 + lengthXPos, 0.0, z));
+            tempOffsets.add(HoleUtils.addToPlayer(playerPos, -(1 + lengthXNeg), 0.0, z));
+        }
+        for (z = 0; z <= lengthZNeg; ++z) {
+            tempOffsets.add(HoleUtils.addToPlayer(playerPos, 1 + lengthXPos, 0.0, -z));
+            tempOffsets.add(HoleUtils.addToPlayer(playerPos, -(1 + lengthXNeg), 0.0, -z));
+        }
+
+        for (BlockPos pos : tempOffsets) {
+            if (getDown(pos))
+                offsets.add(pos.offset(0, -1, 0));
+            offsets.add(pos);
+        }
+
+        return offsets;
+    }
+
+    private List<BlockPos> getOverlapPos() {
+        List<BlockPos> positions = new ArrayList<>();
+
+        double decimalX = mc.player.getX() - Math.floor(mc.player.getX());
+        double decimalZ = mc.player.getZ() - Math.floor(mc.player.getZ());
+        int offX = HoleUtils.calcOffset(decimalX);
+        int offZ = HoleUtils.calcOffset(decimalZ);
+        positions.add(getPlayerPos());
+        for (int x = 0; x <= Math.abs(offX); ++x) {
+            for (int z = 0; z <= Math.abs(offZ); ++z) {
+                int properX = x * offX;
+                int properZ = z * offZ;
+                positions.add(getPlayerPos().offset(properX, -1, properZ));
             }
         }
 
-        Set<BlockPos> targets = new LinkedHashSet<>();
-        for (BlockPos feetPos : feetPositions) {
-            for (Direction dir : Direction.values()) {
-                if (dir == Direction.UP || dir == Direction.DOWN) continue;
-                BlockPos target = feetPos.relative(dir);
-                if (!isInsideFeet(target, feetPositions) && BlockUtils.canPlaceAt(target)) {
-                    targets.add(target);
-                }
+        return positions;
+    }
+
+    private boolean getDown(BlockPos pos) {
+        for (Direction dir : Direction.values()) {
+            if (!mc.level.getBlockState(pos.relative(dir)).canBeReplaced()) {
+                return false;
             }
         }
-        return targets;
+
+        return mc.level.getBlockState(pos).canBeReplaced();
     }
 
-    private boolean isInsideFeet(BlockPos pos, Set<BlockPos> feetPositions) {
-        for (BlockPos feetPos : feetPositions) {
-            if (pos.getX() == feetPos.getX() && pos.getZ() == feetPos.getZ()) return true;
-        }
-        return false;
+    private BlockPos getPlayerPos() {
+        return BlockPos.containing(mc.player.getX(), mc.player.getY() - Math.floor(mc.player.getY()) > 0.8 ? Math.floor(mc.player.getY()) + 1.0 : Math.floor(mc.player.getY()), mc.player.getZ());
     }
 
-    private PlaceInfo getPlaceInfo(BlockPos pos) {
-        PlaceInfo placeInfo = getDirectPlaceInfo(pos);
-        if (placeInfo != null) return placeInfo;
-
-        for (Direction direction : Direction.values()) {
-            if (direction == Direction.UP) continue;
-
-            BlockPos helper = pos.relative(direction);
-            PlaceInfo helperInfo = getDirectPlaceInfo(helper);
-            if (helperInfo != null) return helperInfo;
+    private BlockPos getSequentialPos() {
+        for (BlockPos bp : getBlocks()) {
+            if (new AABB(bp).intersects(mc.player.getBoundingBox())) continue;
+            if (BlockUtils.canPlaceAt(bp)) {
+                return bp;
+            }
         }
-
         return null;
     }
 
-    private PlaceInfo getDirectPlaceInfo(BlockPos pos) {
-        if (!BlockUtils.canPlaceAt(pos)) return null;
-
-        for (Direction direction : Direction.values()) {
-            BlockPos neighbor = pos.relative(direction);
-            Direction side = direction.getOpposite();
-            if (!mc.level.getBlockState(neighbor).canBeReplaced() && isValidPlaceSide(neighbor, side)) {
-                return new PlaceInfo(pos, neighbor, side, getHitVec(neighbor, side));
-            }
+    private boolean placeBlock(BlockPos blockPos, FindItemResult item) {
+        BlockHitResult hitResult = PlayerUtils.getPlaceResult(blockPos, helperMode.getValue(), true);
+        if (hitResult == null) {
+            pendingPos = null;
+            return false;
         }
-        return null;
-    }
-
-    private boolean isValidPlaceSide(BlockPos neighbor, Direction side) {
-        return !mc.level.getBlockState(neighbor).canBeReplaced() && RotationUtils.isGrimDirection(neighbor, side);
-    }
-
-    private boolean isLookingAtPlaceInfo(PlaceInfo placeInfo) {
-        HitResult result = RaytraceUtils.raytrace(RotationManager.INSTANCE.getRotation(), 4.5, 0.0f);
-        if (!(result instanceof BlockHitResult blockHitResult)) {
-            return isLookingNearHitVec(placeInfo);
+        if (mc.level.isEmptyBlock(hitResult.getBlockPos())) {
+            pendingPos = null;
+            return false;
         }
-
-        if (blockHitResult.getBlockPos().equals(placeInfo.neighbor())) {
-            return !sideCheck.getValue() || blockHitResult.getDirection() == placeInfo.side() || isLookingNearHitVec(placeInfo);
-        }
-
-        return isLookingNearHitVec(placeInfo);
-    }
-
-    private boolean isLookingNearHitVec(PlaceInfo placeInfo) {
-        Vec3 eyePos = mc.player.getEyePosition(1.0f);
-        Vec3 lookVec = Vec3.directionFromRotation(RotationManager.INSTANCE.getPitch(), RotationManager.INSTANCE.getYaw());
-        Vec3 hitVec = placeInfo.hitVec();
-        Vec3 eyeToHit = hitVec.subtract(eyePos);
-
-        double projected = eyeToHit.dot(lookVec);
-        if (projected < 0.0 || projected > 4.5) return false;
-
-        Vec3 closest = eyePos.add(lookVec.scale(projected));
-        return closest.distanceToSqr(hitVec) <= 0.12 * 0.12;
-    }
-
-    private Vec3 getHitVec(BlockPos pos, Direction side) {
-        BlockState state = mc.level.getBlockState(pos);
-        VoxelShape shape = state.getShape(mc.level, pos);
-
-        if (shape.isEmpty()) {
-            return pos.getCenter().add(side.getStepX() * 0.5, side.getStepY() * 0.5, side.getStepZ() * 0.5);
-        }
-
-        AABB bounds = shape.bounds();
-        double x = (bounds.minX + bounds.maxX) * 0.5;
-        double y = (bounds.minY + bounds.maxY) * 0.5;
-        double z = (bounds.minZ + bounds.maxZ) * 0.5;
-
-        switch (side) {
-            case EAST -> x = bounds.maxX;
-            case WEST -> x = bounds.minX;
-            case UP -> y = bounds.maxY;
-            case DOWN -> y = bounds.minY;
-            case SOUTH -> z = bounds.maxZ;
-            case NORTH -> z = bounds.minZ;
-        }
-
-        return new Vec3(pos.getX() + x, pos.getY() + y, pos.getZ() + z);
-    }
-
-    private boolean placeBlock(PlaceInfo placeInfo, FindItemResult item) {
-        if (!BlockUtils.canPlaceAt(placeInfo.placedPos()) || !isValidPlaceSide(placeInfo.neighbor(), placeInfo.side())) {
+        if (!PlayerUtils.isValidBlock(hitResult.getBlockPos())) {
+            pendingPos = null;
             return false;
         }
 
-        BlockHitResult hitResult = new BlockHitResult(placeInfo.hitVec(), placeInfo.side(), placeInfo.neighbor(), false);
+        if (rotate.is(RotateMode.Silent)) {
+            if (!blockPos.equals(pendingPos)) {
+                pendingPos = blockPos;
+                setRotation(hitResult);
+                return false;
+            }
+
+            if (!isLookingAt(hitResult)) {
+                setRotation(hitResult);
+                return false;
+            }
+
+            if (mc.level.isEmptyBlock(hitResult.getBlockPos())) {
+                pendingPos = null;
+                return false;
+            }
+
+            if (!PlayerUtils.isValidBlock(hitResult.getBlockPos())) {
+                pendingPos = null;
+                return false;
+            }
+        }
 
         int oldSlot = mc.player.getInventory().getSelectedSlot();
         Input oldInput = mc.player.input.keyPresses;
@@ -318,7 +319,7 @@ public class FeetTrap extends Module {
             }
 
             if (render.getValue()) {
-                renderBoxes.add(new RenderInfo(new AABB(placeInfo.placedPos()), lineColor.getValue(), sideColor.getValue(), System.currentTimeMillis(), fade.getValue(), shrink.getValue()));
+                renderBoxes.add(new RenderInfo(new AABB(blockPos), lineColor.getValue(), sideColor.getValue(), System.currentTimeMillis(), fade.getValue(), shrink.getValue()));
             }
         }
 
@@ -335,6 +336,20 @@ public class FeetTrap extends Module {
         return result.consumesAction();
     }
 
+    private void setRotation(BlockHitResult hitResult) {
+        Rot2f rotation = RotationUtils.calculate(hitResult.getLocation());
+        RotationManager.INSTANCE.setRotations(rotation, rotationSpeed.getValue(), Priority.High);
+    }
+
+    private boolean isLookingAt(BlockHitResult hitResult) {
+        return RaytraceUtils.overBlock(
+                RotationManager.INSTANCE.getRotation(),
+                hitResult.getDirection(),
+                hitResult.getBlockPos(),
+                sideCheck.getValue()
+        );
+    }
+
     private void setShiftState(boolean state) {
         Input current = mc.player.input.keyPresses;
         setShiftState(new Input(current.forward(), current.backward(), current.left(), current.right(), current.jump(), state, current.sprint()));
@@ -346,11 +361,14 @@ public class FeetTrap extends Module {
         mc.getConnection().send(new ServerboundPlayerInputPacket(input));
     }
 
-    private record PlaceInfo(BlockPos placedPos, BlockPos neighbor, Direction side, Vec3 hitVec) {
-    }
-
-    private record RenderInfo(AABB aabb, Color lineColor, Color sideColor, long startTime, boolean fade,
-                              boolean shrink) {
+    private record RenderInfo(
+            AABB aabb,
+            Color lineColor,
+            Color sideColor,
+            long startTime,
+            boolean fade,
+            boolean shrink
+    ) {
     }
 
 }
