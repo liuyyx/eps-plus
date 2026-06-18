@@ -5,9 +5,10 @@ import com.github.epsilon.graphics.immediate.LuminImmediateRenderer;
 import com.mojang.blaze3d.pipeline.DepthStencilState;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.platform.CompareOp;
-import com.mojang.blaze3d.vertex.*;
+import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -40,97 +41,192 @@ public class Render3DUtils {
         drawFilledBox(box, color.getRGB());
     }
 
-    public static void drawFilledBox(AABB box, int c) {
+    public static void drawFilledBox(AABB box, int color) {
+        drawFilledFadeBox(box, color, color);
+    }
+
+    public static void drawFilledSide(BlockPos blockPos, Color color, Direction direction) {
+        drawFilledSide(new AABB(blockPos), color, direction);
+    }
+
+    public static void drawFilledSide(AABB box, Color color, Direction direction) {
         LuminImmediateRenderer.PosColorQuads builder = LuminImmediateRenderer.beginPosColorQuads(FILLED_BOX_PIPELINE);
+        BoxVertices vertices = BoxVertices.of(box);
+        Matrix4f matrix = mc.gameRenderer.gameRenderState().levelRenderState.cameraRenderState.viewRotationMatrix;
+        int c = color.getRGB();
 
-        Vec3 camPos = mc.getEntityRenderDispatcher().camera.position();
-        float minX = (float) (box.minX - camPos.x);
-        float minY = (float) (box.minY - camPos.y);
-        float minZ = (float) (box.minZ - camPos.z);
-        float maxX = (float) (box.maxX - camPos.x);
-        float maxY = (float) (box.maxY - camPos.y);
-        float maxZ = (float) (box.maxZ - camPos.z);
+        switch (direction) {
+            case DOWN -> quad(builder, matrix,
+                    vertices.minX, vertices.minY, vertices.minZ, c,
+                    vertices.maxX, vertices.minY, vertices.minZ, c,
+                    vertices.maxX, vertices.minY, vertices.maxZ, c,
+                    vertices.minX, vertices.minY, vertices.maxZ, c);
+            case NORTH -> quad(builder, matrix,
+                    vertices.minX, vertices.minY, vertices.minZ, c,
+                    vertices.minX, vertices.maxY, vertices.minZ, c,
+                    vertices.maxX, vertices.maxY, vertices.minZ, c,
+                    vertices.maxX, vertices.minY, vertices.minZ, c);
+            case EAST -> quad(builder, matrix,
+                    vertices.maxX, vertices.minY, vertices.minZ, c,
+                    vertices.maxX, vertices.maxY, vertices.minZ, c,
+                    vertices.maxX, vertices.maxY, vertices.maxZ, c,
+                    vertices.maxX, vertices.minY, vertices.maxZ, c);
+            case SOUTH -> quad(builder, matrix,
+                    vertices.minX, vertices.minY, vertices.maxZ, c,
+                    vertices.maxX, vertices.minY, vertices.maxZ, c,
+                    vertices.maxX, vertices.maxY, vertices.maxZ, c,
+                    vertices.minX, vertices.maxY, vertices.maxZ, c);
+            case WEST -> quad(builder, matrix,
+                    vertices.minX, vertices.minY, vertices.minZ, c,
+                    vertices.minX, vertices.minY, vertices.maxZ, c,
+                    vertices.minX, vertices.maxY, vertices.maxZ, c,
+                    vertices.minX, vertices.maxY, vertices.minZ, c);
+            case UP -> quad(builder, matrix,
+                    vertices.minX, vertices.maxY, vertices.minZ, c,
+                    vertices.minX, vertices.maxY, vertices.maxZ, c,
+                    vertices.maxX, vertices.maxY, vertices.maxZ, c,
+                    vertices.maxX, vertices.maxY, vertices.minZ, c);
+        }
 
+        builder.end();
+    }
+
+    public static void drawFilledFadeBox(AABB box, int bottomColor, int topColor) {
+        LuminImmediateRenderer.PosColorQuads builder = LuminImmediateRenderer.beginPosColorQuads(FILLED_BOX_PIPELINE);
+        BoxVertices vertices = BoxVertices.of(box);
         Matrix4f matrix = mc.gameRenderer.gameRenderState().levelRenderState.cameraRenderState.viewRotationMatrix;
 
         quad(builder, matrix,
-                minX, minY, minZ, c,
-                minX, minY, maxZ, c,
-                maxX, minY, maxZ, c,
-                maxX, minY, minZ, c
-        );
+                vertices.minX, vertices.minY, vertices.minZ, bottomColor,
+                vertices.minX, vertices.minY, vertices.maxZ, bottomColor,
+                vertices.maxX, vertices.minY, vertices.maxZ, bottomColor,
+                vertices.maxX, vertices.minY, vertices.minZ, bottomColor);
 
         quad(builder, matrix,
-                minX, maxY, minZ, c,
-                maxX, maxY, minZ, c,
-                maxX, maxY, maxZ, c,
-                minX, maxY, maxZ, c
-        );
+                vertices.minX, vertices.maxY, vertices.minZ, topColor,
+                vertices.maxX, vertices.maxY, vertices.minZ, topColor,
+                vertices.maxX, vertices.maxY, vertices.maxZ, topColor,
+                vertices.minX, vertices.maxY, vertices.maxZ, topColor);
 
         quad(builder, matrix,
-                minX, minY, minZ, c,
-                maxX, minY, minZ, c,
-                maxX, maxY, minZ, c,
-                minX, maxY, minZ, c
-        );
+                vertices.minX, vertices.minY, vertices.minZ, bottomColor,
+                vertices.maxX, vertices.minY, vertices.minZ, bottomColor,
+                vertices.maxX, vertices.maxY, vertices.minZ, topColor,
+                vertices.minX, vertices.maxY, vertices.minZ, topColor);
 
         quad(builder, matrix,
-                maxX, minY, minZ, c,
-                maxX, minY, maxZ, c,
-                maxX, maxY, maxZ, c,
-                maxX, maxY, minZ, c
-        );
+                vertices.maxX, vertices.minY, vertices.minZ, bottomColor,
+                vertices.maxX, vertices.minY, vertices.maxZ, bottomColor,
+                vertices.maxX, vertices.maxY, vertices.maxZ, topColor,
+                vertices.maxX, vertices.maxY, vertices.minZ, topColor);
 
         quad(builder, matrix,
-                minX, minY, maxZ, c,
-                minX, maxY, maxZ, c,
-                maxX, maxY, maxZ, c,
-                maxX, minY, maxZ, c
-        );
+                vertices.minX, vertices.minY, vertices.maxZ, bottomColor,
+                vertices.minX, vertices.maxY, vertices.maxZ, topColor,
+                vertices.maxX, vertices.maxY, vertices.maxZ, topColor,
+                vertices.maxX, vertices.minY, vertices.maxZ, bottomColor);
 
         quad(builder, matrix,
-                minX, minY, minZ, c,
-                minX, maxY, minZ, c,
-                minX, maxY, maxZ, c,
-                minX, minY, maxZ, c
-        );
+                vertices.minX, vertices.minY, vertices.minZ, bottomColor,
+                vertices.minX, vertices.maxY, vertices.minZ, topColor,
+                vertices.minX, vertices.maxY, vertices.maxZ, topColor,
+                vertices.minX, vertices.minY, vertices.maxZ, bottomColor);
+
+        builder.end();
+    }
+
+    public static void drawOutlineBox(PoseStack stack, BlockPos blockPos, Color color) {
+        drawOutlineBox(stack, new AABB(blockPos), color);
+    }
+
+    public static void drawOutlineBox(PoseStack stack, BlockPos blockPos, Color color, float thickness) {
+        drawOutlineBox(stack, new AABB(blockPos), color.getRGB(), thickness);
+    }
+
+    public static void drawOutlineBox(PoseStack stack, AABB box, Color color) {
+        drawOutlineBox(stack, box, color.getRGB(), 1.5f);
+    }
+
+    public static void drawOutlineBox(PoseStack stack, AABB box, Color color, float thickness) {
+        drawOutlineBox(stack, box, color.getRGB(), thickness);
+    }
+
+    public static void drawSideOutline(PoseStack stack, BlockPos blockPos, Color color, float thickness, Direction direction) {
+        drawSideOutline(stack, new AABB(blockPos), color.getRGB(), thickness, direction);
+    }
+
+    public static void drawSideOutline(PoseStack stack, AABB box, Color color, float thickness, Direction direction) {
+        drawSideOutline(stack, box, color.getRGB(), thickness, direction);
+    }
+
+    public static void drawSideOutline(PoseStack stack, AABB box, int color, float thickness, Direction direction) {
+        LuminImmediateRenderer.Lines builder = LuminImmediateRenderer.beginLines(LINES_PIPELINE);
+        BoxVertices vertices = BoxVertices.of(box);
+        PoseStack.Pose entry = stack.last();
+        Matrix4f matrix = entry.pose();
+
+        switch (direction) {
+            case UP -> {
+                vertexLine(builder, matrix, entry, vertices.minX, vertices.maxY, vertices.minZ, vertices.maxX, vertices.maxY, vertices.minZ, color, thickness);
+                vertexLine(builder, matrix, entry, vertices.maxX, vertices.maxY, vertices.minZ, vertices.maxX, vertices.maxY, vertices.maxZ, color, thickness);
+                vertexLine(builder, matrix, entry, vertices.maxX, vertices.maxY, vertices.maxZ, vertices.minX, vertices.maxY, vertices.maxZ, color, thickness);
+                vertexLine(builder, matrix, entry, vertices.minX, vertices.maxY, vertices.maxZ, vertices.minX, vertices.maxY, vertices.minZ, color, thickness);
+            }
+            case DOWN -> {
+                vertexLine(builder, matrix, entry, vertices.minX, vertices.minY, vertices.minZ, vertices.maxX, vertices.minY, vertices.minZ, color, thickness);
+                vertexLine(builder, matrix, entry, vertices.maxX, vertices.minY, vertices.minZ, vertices.maxX, vertices.minY, vertices.maxZ, color, thickness);
+                vertexLine(builder, matrix, entry, vertices.maxX, vertices.minY, vertices.maxZ, vertices.minX, vertices.minY, vertices.maxZ, color, thickness);
+                vertexLine(builder, matrix, entry, vertices.minX, vertices.minY, vertices.maxZ, vertices.minX, vertices.minY, vertices.minZ, color, thickness);
+            }
+            case EAST -> {
+                vertexLine(builder, matrix, entry, vertices.maxX, vertices.minY, vertices.minZ, vertices.maxX, vertices.maxY, vertices.minZ, color, thickness);
+                vertexLine(builder, matrix, entry, vertices.maxX, vertices.minY, vertices.maxZ, vertices.maxX, vertices.maxY, vertices.maxZ, color, thickness);
+                vertexLine(builder, matrix, entry, vertices.maxX, vertices.maxY, vertices.maxZ, vertices.maxX, vertices.maxY, vertices.minZ, color, thickness);
+                vertexLine(builder, matrix, entry, vertices.maxX, vertices.minY, vertices.maxZ, vertices.maxX, vertices.minY, vertices.minZ, color, thickness);
+            }
+            case WEST -> {
+                vertexLine(builder, matrix, entry, vertices.minX, vertices.minY, vertices.minZ, vertices.minX, vertices.maxY, vertices.minZ, color, thickness);
+                vertexLine(builder, matrix, entry, vertices.minX, vertices.minY, vertices.maxZ, vertices.minX, vertices.maxY, vertices.maxZ, color, thickness);
+                vertexLine(builder, matrix, entry, vertices.minX, vertices.maxY, vertices.maxZ, vertices.minX, vertices.maxY, vertices.minZ, color, thickness);
+                vertexLine(builder, matrix, entry, vertices.minX, vertices.minY, vertices.maxZ, vertices.minX, vertices.minY, vertices.minZ, color, thickness);
+            }
+            case NORTH -> {
+                vertexLine(builder, matrix, entry, vertices.maxX, vertices.minY, vertices.minZ, vertices.maxX, vertices.maxY, vertices.minZ, color, thickness);
+                vertexLine(builder, matrix, entry, vertices.minX, vertices.minY, vertices.minZ, vertices.minX, vertices.maxY, vertices.minZ, color, thickness);
+                vertexLine(builder, matrix, entry, vertices.maxX, vertices.minY, vertices.minZ, vertices.minX, vertices.minY, vertices.minZ, color, thickness);
+                vertexLine(builder, matrix, entry, vertices.maxX, vertices.maxY, vertices.minZ, vertices.minX, vertices.maxY, vertices.minZ, color, thickness);
+            }
+            case SOUTH -> {
+                vertexLine(builder, matrix, entry, vertices.minX, vertices.minY, vertices.maxZ, vertices.minX, vertices.maxY, vertices.maxZ, color, thickness);
+                vertexLine(builder, matrix, entry, vertices.maxX, vertices.minY, vertices.maxZ, vertices.maxX, vertices.maxY, vertices.maxZ, color, thickness);
+                vertexLine(builder, matrix, entry, vertices.minX, vertices.minY, vertices.maxZ, vertices.maxX, vertices.minY, vertices.maxZ, color, thickness);
+                vertexLine(builder, matrix, entry, vertices.minX, vertices.maxY, vertices.maxZ, vertices.maxX, vertices.maxY, vertices.maxZ, color, thickness);
+            }
+        }
 
         builder.end();
     }
 
     public static void drawOutlineBox(PoseStack stack, AABB box, int color, float thickness) {
         LuminImmediateRenderer.Lines builder = LuminImmediateRenderer.beginLines(LINES_PIPELINE);
-
-        Vec3 camPos = mc.getEntityRenderDispatcher().camera.position();
-        float minX = (float) (box.minX - camPos.x);
-        float minY = (float) (box.minY - camPos.y);
-        float minZ = (float) (box.minZ - camPos.z);
-        float maxX = (float) (box.maxX - camPos.x);
-        float maxY = (float) (box.maxY - camPos.y);
-        float maxZ = (float) (box.maxZ - camPos.z);
-
+        BoxVertices vertices = BoxVertices.of(box);
         Matrix4f matrix = mc.gameRenderer.gameRenderState().levelRenderState.cameraRenderState.viewRotationMatrix;
         PoseStack.Pose entry = stack.last();
 
-        vertexLine(builder, matrix, entry, minX, minY, minZ, maxX, minY, minZ, color, thickness);
-        vertexLine(builder, matrix, entry, maxX, minY, minZ, maxX, minY, maxZ, color, thickness);
-        vertexLine(builder, matrix, entry, maxX, minY, maxZ, minX, minY, maxZ, color, thickness);
-        vertexLine(builder, matrix, entry, minX, minY, maxZ, minX, minY, minZ, color, thickness);
+        vertexLine(builder, matrix, entry, vertices.minX, vertices.minY, vertices.minZ, vertices.maxX, vertices.minY, vertices.minZ, color, thickness);
+        vertexLine(builder, matrix, entry, vertices.maxX, vertices.minY, vertices.minZ, vertices.maxX, vertices.minY, vertices.maxZ, color, thickness);
+        vertexLine(builder, matrix, entry, vertices.maxX, vertices.minY, vertices.maxZ, vertices.minX, vertices.minY, vertices.maxZ, color, thickness);
+        vertexLine(builder, matrix, entry, vertices.minX, vertices.minY, vertices.maxZ, vertices.minX, vertices.minY, vertices.minZ, color, thickness);
 
-        vertexLine(builder, matrix, entry, minX, minY, minZ, maxX, minY, minZ, color, thickness);
-        vertexLine(builder, matrix, entry, maxX, minY, minZ, maxX, minY, maxZ, color, thickness);
-        vertexLine(builder, matrix, entry, maxX, minY, maxZ, minX, minY, maxZ, color, thickness);
-        vertexLine(builder, matrix, entry, minX, minY, maxZ, minX, minY, minZ, color, thickness);
+        vertexLine(builder, matrix, entry, vertices.minX, vertices.maxY, vertices.minZ, vertices.maxX, vertices.maxY, vertices.minZ, color, thickness);
+        vertexLine(builder, matrix, entry, vertices.maxX, vertices.maxY, vertices.minZ, vertices.maxX, vertices.maxY, vertices.maxZ, color, thickness);
+        vertexLine(builder, matrix, entry, vertices.maxX, vertices.maxY, vertices.maxZ, vertices.minX, vertices.maxY, vertices.maxZ, color, thickness);
+        vertexLine(builder, matrix, entry, vertices.minX, vertices.maxY, vertices.maxZ, vertices.minX, vertices.maxY, vertices.minZ, color, thickness);
 
-        vertexLine(builder, matrix, entry, minX, maxY, minZ, maxX, maxY, minZ, color, thickness);
-        vertexLine(builder, matrix, entry, maxX, maxY, minZ, maxX, maxY, maxZ, color, thickness);
-        vertexLine(builder, matrix, entry, maxX, maxY, maxZ, minX, maxY, maxZ, color, thickness);
-        vertexLine(builder, matrix, entry, minX, maxY, maxZ, minX, maxY, minZ, color, thickness);
-
-        vertexLine(builder, matrix, entry, minX, minY, minZ, minX, maxY, minZ, color, thickness);
-        vertexLine(builder, matrix, entry, maxX, minY, minZ, maxX, maxY, minZ, color, thickness);
-        vertexLine(builder, matrix, entry, maxX, minY, maxZ, maxX, maxY, maxZ, color, thickness);
-        vertexLine(builder, matrix, entry, minX, minY, maxZ, minX, maxY, maxZ, color, thickness);
+        vertexLine(builder, matrix, entry, vertices.minX, vertices.minY, vertices.minZ, vertices.minX, vertices.maxY, vertices.minZ, color, thickness);
+        vertexLine(builder, matrix, entry, vertices.maxX, vertices.minY, vertices.minZ, vertices.maxX, vertices.maxY, vertices.minZ, color, thickness);
+        vertexLine(builder, matrix, entry, vertices.maxX, vertices.minY, vertices.maxZ, vertices.maxX, vertices.maxY, vertices.maxZ, color, thickness);
+        vertexLine(builder, matrix, entry, vertices.minX, vertices.minY, vertices.maxZ, vertices.minX, vertices.maxY, vertices.maxZ, color, thickness);
 
         builder.end();
     }
@@ -164,12 +260,20 @@ public class Render3DUtils {
         return new Vector3f(xNormal / normalSqrt, yNormal / normalSqrt, zNormal / normalSqrt);
     }
 
-    public static void drawOutlineBox(PoseStack stack, AABB box, Color color) {
-        drawOutlineBox(stack, box, color.getRGB(), 1.5f);
-    }
+    private record BoxVertices(float minX, float minY, float minZ, float maxX, float maxY, float maxZ) {
 
-    public static void drawOutlineBox(PoseStack stack, BlockPos pos, Color color) {
-        drawOutlineBox(stack, new AABB(pos), color.getRGB(), 1.5f);
+        private static BoxVertices of(AABB box) {
+            Vec3 camPos = mc.getEntityRenderDispatcher().camera.position();
+            return new BoxVertices(
+                    (float) (box.minX - camPos.x),
+                    (float) (box.minY - camPos.y),
+                    (float) (box.minZ - camPos.z),
+                    (float) (box.maxX - camPos.x),
+                    (float) (box.maxY - camPos.y),
+                    (float) (box.maxZ - camPos.z)
+            );
+        }
+
     }
 
 }

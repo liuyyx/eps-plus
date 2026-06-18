@@ -2,7 +2,6 @@ package com.github.epsilon.graphics.shaders;
 
 import com.github.epsilon.assets.resources.ResourceLocationUtils;
 import com.github.epsilon.graphics.LuminRenderSystem;
-import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.buffers.Std140Builder;
 import com.mojang.blaze3d.buffers.Std140SizeCalculator;
@@ -12,14 +11,16 @@ import com.mojang.blaze3d.shaders.UniformType;
 import com.mojang.blaze3d.systems.RenderPass;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.textures.GpuTextureView;
+import net.minecraft.client.renderer.DynamicUniformStorage;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.Util;
 
+import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
 import java.util.OptionalDouble;
+import java.util.Optional;
 
 import static com.github.epsilon.Constants.mc;
 
@@ -31,7 +32,7 @@ public class GlslSandBox implements AutoCloseable {
     public static final Identifier MINECRAFT = ResourceLocationUtils.getIdentifier("menu/minecraft");
     public static final Identifier PLANET = ResourceLocationUtils.getIdentifier("menu/planet");
 
-    private static final Identifier FULLSCREEN_VERTEX = ResourceLocationUtils.getIdentifier("fullscreen");
+    private static final Identifier FULLSCREEN_VERTEX = Identifier.withDefaultNamespace("core/screenquad");
 
     private static final int SANDBOX_INFO_SIZE = new Std140SizeCalculator()
             .putVec4()
@@ -40,7 +41,6 @@ public class GlslSandBox implements AutoCloseable {
 
     private final Map<Identifier, RenderPipeline> pipelines = new HashMap<>();
 
-    private GpuBuffer sandboxInfoUniformBuf;
     private long initTime = Util.getMillis();
 
     private RenderPipeline getOrCreatePipeline(Identifier fragmentShader) {
@@ -54,16 +54,6 @@ public class GlslSandBox implements AutoCloseable {
         );
     }
 
-    private void ensureUniformBuffer() {
-        if (sandboxInfoUniformBuf == null) {
-            sandboxInfoUniformBuf = RenderSystem.getDevice().createBuffer(
-                    () -> "Lumin GLSL Sandbox UBO",
-                    GpuBuffer.USAGE_UNIFORM | GpuBuffer.USAGE_MAP_WRITE,
-                    SANDBOX_INFO_SIZE
-            );
-        }
-    }
-
     public void resetTime() {
         initTime = Util.getMillis();
     }
@@ -75,8 +65,6 @@ public class GlslSandBox implements AutoCloseable {
     public void render(Identifier fragmentShader, double mouseX, double mouseY, long startTimeMs) {
         GpuTextureView colorView = LuminRenderSystem.resolveColorView();
         if (colorView == null) return;
-
-        ensureUniformBuffer();
 
         final var activeTarget = LuminRenderSystem.getActiveTarget();
         final int targetWidth = activeTarget != null ? activeTarget.width() : mc.gameRenderer.mainRenderTarget().width;
@@ -92,14 +80,15 @@ public class GlslSandBox implements AutoCloseable {
         float mouseUvX = mousePxX / targetWidth;
         float mouseUvY = (targetHeight - 1.0f - mousePxY) / targetHeight;
         float elapsedTime = (Util.getMillis() - startTimeMs) / 1000.0f;
+        GpuBufferSlice sandboxInfo = LuminRenderSystem.writeDynamicUniform(
+                "glsl_sandbox_info",
+                "Lumin GLSL Sandbox UBO",
+                SANDBOX_INFO_SIZE,
+                4,
+                new SandboxInfo(targetWidth, targetHeight, elapsedTime, mouseUvX, mouseUvY, mousePxX, mousePxY)
+        );
 
         final var encoder = RenderSystem.getDevice().createCommandEncoder();
-        try (GpuBufferSlice.MappedView mappedView = sandboxInfoUniformBuf.map(false, true)) {
-            Std140Builder.intoBuffer(mappedView.data())
-                    .putVec4(targetWidth, targetHeight, elapsedTime, 0.0f)
-                    .putVec4(mouseUvX, mouseUvY, mousePxX, mousePxY);
-        }
-
         try (RenderPass pass = encoder.createRenderPass(
                 () -> "Lumin GLSL Sandbox",
                 colorView, Optional.empty(),
@@ -107,18 +96,33 @@ public class GlslSandBox implements AutoCloseable {
         ) {
             pass.setPipeline(getOrCreatePipeline(fragmentShader));
             RenderSystem.bindDefaultUniforms(pass);
-            pass.setUniform("GlslSandboxInfo", sandboxInfoUniformBuf);
-            pass.draw(6, 1, 0, 0);
+            pass.setUniform("GlslSandboxInfo", sandboxInfo);
+            pass.draw(3, 1, 0, 0);
         }
     }
 
     @Override
     public void close() {
         pipelines.clear();
-        if (sandboxInfoUniformBuf != null) {
-            sandboxInfoUniformBuf.close();
-            sandboxInfoUniformBuf = null;
+    }
+
+    private record SandboxInfo(
+            float width,
+            float height,
+            float elapsedTime,
+            float mouseUvX,
+            float mouseUvY,
+            float mousePxX,
+            float mousePxY
+    ) implements DynamicUniformStorage.DynamicUniform {
+
+        @Override
+        public void write(ByteBuffer buffer) {
+            Std140Builder.intoBuffer(buffer)
+                    .putVec4(width, height, elapsedTime, 0.0f)
+                    .putVec4(mouseUvX, mouseUvY, mousePxX, mousePxY);
         }
+
     }
 
 }

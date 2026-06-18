@@ -112,6 +112,7 @@ public class ModuleManager {
         // Render
         addModule(AntiAlias.INSTANCE);
         addModule(AspectRatio.INSTANCE);
+        addModule(BlockHighlight.INSTANCE);
         addModule(CameraClip.INSTANCE);
         addModule(Chams.INSTANCE);
         addModule(ESP.INSTANCE);
@@ -120,8 +121,12 @@ public class ModuleManager {
         addModule(GameAnimation.INSTANCE);
         addModule(HandsView.INSTANCE);
         addModule(Hat.INSTANCE);
+        addModule(HitParticles.INSTANCE);
+        addModule(JumpCircle.INSTANCE);
         addModule(NameTags.INSTANCE);
         addModule(NoRender.INSTANCE);
+        addModule(Particles.INSTANCE);
+        addModule(Shaders.INSTANCE);
         addModule(Xray.INSTANCE);
 
         // Hud

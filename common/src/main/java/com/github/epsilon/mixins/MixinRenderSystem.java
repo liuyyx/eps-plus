@@ -1,0 +1,18 @@
+package com.github.epsilon.mixins;
+
+import com.github.epsilon.graphics.LuminRenderSystem;
+import net.minecraft.client.renderer.DynamicUniforms;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+
+@Mixin(DynamicUniforms.class)
+public class MixinRenderSystem {
+
+    @Inject(method = "reset", at = @At("RETURN"))
+    private void onReset(CallbackInfo ci) {
+        LuminRenderSystem.endDynamicUniformFrame();
+    }
+
+}

@@ -17,6 +17,7 @@ import com.mojang.blaze3d.textures.*;
 import com.mojang.blaze3d.vulkan.VulkanDevice;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.client.renderer.DynamicUniformStorage;
 import net.minecraft.client.renderer.Projection;
 import net.minecraft.client.renderer.ProjectionMatrixBuffer;
 import net.minecraft.client.renderer.rendertype.TextureTransform;
@@ -30,6 +31,8 @@ import org.joml.Vector4fc;
 
 import javax.annotation.Nullable;
 import java.lang.Math;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.OptionalDouble;
 
 import static com.github.epsilon.Constants.mc;
@@ -55,10 +58,25 @@ public class LuminRenderSystem {
 
     public static void destroyAll() {
         guiProjectionMatrixBuffer.close();
+        ShaderUniforms.closeAll();
         RenderTargetHolder.INSTANCE.destroyAll();
         StaticFontLoader.destroyAll();
         RendererHolder.INSTANCE.destroyAll();
         vulkanContext.destroy();
+    }
+
+    public static <T extends DynamicUniformStorage.DynamicUniform> GpuBufferSlice writeDynamicUniform(
+            String key,
+            String label,
+            int uniformSize,
+            int initialCapacity,
+            T uniform
+    ) {
+        return ShaderUniforms.write(key, label, uniformSize, initialCapacity, uniform);
+    }
+
+    public static void endDynamicUniformFrame() {
+        ShaderUniforms.endFrame();
     }
 
     @Nullable
@@ -235,6 +253,37 @@ public class LuminRenderSystem {
             int indexCount,
             GpuBufferSlice dynamicUniforms
     ) {
+    }
+
+    private static final class ShaderUniforms {
+
+        private static final Map<String, DynamicUniformStorage<DynamicUniformStorage.DynamicUniform>> UNIFORMS = new HashMap<>();
+
+        private ShaderUniforms() {
+        }
+
+        @SuppressWarnings("unchecked")
+        private static <T extends DynamicUniformStorage.DynamicUniform> GpuBufferSlice write(
+                String key,
+                String label,
+                int uniformSize,
+                int initialCapacity,
+                T uniform
+        ) {
+            DynamicUniformStorage<T> storage = (DynamicUniformStorage<T>) UNIFORMS.computeIfAbsent(key, ignored ->
+                    new DynamicUniformStorage<>(label, uniformSize, initialCapacity));
+            return storage.writeUniform(uniform);
+        }
+
+        private static void endFrame() {
+            UNIFORMS.values().forEach(DynamicUniformStorage::endFrame);
+        }
+
+        private static void closeAll() {
+            UNIFORMS.values().forEach(DynamicUniformStorage::close);
+            UNIFORMS.clear();
+        }
+
     }
 
     public static final class LuminRenderTarget implements AutoCloseable {

@@ -9,7 +9,7 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 public class MixinMain {
 
     @Redirect(method = "<clinit>", at = @At(value = "INVOKE", target = "Ljava/lang/System;setProperty(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;"))
-    private static String hookStaticInit(String key, String value) {
+    private static String redirectStaticInit(String key, String value) {
         return System.setProperty("java.awt.headless", "false");
     }
 
