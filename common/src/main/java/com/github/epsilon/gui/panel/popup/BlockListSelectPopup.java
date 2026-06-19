@@ -1,7 +1,7 @@
 package com.github.epsilon.gui.panel.popup;
 
-import com.github.epsilon.graphics.renderers.TextRenderer;
 import com.github.epsilon.graphics.LuminRenderSystem;
+import com.github.epsilon.graphics.renderers.TextRenderer;
 import com.github.epsilon.gui.dsl.PanelRenderBatch;
 import com.github.epsilon.gui.dsl.PanelUiTree;
 import com.github.epsilon.gui.panel.MD3Theme;

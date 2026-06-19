@@ -140,22 +140,6 @@ public class ModuleHolder {
     }
 
     @EventHandler
-<<<<<<< HEAD
-    private void onRender2D(Render2DEvent.HUD event) {
-        if (ClientUtils.isLoading() || mc.level == null || mc.gui.screen() instanceof HudEditorScreen) return;
-
-        for (Module m : modules) {
-            if (m instanceof HudModule module && module.isEnabled()) {
-                DeltaTracker delta = mc.getDeltaTracker();
-                module.updateLayout();
-                module.render(event.getGuiGraphics(), delta);
-            }
-        }
-    }
-
-    @EventHandler
-=======
->>>>>>> d12f049 (重写 HudEditor (#274))
     private void onKeyPress(KeyPressEvent event) {
         if (mc.level == null || mc.gui.screen() != null || event.getKey() == GLFW.GLFW_KEY_UNKNOWN) return;
 
