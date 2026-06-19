@@ -24,13 +24,14 @@ import java.util.function.Function;
 public class Chams extends Module {
 
     public static final Chams INSTANCE = new Chams();
-    private static final ThreadLocal<Boolean> RENDERING_THIRD_PERSON_HAND_ITEM = ThreadLocal.withInitial(() -> false);
 
     private Chams() {
         super("Chams", Category.RENDER);
     }
 
     public final BoolSetting noDepth = boolSetting("No Depth", true);
+
+    private static final ThreadLocal<Boolean> RENDERING_THIRD_PERSON_HAND_ITEM = ThreadLocal.withInitial(() -> false);
 
     private static final RenderPipeline ENTITY_CHAMS_PIPELINE = RenderPipeline.builder(RenderPipelines.ENTITY_SNIPPET)
             .withLocation("pipeline/epsilon_entity_chams")
@@ -39,24 +40,24 @@ public class Chams extends Module {
             .withBindGroupLayout(BindGroupLayouts.SAMPLER1)
             .withColorTargetState(new ColorTargetState(BlendFunction.TRANSLUCENT))
             .withCull(false)
-            .withDepthStencilState(new DepthStencilState(CompareOp.LESS_THAN_OR_EQUAL, true, -1.0f, -1100000.0f))
+            .withDepthStencilState(new DepthStencilState(CompareOp.ALWAYS_PASS, true))
             .build();
 
     private static final RenderPipeline ITEM_CHAMS_CUTOUT_PIPELINE = RenderPipeline.builder(RenderPipelines.ITEM_SNIPPET)
             .withLocation("pipeline/epsilon_item_chams_cutout")
             .withShaderDefine("ALPHA_CUTOUT", 0.1f)
-            .withDepthStencilState(new DepthStencilState(CompareOp.LESS_THAN_OR_EQUAL, true, -1.0f, -1100000.0f))
+            .withDepthStencilState(new DepthStencilState(CompareOp.ALWAYS_PASS, true))
             .build();
 
     private static final RenderPipeline ITEM_CHAMS_TRANSLUCENT_PIPELINE = RenderPipeline.builder(RenderPipelines.ITEM_SNIPPET)
             .withLocation("pipeline/epsilon_item_chams_translucent")
             .withShaderDefine("ALPHA_CUTOUT", 0.1f)
             .withColorTargetState(new ColorTargetState(BlendFunction.TRANSLUCENT))
-            .withDepthStencilState(new DepthStencilState(CompareOp.LESS_THAN_OR_EQUAL, true, -1.0f, -1100000.0f))
+            .withDepthStencilState(new DepthStencilState(CompareOp.ALWAYS_PASS, true))
             .build();
 
     private static final Function<Identifier, RenderType> ENTITY_CHAMS_TYPE = Util.memoize(
-            texture -> RenderType.create("sakura_entity_chams", RenderSetup.builder(ENTITY_CHAMS_PIPELINE)
+            texture -> RenderType.create("epsilon_entity_chams", RenderSetup.builder(ENTITY_CHAMS_PIPELINE)
                     .withTexture("Sampler0", texture)
                     .useLightmap()
                     .useOverlay()
@@ -66,18 +67,20 @@ public class Chams extends Module {
                     .createRenderSetup()));
 
     private static final Function<Identifier, RenderType> ITEM_CHAMS_CUTOUT_TYPE = Util.memoize(
-            texture -> RenderType.create("sakura_item_chams_cutout", RenderSetup.builder(ITEM_CHAMS_CUTOUT_PIPELINE)
+            texture -> RenderType.create("epsilon_item_chams_cutout", RenderSetup.builder(ITEM_CHAMS_CUTOUT_PIPELINE)
                     .withTexture("Sampler0", texture)
                     .useLightmap()
+                    .useOverlay()
                     .affectsCrumbling()
                     .setOutline(RenderSetup.OutlineProperty.AFFECTS_OUTLINE)
                     .createRenderSetup()));
 
     private static final Function<Identifier, RenderType> ITEM_CHAMS_TRANSLUCENT_TYPE = Util.memoize(
-            texture -> RenderType.create("sakura_item_chams_translucent", RenderSetup.builder(ITEM_CHAMS_TRANSLUCENT_PIPELINE)
+            texture -> RenderType.create("epsilon_item_chams_translucent", RenderSetup.builder(ITEM_CHAMS_TRANSLUCENT_PIPELINE)
                     .withTexture("Sampler0", texture)
                     .setOutputTarget(OutputTarget.ITEM_ENTITY_TARGET)
                     .useLightmap()
+                    .useOverlay()
                     .affectsCrumbling()
                     .sortOnUpload()
                     .setOutline(RenderSetup.OutlineProperty.AFFECTS_OUTLINE)

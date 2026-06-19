@@ -20,12 +20,18 @@ import com.mojang.blaze3d.textures.GpuSampler;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.DynamicUniformStorage;
 import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.client.renderer.feature.submit.SubmitNode;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.Util;
 
 import java.awt.*;
 import java.nio.ByteBuffer;
+import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.Optional;
+import java.util.Set;
+
+import static com.github.epsilon.Constants.mc;
 
 /**
  * @author ilove0329P
@@ -62,10 +68,8 @@ public class ShaderHolder {
     private boolean renderingChests;
     private boolean capturedChests;
     private boolean preparedChests;
-
-    private final long startTimeMs = Util.getMillis();
-
-    public static final int EPSILON_CHEST_OUTLINE_MARKER = 0x01000001;
+    private int chestCaptureDepth;
+    private final Set<SubmitNode> chestOutlineSubmits = Collections.newSetFromMap(new IdentityHashMap<>());
 
     private ShaderHolder() {
     }
@@ -109,6 +113,14 @@ public class ShaderHolder {
         return renderingChests ? chestTarget : null;
     }
 
+    public void markChestOutlineSubmit(SubmitNode submit) {
+        chestOutlineSubmits.add(submit);
+    }
+
+    public boolean isChestOutlineSubmit(SubmitNode submit) {
+        return chestOutlineSubmits.contains(submit);
+    }
+
     public void beginChestOutlineCapture() {
         if (!preparedChests) {
             RenderTarget mainTarget = Minecraft.getInstance().gameRenderer.mainRenderTarget();
@@ -116,11 +128,15 @@ public class ShaderHolder {
             preparedChests = true;
         }
         capturedChests = true;
+        chestCaptureDepth++;
         renderingChests = true;
     }
 
     public void endChestOutlineCapture() {
-        renderingChests = false;
+        if (chestCaptureDepth > 0) {
+            chestCaptureDepth--;
+        }
+        renderingChests = chestCaptureDepth > 0;
     }
 
     public void processHandOutlineTarget(RenderTarget mainTarget) {
@@ -158,6 +174,9 @@ public class ShaderHolder {
             chestTarget.blitAndBlendToTexture(mainTarget.getColorTextureView(), mainTarget.getDepthTextureView());
         }
         preparedChests = false;
+        chestCaptureDepth = 0;
+        renderingChests = false;
+        chestOutlineSubmits.clear();
     }
 
     private void renderPass(String name, RenderTarget input, RenderTarget output, RenderPipeline pipeline, GpuBufferSlice shaderConfig) {
@@ -187,14 +206,15 @@ public class ShaderHolder {
         Shaders shaders = Shaders.INSTANCE;
         float width = Math.max(1.0f, screenWidth);
         float height = Math.max(1.0f, screenHeight);
+        float scaledWidth = Math.max(1.0f, mc.getWindow().getGuiScaledWidth());
+        float scaledHeight = Math.max(1.0f, mc.getWindow().getGuiScaledHeight());
         Color outline = shaders.outlineColor.getValue();
         Color smokeOutline1 = shaders.smokeOutlineColor1.getValue();
         Color smokeOutline2 = shaders.smokeOutlineColor2.getValue();
         Color fill = shaders.fillColor1.getValue();
         Color smokeFill1 = shaders.fillColor2.getValue();
         Color smokeFill2 = shaders.fillColor3.getValue();
-
-        GpuBufferSlice shaderConfig = LuminRenderSystem.writeDynamicUniform(
+        return LuminRenderSystem.writeDynamicUniform(
                 "shader_config",
                 "Epsilon Shader Config UBO",
                 UNIFORMS_SIZE,
@@ -204,13 +224,15 @@ public class ShaderHolder {
                         height,
                         shaders.quality.getValue(),
                         shaders.lineWidth.getValue(),
-                        shaders.glow.getValue() ? -1.0f : alpha(outline),
+                        shaders.smokeGlow.getValue() ? -1.0f : alpha(outline),
                         shaders.fillAlpha.getValue() / 255.0f,
                         shaders.alpha2.getValue() / 255.0f,
-                        ((Util.getMillis() - startTimeMs) % 1_000_000L) / 1000.0f,
+                        (Util.getMillis() % 100_000L) / 1000.0f,
                         shaders.factor.getValue().floatValue(),
                         shaders.gradient.getValue().floatValue(),
                         shaders.octaves.getValue(),
+                        scaledWidth,
+                        scaledHeight,
                         outline,
                         smokeOutline1,
                         smokeOutline2,
@@ -219,7 +241,6 @@ public class ShaderHolder {
                         smokeFill2
                 )
         );
-        return shaderConfig;
     }
 
     private void ensureProgram() {
@@ -326,6 +347,8 @@ public class ShaderHolder {
             float gradientFactor,
             float gradientScale,
             float octaves,
+            float resolutionWidth,
+            float resolutionHeight,
             Color outline,
             Color smokeOutline1,
             Color smokeOutline2,
@@ -340,7 +363,7 @@ public class ShaderHolder {
                     .putVec4(width, height, 1.0f / width, 1.0f / height)
                     .putVec4(quality, lineWidth, outlineAlpha, fillAlpha)
                     .putVec4(gradientAlpha, time, gradientFactor, gradientScale)
-                    .putVec4(octaves, 0.0f, 0.0f, 0.0f)
+                    .putVec4(octaves, resolutionWidth, resolutionHeight, 0.0f)
                     .putVec4(red(outline), green(outline), blue(outline), alpha(outline))
                     .putVec4(red(smokeOutline1), green(smokeOutline1), blue(smokeOutline1), alpha(smokeOutline1))
                     .putVec4(red(smokeOutline2), green(smokeOutline2), blue(smokeOutline2), alpha(smokeOutline2))
