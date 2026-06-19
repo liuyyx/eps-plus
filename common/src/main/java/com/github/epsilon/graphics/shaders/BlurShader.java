@@ -178,10 +178,6 @@ public class BlurShader {
         render(x, y, width, height, radius, radius, radius, radius, blurStrength);
     }
 
-    public void render3DBox(AABB box, double blurStrength) {
-        render3DBoxes(List.of(box), blurStrength);
-    }
-
     public void render3DBoxes(List<AABB> boxes, double blurStrength) {
         if (boxes.isEmpty()) {
             return;
