@@ -38,7 +38,7 @@ public class BlockHighlight extends Module {
     private final ColorSetting lineColor = colorSetting("Line Color", new Color(255, 255, 255, 255), () -> mode.is(Mode.Both) || mode.is(Mode.BothSide) || mode.is(Mode.Outline) || mode.is(Mode.OutlinedSide));
     private final DoubleSetting lineWidth = doubleSetting("Line Width", 1.0, 0.0, 5.0, 0.5);
     private final BoolSetting blur = boolSetting("Blur", true);
-    private final DoubleSetting blurStrength = doubleSetting("Blur Strength", 5.0, 0.0, 16.0, 0.5, () -> blur.getValue() && (mode.is(Mode.Both) || mode.is(Mode.BothSide) || mode.is(Mode.Fill)));
+    private final DoubleSetting blurStrength = doubleSetting("Blur Strength", 5.0, 0.0, 16.0, 0.5);
 
     @EventHandler
     private void onRender3D(Render3DEvent event) {
@@ -60,7 +60,6 @@ public class BlockHighlight extends Module {
                 Managers.RENDER.addOutlineBox(box, outlineColor, thickness);
             }
             case BothSide -> {
-                drawBlur(box);
                 Managers.RENDER.addSideOutline(box, outlineColor, thickness, direction);
                 Managers.RENDER.addFilledSide(box, fillColor, direction);
             }
