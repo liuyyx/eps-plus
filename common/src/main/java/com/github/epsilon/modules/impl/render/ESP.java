@@ -9,6 +9,8 @@ import com.github.epsilon.settings.impl.BlockListSetting;
 import com.github.epsilon.settings.impl.BoolSetting;
 import com.github.epsilon.settings.impl.ColorSetting;
 import com.github.epsilon.settings.impl.DoubleSetting;
+import com.google.common.base.Supplier;
+import com.google.common.base.Suppliers;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Block;
@@ -21,6 +23,7 @@ import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.phys.AABB;
 
 import java.awt.*;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -33,31 +36,21 @@ public class ESP extends Module {
         super("ESP", Category.RENDER);
     }
 
+    private final Supplier<List<Block>> defaultBlockList = Suppliers.memoize(() -> {
+        final var list = new ArrayList<>(List.of(
+                Blocks.CHEST,
+                Blocks.TRAPPED_CHEST,
+                Blocks.ENDER_CHEST,
+                Blocks.BARREL,
+                Blocks.SHULKER_BOX
+        ));
+        list.addAll(Blocks.DYED_SHULKER_BOX.asList());
+        return list;
+    });
+
     private final BoolSetting blocks = boolSetting("Blocks", true);
     private final BlockListSetting blockList = blockListSetting("Block List",
-            List.of(
-                    Blocks.CHEST,
-                    Blocks.TRAPPED_CHEST,
-                    Blocks.ENDER_CHEST,
-                    Blocks.BARREL,
-                    Blocks.SHULKER_BOX,
-                    Blocks.WHITE_SHULKER_BOX,
-                    Blocks.ORANGE_SHULKER_BOX,
-                    Blocks.MAGENTA_SHULKER_BOX,
-                    Blocks.LIGHT_BLUE_SHULKER_BOX,
-                    Blocks.YELLOW_SHULKER_BOX,
-                    Blocks.LIME_SHULKER_BOX,
-                    Blocks.PINK_SHULKER_BOX,
-                    Blocks.GRAY_SHULKER_BOX,
-                    Blocks.LIGHT_GRAY_SHULKER_BOX,
-                    Blocks.CYAN_SHULKER_BOX,
-                    Blocks.PURPLE_SHULKER_BOX,
-                    Blocks.BLUE_SHULKER_BOX,
-                    Blocks.BROWN_SHULKER_BOX,
-                    Blocks.GREEN_SHULKER_BOX,
-                    Blocks.RED_SHULKER_BOX,
-                    Blocks.BLACK_SHULKER_BOX
-            ), blocks::getValue);
+            defaultBlockList.get(), blocks::getValue);
     private final DoubleSetting range = doubleSetting("Range", 64.0, 1.0, 128.0, 1.0);
     private final ColorSetting color = colorSetting("Color", new Color(160, 210, 255, 30));
     private final BoolSetting blur = boolSetting("Blur", true);
