@@ -23,6 +23,7 @@ import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.renderer.feature.submit.SubmitNode;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.Util;
+import org.joml.Vector4f;
 
 import java.awt.*;
 import java.nio.ByteBuffer;
@@ -91,7 +92,7 @@ public class ShaderHolder {
         if (Shaders.INSTANCE.shouldRenderHands()) {
             ensureHandTarget(Math.max(1, width), Math.max(1, height));
             CommandEncoder encoder = RenderSystem.getDevice().createCommandEncoder();
-            encoder.clearColorAndDepthTextures(handTarget.getColorTexture(), new org.joml.Vector4f(0.0f), handTarget.getDepthTexture(), 1.0);
+            encoder.clearColorAndDepthTextures(handTarget.getColorTexture(), new Vector4f(0.0f), handTarget.getDepthTexture(), 1.0);
             renderingHands = true;
             capturedHands = true;
         }
