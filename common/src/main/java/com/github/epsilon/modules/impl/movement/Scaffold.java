@@ -92,7 +92,8 @@ public class Scaffold extends Module {
 
     private enum Mode {
         TellyBridge,
-        GodBridge
+        GodBridge,
+        Legit
     }
 
     private enum RotationMode {
@@ -175,6 +176,8 @@ public class Scaffold extends Module {
     private final IntSetting rotationSpeed2 = intSetting("Rotation Speed 2", 36, 10, 180, 10, () -> rotationMode.is(RotationMode.Heypixel));
     private final IntSetting rotationBackSpeed = intSetting("Rotation Back Speed", 180, 10, 180, 10, () -> mode.is(Mode.TellyBridge));
     private final IntSetting tellyTicks = intSetting("Telly Ticks", 1, 0, 6, 1, () -> mode.is(Mode.TellyBridge));
+    private final IntSetting legitSneakDelay = intSetting("Legit Sneak Delay", 4, 1, 5, 1, () -> mode.is(Mode.Legit));
+    private final IntSetting legitModeSpeed = intSetting("Legit Mode Speed", 180, 1, 180, 1, () -> mode.is(Mode.Legit));
 
     private final BoolSetting swingHand = boolSetting("Swing Hand", true);
     private final BoolSetting render = boolSetting("Render", true);
@@ -200,6 +203,11 @@ public class Scaffold extends Module {
     private boolean emergencyPlacementActive;
     private boolean pearlUsePacketSent;
 
+    private static final double LEGIT_EDGE_THRESHOLD = 0.15;
+    private int legitEdgeState = 0;
+    private int legitEdgeTimer = 0;
+    private boolean legitWasOnEdge = false;
+
     private final List<RenderInfo> renderBoxes = new ArrayList<>();
 
     @Override
@@ -213,6 +221,7 @@ public class Scaffold extends Module {
         shouldSwapBack = false;
         emergencyPlacementActive = false;
         pearlUsePacketSent = false;
+        resetLegitEdgeState();
     }
 
     @Override
@@ -220,6 +229,7 @@ public class Scaffold extends Module {
         yLevel = 0;
         emergencyPlacementActive = false;
         pearlUsePacketSent = false;
+        resetLegitEdgeState();
         if (shouldSwapBack) {
             InvUtils.swapBack();
             shouldSwapBack = false;
@@ -231,6 +241,13 @@ public class Scaffold extends Module {
         if (!event.isCancelled()) emergencyPlacementActive = false;
 
         blockResult = findBlockResult();
+
+        if (mode.is(Mode.Legit)) {
+            updateLegitEdgeState();
+        } else {
+            resetLegitEdgeState();
+        }
+
         if (!blockResult.found()) return;
 
         if (mc.player.onGround()) {
@@ -294,6 +311,7 @@ public class Scaffold extends Module {
         switch (mode.getValue()) {
             case TellyBridge -> handleTelly();
             case GodBridge -> handleNormal();
+            case Legit -> handleLegit();
         }
     }
 
@@ -306,6 +324,13 @@ public class Scaffold extends Module {
 
         if (mode.is(Mode.TellyBridge) && mc.player.onGround() && !mc.options.keyJump.isDown() && mc.player.isMoving()) {
             event.setJump(true);
+        }
+
+        if (mode.is(Mode.Legit) && mc.gui.screen() == null
+                && mc.player.onGround() && (legitEdgeState == 1 || legitEdgeState == 2)) {
+            event.setSneak(true);
+            event.setSprint(false);
+            mc.player.setSprinting(false);
         }
     }
 
@@ -388,6 +413,95 @@ public class Scaffold extends Module {
             RotationManager.INSTANCE.setRotations(rotation, rotationSpeed.getValue());
         }
         place();
+    }
+
+    private void handleLegit() {
+        rotation = getRotation(blockPos, direction);
+        RotationManager.INSTANCE.setRotations(rotation, legitModeSpeed.getValue());
+        if (legitCanPlace()) {
+            place();
+        }
+    }
+
+    /**
+     * Legit（蹲起搭）边缘状态机：
+     * 0 = 未在边缘；1 = 刚踏上边缘，潜行等待 legitSneakDelay 刻（此阶段不放置）；
+     * 2 = 等待结束，潜行继续但允许放置。
+     */
+    private void updateLegitEdgeState() {
+        boolean onGround = mc.player.onGround();
+        boolean atEdge = onGround && isOnEdge();
+        boolean holdingBlock = blockResult != null && blockResult.found() && canUseBlockResult();
+        boolean justReachedEdge = atEdge && !legitWasOnEdge;
+
+        if (!onGround) {
+            legitEdgeState = 0;
+            legitEdgeTimer = 0;
+        } else if (atEdge && holdingBlock) {
+            switch (legitEdgeState) {
+                case 0 -> {
+                    if (justReachedEdge || legitEdgeTimer == 0) {
+                        legitEdgeState = 1;
+                        legitEdgeTimer = legitSneakDelay.getValue();
+                    }
+                }
+                case 1 -> {
+                    legitEdgeTimer--;
+                    if (legitEdgeTimer <= 0) {
+                        legitEdgeState = 2;
+                        legitEdgeTimer = 0;
+                    }
+                }
+                case 2 -> {
+                }
+                default -> {
+                    legitEdgeState = 0;
+                    legitEdgeTimer = 0;
+                }
+            }
+        } else {
+            legitEdgeState = 0;
+            legitEdgeTimer = 0;
+        }
+        legitWasOnEdge = atEdge;
+    }
+
+    private void resetLegitEdgeState() {
+        legitEdgeState = 0;
+        legitEdgeTimer = 0;
+        legitWasOnEdge = false;
+    }
+
+    /**
+     * Legit 放置闸门：在地面且处于状态 1（潜行等待期）时禁止放置。
+     */
+    private boolean legitCanPlace() {
+        return !mc.player.onGround() || legitEdgeState == 0 || legitEdgeState == 2;
+    }
+
+    /**
+     * 边缘检测：脚下为可替换方块，或玩家位于方块边缘阈值内且相邻方块下方可替换。
+     */
+    private boolean isOnEdge() {
+        if (!mc.player.onGround()) return true;
+
+        int playerX = Mth.floor(mc.player.getX());
+        int playerY = Mth.floor(mc.player.getY());
+        int playerZ = Mth.floor(mc.player.getZ());
+
+        if (mc.level.getBlockState(new BlockPos(playerX, playerY - 1, playerZ)).canBeReplaced()) return true;
+
+        double xOff = mc.player.getX() - playerX;
+        double zOff = mc.player.getZ() - playerZ;
+        if (xOff < LEGIT_EDGE_THRESHOLD || xOff > 1.0 - LEGIT_EDGE_THRESHOLD
+                || zOff < LEGIT_EDGE_THRESHOLD || zOff > 1.0 - LEGIT_EDGE_THRESHOLD) {
+            int checkX = playerX + (xOff < LEGIT_EDGE_THRESHOLD ? -1 : (xOff > 1.0 - LEGIT_EDGE_THRESHOLD ? 1 : 0));
+            int checkZ = playerZ + (zOff < LEGIT_EDGE_THRESHOLD ? -1 : (zOff > 1.0 - LEGIT_EDGE_THRESHOLD ? 1 : 0));
+            if (checkX != playerX || checkZ != playerZ) {
+                if (mc.level.getBlockState(new BlockPos(checkX, playerY - 1, checkZ)).canBeReplaced()) return true;
+            }
+        }
+        return false;
     }
 
     private void place() {

@@ -1859,7 +1859,8 @@
         "mode": {
           "_value": "Mode",
           "tellybridge": "Telly Bridge",
-          "godbridge": "God Bridge"
+          "godbridge": "God Bridge",
+          "legit": "Legit"
         },
         "swap mode": {
           "_value": "Swap Mode",
@@ -1886,6 +1887,8 @@
         "rotation speed 2": "Rotation Speed 2",
         "rotation back speed": "Rotation Back Speed",
         "telly ticks": "Telly Ticks",
+        "legit sneak delay": "Legit Sneak Delay",
+        "legit mode speed": "Legit Mode Speed",
         "swing hand": "Swing Hand",
         "render": "Render",
         "fade": "Fade",
