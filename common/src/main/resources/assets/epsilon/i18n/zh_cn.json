@@ -1972,6 +1972,13 @@
         "delay ticks": "延迟刻数",
         "jump reset": "跳跃重置"
       },
+      "telly": {
+        "_value": "Telly桥",
+        "auto swap": "自动切换",
+        "disable safewalk": "禁用安全行走",
+        "show activation hitbox": "显示激活判定框",
+        "print status": "打印状态"
+      },
       "kill effect": {
         "_value": "击杀特效",
         "lightning": "闪电",

@@ -1972,6 +1972,13 @@
         "delay ticks": "Delay Ticks",
         "jump reset": "Jump Reset"
       },
+      "telly": {
+        "_value": "Telly",
+        "auto swap": "Auto Swap",
+        "disable safewalk": "Disable SafeWalk",
+        "show activation hitbox": "Show Activation Hitbox",
+        "print status": "Print Status"
+      },
       "kill effect": {
         "_value": "Kill Effect",
         "lightning": "Lightning",
