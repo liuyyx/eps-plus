@@ -974,6 +974,18 @@
           "high": "高",
           "highest": "最高"
         },
+        "aim mode": {
+          "_value": "瞄准模式",
+          "normal": "普通",
+          "ai": "AI"
+        },
+        "ai model": {
+          "_value": "AI模型",
+          "model21kc11kp": "21KC11KP",
+          "model19kc8kp": "19KC8KP"
+        },
+        "ai yaw multiplier": "AI水平倍率",
+        "ai pitch multiplier": "AI俯仰倍率",
         "cps": "每秒点击数",
         "players": "玩家",
         "mobs": "怪物",

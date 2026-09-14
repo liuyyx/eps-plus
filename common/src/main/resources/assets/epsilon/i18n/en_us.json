@@ -974,6 +974,18 @@
           "high": "High",
           "highest": "Highest"
         },
+        "aim mode": {
+          "_value": "Aim Mode",
+          "normal": "Normal",
+          "ai": "AI"
+        },
+        "ai model": {
+          "_value": "AI Model",
+          "model21kc11kp": "21KC11KP",
+          "model19kc8kp": "19KC8KP"
+        },
+        "ai yaw multiplier": "AI Yaw Multiplier",
+        "ai pitch multiplier": "AI Pitch Multiplier",
         "cps": "CPS",
         "players": "Players",
         "mobs": "Mobs",

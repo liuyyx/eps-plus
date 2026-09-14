@@ -6,6 +6,7 @@ import com.github.epsilon.events.bus.listeners.ConsumerListener;
 import com.github.epsilon.events.impl.ClientTickEvent;
 import com.github.epsilon.events.impl.PlayerTickEvent;
 import com.github.epsilon.events.impl.Render3DEvent;
+import com.github.epsilon.events.impl.RespawnEvent;
 import com.github.epsilon.managers.rotation.RotationManager;
 import com.github.epsilon.managers.target.TargetManager;
 import com.github.epsilon.managers.target.TargetRequest;
@@ -15,6 +16,7 @@ import com.github.epsilon.modules.impl.movement.NoSlowdown;
 import com.github.epsilon.modules.impl.movement.Scaffold;
 import com.github.epsilon.modules.impl.movement.Velocity;
 import com.github.epsilon.settings.impl.*;
+import com.github.epsilon.utils.ai.AiRotationModelManager;
 import com.github.epsilon.utils.player.PlayerUtils;
 import com.github.epsilon.utils.render.esp.CaptureMarkESP;
 import com.github.epsilon.utils.render.esp.CircleESP;
@@ -83,6 +85,16 @@ public class KillAura extends Module {
         Deobf
     }
 
+    private enum AimMode {
+        Normal,
+        Ai
+    }
+
+    private enum AiModel {
+        Model21KC11KP,
+        Model19KC8KP
+    }
+
     private final BoolSetting pauseOnEat = boolSetting("Pause On Eat", true);
     private final BoolSetting pauseOnScaffold = boolSetting("Pause On Scaffold", true);
     private final BoolSetting hitSelect = boolSetting("Hit Select", true);
@@ -95,6 +107,10 @@ public class KillAura extends Module {
     private final IntSetting fov = intSetting("FOV", 360, 10, 360, 1);
     private final IntSetting rotationSpeed = intSetting("Rotation Speed", 180, 10, 180, 10);
     private final EnumSetting<Priority> rotationPriority = enumSetting("Rotation Priority", Priority.High);
+    private final EnumSetting<AimMode> aimMode = enumSetting("Aim Mode", AimMode.Normal);
+    private final EnumSetting<AiModel> aiModel = enumSetting("AI Model", AiModel.Model21KC11KP, () -> aimMode.is(AimMode.Ai));
+    private final DoubleSetting aiYawMultiplier = doubleSetting("AI Yaw Multiplier", 1.5, 0.5, 2.0, 0.05, () -> aimMode.is(AimMode.Ai));
+    private final DoubleSetting aiPitchMultiplier = doubleSetting("AI Pitch Multiplier", 1.0, 0.5, 2.0, 0.05, () -> aimMode.is(AimMode.Ai));
     private final IntSetting cps = intSetting("CPS", 12, 1, 20, 1, () -> mode.is(Mode.OnePointEight));
 
     private final BoolSetting players = boolSetting("Players", true);
@@ -142,6 +158,17 @@ public class KillAura extends Module {
 
     private int attacks;
     private long lastAttackTime;
+
+    // AI 转向：模块自持的上一刻托管角快照 + tick 戳。
+    // 不能复用 RotationManager.lastRotations —— 它在 onSendPosition 中被赋为 rotations
+    // 的同一对象引用，读取瞬间两者恒等，会导致角速度特征恒为 0。
+    // tick 戳用于判定相邻性：目标消失、模式切换、重生等跳刻场景会使 delta != 1，
+    // 此时角速度特征取 0 而非跨间隔的虚假值。
+    // 注意：采样位于遮挡早退之前，故被遮挡的 tick 仍会推进 tick 戳；
+    // 该刻不施加转向，因此紧随其后的采样刻差值自然为 0，属正确行为。
+    private float previousManagedYaw;
+    private float previousManagedPitch;
+    private int previousManagedTick = Integer.MIN_VALUE;
 
     private final TimerUtils switchTimer = new TimerUtils();
 
@@ -224,9 +251,13 @@ public class KillAura extends Module {
 
         target = targets.get(targetIndex);
 
-        Rot2f calculate = RotationUtils.calculate(target, true, aimRange.getValue());
-        if (RaytraceUtils.raytrace(calculate, aimRange.getValue()).getType() == HitResult.Type.BLOCK) return;
-        RotationManager.INSTANCE.setRotations(calculate, rotationSpeed.getValue(), rotation -> RaytraceUtils.raytrace(rotation, 3.0f) instanceof EntityHitResult entityHitResult && entityHitResult.getEntity() == target, rotationPriority.getValue());
+        if (aimMode.is(AimMode.Ai)) {
+            if (!applyAiRotation(target)) return;
+        } else {
+            Rot2f calculate = RotationUtils.calculate(target, true, aimRange.getValue());
+            if (RaytraceUtils.raytrace(calculate, aimRange.getValue()).getType() == HitResult.Type.BLOCK) return;
+            RotationManager.INSTANCE.setRotations(calculate, rotationSpeed.getValue(), rotation -> RaytraceUtils.raytrace(rotation, 3.0f) instanceof EntityHitResult entityHitResult && entityHitResult.getEntity() == target, rotationPriority.getValue());
+        }
 
         HitResult hitResult = RotationManager.INSTANCE.getHitResult();
         if (hitSelect.getValue() && hitResult instanceof EntityHitResult entityHitResult && entityHitResult.getEntity() instanceof Player player && !AntiBot.INSTANCE.isBot(player) && !TargetManager.INSTANCE.isSameTeam(player) && velocity.attackQueue <= 0) {
@@ -344,11 +375,105 @@ public class KillAura extends Module {
         }
     }
 
+    /**
+     * AI 转向模式：由捆绑的 MLP 战斗回归模型直接输出 yaw/pitch 增量，
+     * 取代普通模式下「直接设定目标角度」的做法。
+     *
+     * <p>输入布局镜像训练样本 CombatSample：
+     * [yaw 误差, pitch 误差, yaw 角速度, pitch 角速度, 玩家+目标水平速度, 距离]。
+     * 模型输出为当前刻应施加的角度增量（度）。</p>
+     *
+     * <p>与源实现的差异：源走 {@code applyAiRotationDelta} 的鼠标增量空间并短路控制器速度逻辑；
+     * 本移植映射为「绝对目标 + 速度」提交。不传射线命中谓词，因而跳过
+     * {@code RotationManager.smooth()} 中依赖谓词的伪装抖动分支；
+     * 但仍会经过 {@link RotationUtils#smooth} 的灵敏度量化与亚度级噪声（全局旋转管线行为）。</p>
+     *
+     * <p>回退行为：模型不可用或输出非法时，源实现保持当前角不动；本移植改为提交普通转向
+     * （可用性优先），属刻意适配。模型资源缺失时管理器会输出一次警告。</p>
+     *
+     * @return {@code true} 表示本刻转向已处理；{@code false} 表示被方块遮挡，
+     * 调用方应中止整个 tick（与普通模式行为一致）
+     */
+    private boolean applyAiRotation(LivingEntity aimTarget) {
+        // 先采样托管角与角速度：该采样与是否被遮挡无关，放在遮挡早退之前可保证
+        // 快照逐刻连续，避免目标消失/被遮挡数秒后恢复时喂入跨间隔的虚假角速度。
+        Rot2f current = RotationManager.INSTANCE.getRotation();
+        float managedYaw = current.getYaw();
+        float managedPitch = current.getPitch();
+
+        // 角速度特征只在「上一刻刚采样过」时可信；否则（跳刻/重生/目标消失）取 0。
+        int nowTick = mc.player.tickCount;
+        boolean velocityFresh = previousManagedTick != Integer.MIN_VALUE && nowTick - previousManagedTick == 1;
+        float velocityYaw = velocityFresh ? Mth.wrapDegrees(managedYaw - previousManagedYaw) : 0.0f;
+        float velocityPitch = velocityFresh ? managedPitch - previousManagedPitch : 0.0f;
+        previousManagedYaw = managedYaw;
+        previousManagedPitch = managedPitch;
+        previousManagedTick = nowTick;
+
+        Rot2f desired = RotationUtils.calculate(aimTarget, true, aimRange.getValue());
+        if (RaytraceUtils.raytrace(desired, aimRange.getValue()).getType() == HitResult.Type.BLOCK) return false;
+
+        float deltaYaw = Mth.wrapDegrees(desired.getYaw() - managedYaw);
+        float deltaPitch = Mth.wrapDegrees(desired.getPitch() - managedPitch);
+
+        double playerSpeed = mc.player.getDeltaMovement().horizontal().length();
+        double targetSpeed = aimTarget.getDeltaMovement().horizontal().length();
+        float speedFeature = (float) (playerSpeed + targetSpeed);
+        // 源用 computeAimCoords 返回的目标「脚部」坐标做 player.i(x,y,z)，即脚-脚距离；
+        // Entity.distanceTo 与之同构（脚点欧氏距离）。
+        float distanceFeature = mc.player.distanceTo(aimTarget);
+
+        float[] input = {deltaYaw, deltaPitch, velocityYaw, velocityPitch, speedFeature, distanceFeature};
+
+        // 仅在目标模型与当前激活模型不一致时才切换，避免每 tick 的字符串分配与加锁。
+        String modelName = aiModel.is(AiModel.Model19KC8KP) ? "19KC8KP" : "21KC11KP";
+        if (!modelName.equalsIgnoreCase(AiRotationModelManager.INSTANCE.getActiveName())) {
+            AiRotationModelManager.INSTANCE.ensureReady();
+            AiRotationModelManager.INSTANCE.setActiveModel(modelName);
+        }
+        float[] output = AiRotationModelManager.INSTANCE.predictSafe(input);
+
+        if (output == null || output.length < 2 || !Float.isFinite(output[0]) || !Float.isFinite(output[1])) {
+            RotationManager.INSTANCE.setRotations(desired, rotationSpeed.getValue(), rotation -> RaytraceUtils.raytrace(rotation, 3.0f) instanceof EntityHitResult entityHitResult && entityHitResult.getEntity() == aimTarget, rotationPriority.getValue());
+            return true;
+        }
+
+        float yawStep = output[0] * aiYawMultiplier.getValue().floatValue();
+        float pitchStep = output[1] * aiPitchMultiplier.getValue().floatValue();
+        Rot2f stepTarget = new Rot2f(managedYaw + yawStep, Mth.clamp(managedPitch + pitchStep, -90.0f, 90.0f));
+
+        // 位移距离必须按 smooth() 内部同一基准（lastRotations）计算，
+        // 否则提交的速度与实际位移不符。
+        Rot2f moveBase = RotationManager.INSTANCE.lastRotations;
+        double stepDistance = Math.hypot(
+                Mth.wrapDegrees(stepTarget.getYaw() - moveBase.getYaw()),
+                stepTarget.getPitch() - moveBase.getPitch()
+        );
+        // 零步长时 RotationUtils.move 会出现 0/0 的 NaN 分配，且本身无需转向。
+        if (!(stepDistance > 1.0e-6)) return true;
+
+        // 以等于位移距离的速度提交，等价于本刻全额施加模型增量。
+        // 不传射线命中谓词：跳过 RotationManager.smooth() 中依赖谓词的抖动分支
+        // （RotationUtils.smooth 的灵敏度量化与亚度级噪声仍会生效）。
+        RotationManager.INSTANCE.setRotations(stepTarget, stepDistance, rotationPriority.getValue());
+        return true;
+    }
+
     private void resetState() {
         targets = null;
         target = null;
         attacks = 0;
         lastAttackTime = 0L;
+        previousManagedTick = Integer.MIN_VALUE;
+    }
+
+    /**
+     * 重生/换维度后玩家实体重建、{@code RotationManager} 会将托管旋转归零，
+     * 此处同步作废角速度快照，避免复活首刻喂入跨间隔的虚假角速度。
+     */
+    @EventHandler
+    private void onRespawn(RespawnEvent event) {
+        previousManagedTick = Integer.MIN_VALUE;
     }
 
 }
