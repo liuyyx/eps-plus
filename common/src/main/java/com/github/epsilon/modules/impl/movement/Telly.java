@@ -140,11 +140,16 @@ public class Telly extends Module {
     }
     private final int[] YAW_NUDGE_PATTERN = {0, 1, -1, 2, -2};
     private int rotationStepCounter = 0;
-    private final double ACTIVATION_ACROSS_MIN = 0.38;
-    private final double ACTIVATION_ACROSS_MAX = 0.65;
-    private final double ACTIVATION_HEIGHT_MIN = 0.25;
-    private final double ACTIVATION_HEIGHT_MAX = 0.75;
-    private final float ACTIVATION_YAW_TOLERANCE = 2.0f;
+    // 激活容差。
+    // 源版这三个常量（2° / 0.38~0.65 / 0.25~0.75）是在 RavenBS 那套 client.raycastBlock
+    // 几何下调出来的。移植到 Epsilon 后实测：反复尝试时常以 0.38°、0.01、0.03 之差落空，
+    // 虽然偶尔能达成「全部满足」，但要在同一刻保持住并松开潜行，实际上做不到。
+    // 因此按实测放宽，同时保持「斜向对齐 + 站在边缘外侧」的语义不变。
+    private final double ACTIVATION_ACROSS_MIN = 0.25;
+    private final double ACTIVATION_ACROSS_MAX = 0.75;
+    private final double ACTIVATION_HEIGHT_MIN = 0.15;
+    private final double ACTIVATION_HEIGHT_MAX = 0.85;
+    private final float ACTIVATION_YAW_TOLERANCE = 10.0f;
 
     // 激活命中框渲染管线：无深度测试、不剔除，与 ESP 系列保持一致。
     private static final RenderPipeline ACTIVATION_FACE_PIPELINE = RenderPipeline.builder(RenderPipelines.DEBUG_FILLED_SNIPPET)
