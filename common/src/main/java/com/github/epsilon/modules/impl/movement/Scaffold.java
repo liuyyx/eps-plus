@@ -185,6 +185,11 @@ public class Scaffold extends Module {
      * Matrix 的 sfd.place.t（scaffold place timing）会稳定判违规。
      */
     private final IntSetting placeDelay = intSetting("Place Delay", 1, 0, 5, 1);
+    /**
+     * 放置冷却的随机附加量（0~5）。实际冷却 = {@link #placeDelay} + [0, 本值]，
+     * 每次放置重新掷一次，避免固定间隔本身成为新的可识别特征。
+     */
+    private final IntSetting placeDelayRandom = intSetting("Place Delay Random", 2, 0, 5, 1);
     private final IntSetting legitModeSpeed = intSetting("Legit Mode Speed", 180, 1, 180, 1, () -> mode.is(Mode.Legit));
 
     private final BoolSetting swingHand = boolSetting("Swing Hand", true);
@@ -564,7 +569,9 @@ public class Scaffold extends Module {
         InteractionResult result = mc.gameMode.useItemOn(mc.player, hand, new BlockHitResult(getVec3(blockPos, direction), direction, blockPos, false));
 
         if (result.consumesAction()) {
-            placeDelayCounter = placeDelay.getValue();
+            // 冷却 = 基准 + 随机量，每次放置重新掷一次
+            placeDelayCounter = placeDelay.getValue()
+                    + (placeDelayRandom.getValue() > 0 ? legitRandom.nextInt(placeDelayRandom.getValue() + 1) : 0);
             if (swingHand.getValue()) {
                 mc.player.swing(hand);
             } else {
