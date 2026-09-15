@@ -521,7 +521,7 @@ public class Telly extends Module {
             return;
         }
 
-        setActivationMovementHold(activationPromptReady() && mc.options.keyUse.isDown());
+        setActivationMovementHold(activationPromptReady() && mc.mouseHandler.isRightPressed());
 
         boolean lookingDown = player.getXRot() >= activationPitch();
         boolean atEdge = lookingDown && isLookingAtEdge(player);
@@ -530,7 +530,10 @@ public class Telly extends Module {
             if (activatePromptAt == 0L) activatePromptAt = System.currentTimeMillis();
             promptBrokeAt = 0L;
             if (activationSuppressUse()) mc.options.keyUse.setDown(false);
-            if (activationPromptReady() && mc.options.keyUse.isDown()) {
+            // 注意：这里必须读物理鼠标键，不能读 mc.options.keyUse.isDown()。
+            // keyUse 的 down 状态会被本方法自身 setDown(false) 清零（用于抑制原版右键使用），
+            // 写后立刻读恒为 false，会导致激活永远无法完成。
+            if (activationPromptReady() && mc.mouseHandler.isRightPressed()) {
                 disableSafeWalkForRun();
                 enforceSafeWalkDisabledForRun();
             } else if (safeWalkStateCaptured) {
@@ -550,7 +553,9 @@ public class Telly extends Module {
         }
         mc.options.keyUse.setDown(false);
 
-        if (!mc.options.keyShift.isDown() && mc.options.keyUse.isDown() && isActivationYawAligned(player.getYRot())) {
+        // 触发：松开潜行、仍按住右键、朝向对齐。
+        // 右键同样读物理鼠标键 —— 上一行的 setDown(false) 会把 keyUse 清零。
+        if (!mc.options.keyShift.isDown() && mc.mouseHandler.isRightPressed() && isActivationYawAligned(player.getYRot())) {
             rememberActivationPromptColor();
             activatePromptAt = 0L;
             promptBrokeAt = 0L;
@@ -1104,7 +1109,9 @@ public class Telly extends Module {
     private void restorePhysicalUse() {
         tellyAutoPlaceWindow = false;
         autoPlaceDebugActive = false;
-        mc.options.keyUse.setDown(mc.options.keyUse.isDown());
+        // 必须回读物理鼠标键：setDown(keyUse.isDown()) 是自赋值，等于什么都没做，
+        // 右键会一直停在被抑制的 false 上。
+        mc.options.keyUse.setDown(mc.mouseHandler.isRightPressed());
     }
 
     private void releaseMovementKeys() {
@@ -2326,7 +2333,7 @@ public class Telly extends Module {
     }
 
     private void restoreUseToPhysicalState() {
-        mc.options.keyUse.setDown(running ? tellyAutoPlaceWindow : mc.options.keyUse.isDown());
+        mc.options.keyUse.setDown(running ? tellyAutoPlaceWindow : mc.mouseHandler.isRightPressed());
         useSuppressed = false;
     }
 
