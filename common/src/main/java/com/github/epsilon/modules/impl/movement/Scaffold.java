@@ -179,6 +179,12 @@ public class Scaffold extends Module {
     private final IntSetting tellyTicks = intSetting("Telly Ticks", 1, 0, 6, 1, () -> mode.is(Mode.TellyBridge));
     private final IntSetting legitSneakDelay = intSetting("Legit Sneak Delay", 4, 1, 5, 1, () -> mode.is(Mode.Legit));
     private final IntSetting legitSneakRandom = intSetting("Legit Sneak Random", 2, 0, 5, 1, () -> mode.is(Mode.Legit));
+    /**
+     * 放置后的冷却刻数（与 leader 的 Place Delay 同义，默认 1、范围 0~5）。
+     * 缺少节流时只要方块搜索成功就每刻放置，形成完全规律的时序，
+     * Matrix 的 sfd.place.t（scaffold place timing）会稳定判违规。
+     */
+    private final IntSetting placeDelay = intSetting("Place Delay", 1, 0, 5, 1);
     private final IntSetting legitModeSpeed = intSetting("Legit Mode Speed", 180, 1, 180, 1, () -> mode.is(Mode.Legit));
 
     private final BoolSetting swingHand = boolSetting("Swing Hand", true);
@@ -218,6 +224,9 @@ public class Scaffold extends Module {
     private int legitRotationTick = 0;
     private final Random legitRandom = new Random();
 
+    /** 放置冷却剩余刻数；>0 时不放置。见 {@link #placeDelay}。 */
+    private int placeDelayCounter = 0;
+
     private final List<RenderInfo> renderBoxes = new ArrayList<>();
 
     @Override
@@ -249,6 +258,8 @@ public class Scaffold extends Module {
     @EventHandler
     private void onPlayerTick(PlayerTickEvent.Pre event) {
         if (!event.isCancelled()) emergencyPlacementActive = false;
+
+        if (placeDelayCounter > 0) placeDelayCounter--;
 
         blockResult = findBlockResult();
 
@@ -536,6 +547,9 @@ public class Scaffold extends Module {
             return;
         }
 
+        // 放置节流：冷却未结束时不再放置，避免逐刻连续放置形成规律时序。
+        if (placeDelayCounter > 0) return;
+
         if (switch (raytrace.getValue()) {
             case Normal -> !RaytraceUtils.overBlock(RotationManager.INSTANCE.getRotation(), blockPos);
             case Strict -> !RaytraceUtils.overBlock(RotationManager.INSTANCE.getRotation(), blockPos, direction);
@@ -550,6 +564,7 @@ public class Scaffold extends Module {
         InteractionResult result = mc.gameMode.useItemOn(mc.player, hand, new BlockHitResult(getVec3(blockPos, direction), direction, blockPos, false));
 
         if (result.consumesAction()) {
+            placeDelayCounter = placeDelay.getValue();
             if (swingHand.getValue()) {
                 mc.player.swing(hand);
             } else {
