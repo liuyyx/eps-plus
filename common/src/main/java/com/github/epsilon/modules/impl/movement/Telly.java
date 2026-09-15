@@ -55,11 +55,13 @@ public class Telly extends Module {
     private final BoolSetting disableSafeWalk = boolSetting("Disable SafeWalk", true);
     private final BoolSetting showActivationHitbox = boolSetting("Show Activation Hitbox", true);
     /**
-     * 激活诊断：每秒往聊天栏输出一次探测结果与被卡住的条件。
-     * 激活判据涉及「俯仰角 / 命中面 / 站位 / 命中点区域 / 行进朝向 / 唇距」六项，
+     * 激活诊断：潜行期间每秒往聊天栏输出一次探测结果与被卡住的条件。
+     * 激活判据涉及「俯仰角 / 命中面 / 站位 / 命中点区域 / 行进朝向 / 唇距」等多项，
      * 逐项都成立才算通过；开启本开关可直接定位是哪一项不满足。
+     *
+     * <p>仅在按住潜行时输出 —— 不在手势中时完全安静，不会刷屏。</p>
      */
-    private final BoolSetting debugActivation = boolSetting("Debug Activation", false);
+    private final BoolSetting debugActivation = boolSetting("Debug Activation", true);
     private final BoolSetting printStatus = boolSetting("Print Status", true);
 
     // ─── State fields ───────────────────────────────────────────────────────
@@ -594,7 +596,7 @@ public class Telly extends Module {
             return;
         }
 
-        if (debugActivation.getValue()) {
+        if (debugActivation.getValue() && mc.options.keyShift.isDown()) {
             long now = System.currentTimeMillis();
             if (now - lastActivationDebugAt >= 1000L) {
                 lastActivationDebugAt = now;
