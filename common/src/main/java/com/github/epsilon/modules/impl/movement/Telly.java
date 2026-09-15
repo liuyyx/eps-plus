@@ -537,56 +537,79 @@ public class Telly extends Module {
     }
 
     /**
-     * 逐项复核激活判据，返回第一个不满足的条件（全部满足返回 {@code null}）。
+     * 全量诊断：一次列出九项判据 + 触发阶段的状态，而不是只报第一个失败项。
      * 仅用于 {@code Debug Activation} 的输出，不参与实际逻辑。
+     *
+     * <p>格式：{@code [总体] 俯仰… 朝向… 射线… 面… 点… 行进面… 站位… 前方… 唇距…
+     * ‖ 潜行… 右键… 计时…}。{@code ✓} 表示该条通过。</p>
      */
-    private String activationProbeReason(LocalPlayer player) {
-        if (player.getXRot() < activationPitch()) {
-            return String.format("俯仰角 %.1f < %.0f（需要更低头）", player.getXRot(), activationPitch());
-        }
-        if (!isActivationYawAligned(player.getYRot())) {
-            float nearest = Math.round((player.getYRot() - 45.0f) / 90.0f) * 90.0f + 45.0f;
-            return String.format("朝向偏离对角线 %.2f° > 2°（需正对 45°+k·90°）",
-                    Math.abs(tellyWrapAngle(player.getYRot() - nearest)));
-        }
+    private String activationFullReport(LocalPlayer player) {
+        StringBuilder sb = new StringBuilder();
+
+        boolean pitchOk = player.getXRot() >= activationPitch();
+        sb.append(pitchOk ? "§a俯仰✓§f" : "§c俯仰✗§f")
+                .append(String.format("%.1f", player.getXRot())).append(' ');
+
+        float nearestDiagonal = Math.round((player.getYRot() - 45.0f) / 90.0f) * 90.0f + 45.0f;
+        float yawOff = Math.abs(tellyWrapAngle(player.getYRot() - nearestDiagonal));
+        boolean yawOk = isActivationYawAligned(player.getYRot());
+        sb.append(yawOk ? "§a朝向✓§f" : "§c朝向✗§f")
+                .append(String.format("%.2f", yawOff)).append(' ');
+
         BlockHitResult hit = raycastBlock(4.5);
-        if (hit == null || hit.getType() == HitResult.Type.MISS) return "射线 4.5 格内未命中方块";
-        Direction face = hit.getDirection();
-        if (face == Direction.UP || face == Direction.DOWN) {
-            return "命中面是 " + face + "（判据要求侧面）";
+        boolean rayOk = hit != null && hit.getType() != HitResult.Type.MISS;
+        sb.append(rayOk ? "§a射线✓§f " : "§c射线✗§f ");
+
+        boolean faceOk = false, centerOk = false, travelOk = false;
+        boolean standOk = false, aheadOk = false, lipOk = false;
+        if (rayOk) {
+            Direction dir = hit.getDirection();
+            int f = directionToInt(dir);
+            faceOk = dir != Direction.UP && dir != Direction.DOWN;
+            sb.append(faceOk ? "§a面✓§f" : "§c面✗§f").append(dir.name()).append(' ');
+
+            Vec3 localHit = hit.getLocation().subtract(new Vec3(hit.getBlockPos()));
+            centerOk = isInActivationFaceCenter(f, localHit);
+            sb.append(centerOk ? "§a点✓§f" : "§c点✗§f")
+                    .append(String.format("(%.2f,%.2f,%.2f) ", localHit.x, localHit.y, localHit.z));
+
+            int[] travel = travelDirectionFromYaw(player.getYRot());
+            int travelFace = travel[0] > 0 ? 5 : travel[0] < 0 ? 4 : travel[1] > 0 ? 3 : 2;
+            travelOk = f == travelFace;
+            sb.append(travelOk ? "§a行进面✓§f" : "§c行进面✗§f").append(f).append('/').append(travelFace).append(' ');
+
+            BlockPos bp = hit.getBlockPos();
+            int[] pos = {bp.getX(), bp.getY(), bp.getZ()};
+            standOk = isPlayerOnActivationBlock(player, pos);
+            sb.append(standOk ? "§a站位✓§f " : "§c站位✗§f").append("feet=").append(floor(player.position().y - 0.01))
+                    .append("/hit=").append(pos[1]).append(' ');
+
+            if (standOk) {
+                int aheadX = pos[0] + travel[0];
+                int aheadZ = pos[2] + travel[1];
+                String aheadName = blockNameAt(aheadX, pos[1] + 1, aheadZ);
+                aheadOk = isReplaceableName(aheadName, false);
+                sb.append(aheadOk ? "§a前方✓§f " : "§c前方✗§f").append(aheadName).append(' ');
+
+                Vec3 pp = player.position();
+                double lip = f == 5 ? (pos[0] + 1) - pp.x
+                        : f == 4 ? pp.x - pos[0]
+                        : f == 3 ? (pos[2] + 1) - pp.z
+                        : pp.z - pos[2];
+                lipOk = lip <= 0.65;
+                sb.append(lipOk ? "§a唇距✓§f" : "§c唇距✗§f").append(String.format("%.2f", lip)).append(' ');
+            }
         }
-        Vec3 localHit = hit.getLocation().subtract(new Vec3(hit.getBlockPos()));
-        if (!isInActivationFaceCenter(directionToInt(face), localHit)) {
-            return String.format("命中点不在区域内 local=(%.2f, %.2f, %.2f)，要求 across∈[0.38,0.65]、y∈[0.25,0.75]",
-                    localHit.x, localHit.y, localHit.z);
-        }
-        int[] travel = travelDirectionFromYaw(player.getYRot());
-        int travelFace = travel[0] > 0 ? 5 : travel[0] < 0 ? 4 : travel[1] > 0 ? 3 : 2;
-        if (directionToInt(face) != travelFace) {
-            return "命中面 " + directionToInt(face) + " ≠ 行进方向面 " + travelFace;
-        }
-        BlockPos bp = hit.getBlockPos();
-        int[] pos = {bp.getX(), bp.getY(), bp.getZ()};
-        if (!isPlayerOnActivationBlock(player, pos)) {
-            return String.format("未站在命中方块上（脚下方块 y=%d，命中方块 y=%d）",
-                    floor(player.position().y - 0.01), pos[1]);
-        }
-        int aheadX = pos[0] + travel[0];
-        int aheadZ = pos[2] + travel[1];
-        if (!isReplaceableName(blockNameAt(aheadX, pos[1] + 1, aheadZ), false)) {
-            return "前方上方不是可替换方块（" + blockNameAt(aheadX, pos[1] + 1, aheadZ) + "）";
-        }
-        Vec3 playerPos = player.position();
-        double lipDistance;
-        int f = directionToInt(face);
-        if (f == 5) lipDistance = (pos[0] + 1) - playerPos.x;
-        else if (f == 4) lipDistance = playerPos.x - pos[0];
-        else if (f == 3) lipDistance = (pos[2] + 1) - playerPos.z;
-        else lipDistance = playerPos.z - pos[2];
-        if (lipDistance > 0.65) {
-            return String.format("距边缘 %.2f > 0.65（需更靠边）", lipDistance);
-        }
-        return null;
+
+        sb.append("§7‖§f ");
+        sb.append(mc.options.keyShift.isDown() ? "§a潜行✓§f " : "§c潜行✗§f ");
+        sb.append(mc.mouseHandler.isRightPressed() ? "§a右键✓§f " : "§c右键✗§f ");
+        sb.append(activatePromptAt == 0L ? "§c未计时§f"
+                : (activationPromptReady() ? "§a就绪✓§f" : "§e计时中§f"));
+
+        boolean allOk = pitchOk && yawOk && rayOk && faceOk && centerOk
+                && travelOk && standOk && aheadOk && lipOk;
+        return (allOk ? "§a[探测全通过]§f " : "§e[探测未通过]§f ") + sb;
     }
 
     private void updateActivationPrompt() {
@@ -596,15 +619,17 @@ public class Telly extends Module {
             return;
         }
 
-        if (debugActivation.getValue() && mc.options.keyShift.isDown()) {
+        // 潜行期间持续输出；松开潜行后仍输出到计时器被清掉为止，
+        // 这样「松手瞬间」那一刻也有输出，而不是诊断恰好静音。
+        if (debugActivation.getValue() && (mc.options.keyShift.isDown() || activatePromptAt != 0L)) {
             long now = System.currentTimeMillis();
             if (now - lastActivationDebugAt >= 1000L) {
                 lastActivationDebugAt = now;
-                String reason = activationProbeReason(player);
+                String stage = activationFullReport(player);
                 // 直接发聊天消息，不经 printModuleStatus：
                 // 诊断输出不能依赖 Print Status 开关，否则失败模式又多一个。
                 player.sendSystemMessage(Component.literal(
-                        "§bTelly §7| §f诊断 → " + (reason == null ? "§a激活条件全部满足" : "§c" + reason)));
+                        "§bTelly §7| §f诊断 → §c" + stage));
             }
         }
 
