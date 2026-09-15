@@ -90,10 +90,18 @@ docs/       # 开发文档
 - [LeavesHack](https://github.com/MrBZBZ/LeavesHack)
 - [TrollHack](https://github.com/Luna5ama/TrollHack)
 
-新增模块的算法参考实现：
-- **Telly** —— [RavenBS-Plus-Plus](https://github.com/OlziYT/RavenBS-Plus-Plus)（1.8.9 客户端的 telly 脚本）
-- **Scaffold · Legit** —— [Leader-Lite](https://github.com/woshijiejue/Leader-Lite)（1.8.9 客户端）
-- **KillAura · AI** —— 回归模型 `21KC11KP` / `19KC8KP`
+## 👥 贡献者
+
+新增模块的算法与数据来源，以及本次移植工作：
+
+- [**@OlziYT**](https://github.com/OlziYT) —— [RavenBS-Plus-Plus](https://github.com/OlziYT/RavenBS-Plus-Plus)
+  Telly（自动搭路）的算法来源：边缘判据、21 帧旋转脚本、方块搜索与放置策略
+- [**@woshijiejue**](https://github.com/woshijiejue) —— [Leader-Lite](https://github.com/woshijiejue/Leader-Lite)
+  Scaffold · Legit（蹲起搭）的算法来源：边缘状态机、转向限速与放置闸门
+- [**@minecrafttzh**](https://github.com/minecrafttzh) —— [OpenVape4.21](https://github.com/minecrafttzh/OpenVape4.21)
+  KillAura AI 转头的算法与回归模型来源
+- [**DeepSeek**](https://www.deepseek.com/) —— 上述模块到 Minecraft 26.2 / Epsilon 的移植、
+  平台 API 适配（1.8.9 → 26.2）、反作弊相关排查与本文档
 
 ## 📝 许可证
 
