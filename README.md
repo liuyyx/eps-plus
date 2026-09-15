@@ -79,7 +79,7 @@ neoforge/   # NeoForge 入口
 docs/       # 开发文档
 ```
 
-## 🙏 致谢与贡献者
+## 🙏 致谢
 
 本项目的核心来自 [NekoyaHouse/Epsilon](https://github.com/NekoyaHouse/Epsilon)，遵循原项目的 GPL-3.0 许可。
 第三方代码归属的完整说明见 [NOTICE](NOTICE.md)。
@@ -99,11 +99,6 @@ docs/       # 开发文档
   Scaffold · Legit（蹲起搭）：边缘状态机、转向限速与放置闸门
 - [**@minecrafttzh**](https://github.com/minecrafttzh) —— [OpenVape4.21](https://github.com/minecrafttzh/OpenVape4.21)
   KillAura AI 转头：转向算法与回归模型
-
-### 贡献者
-
-- [**DeepSeek**](https://www.deepseek.com/) —— 上述模块到 Minecraft 26.2 / Epsilon 的移植、
-  平台 API 适配（1.8.9 → 26.2）、反作弊相关排查与本文档
 
 ## 📝 许可证
 
