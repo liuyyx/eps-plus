@@ -599,7 +599,10 @@ public class Telly extends Module {
             if (now - lastActivationDebugAt >= 1000L) {
                 lastActivationDebugAt = now;
                 String reason = activationProbeReason(player);
-                printModuleStatus(reason == null ? "激活条件全部满足" : "未通过 → " + reason);
+                // 直接发聊天消息，不经 printModuleStatus：
+                // 诊断输出不能依赖 Print Status 开关，否则失败模式又多一个。
+                player.sendSystemMessage(Component.literal(
+                        "§bTelly §7| §f诊断 → " + (reason == null ? "§a激活条件全部满足" : "§c" + reason)));
             }
         }
 
