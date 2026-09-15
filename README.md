@@ -79,27 +79,29 @@ neoforge/   # NeoForge 入口
 docs/       # 开发文档
 ```
 
-## 🙏 致谢
+## 🙏 致谢与贡献者
 
 本项目的核心来自 [NekoyaHouse/Epsilon](https://github.com/NekoyaHouse/Epsilon)，遵循原项目的 GPL-3.0 许可。
-第三方代码归属详见 [NOTICE](NOTICE.md)。
+第三方代码归属的完整说明见 [NOTICE](NOTICE.md)。
 
-上游同时还受益于：
+**上游同时还受益于：**
+
 - [Meteor Client](https://github.com/MeteorDevelopment/meteor-client)
 - [Orbit](https://github.com/MeteorDevelopment/orbit)
 - [LeavesHack](https://github.com/MrBZBZ/LeavesHack)
 - [TrollHack](https://github.com/Luna5ama/TrollHack)
 
-## 👥 贡献者
-
-新增模块的算法与数据来源，以及本次移植工作：
+**本分支新增模块的算法与数据来自以下项目**（均为 Minecraft 1.8.9 实现，本分支将其移植到 26.2）：
 
 - [**@OlziYT**](https://github.com/OlziYT) —— [RavenBS-Plus-Plus](https://github.com/OlziYT/RavenBS-Plus-Plus)
-  Telly（自动搭路）的算法来源：边缘判据、21 帧旋转脚本、方块搜索与放置策略
+  Telly（自动搭路）：边缘判据、21 帧旋转脚本、方块候选搜索与放置策略
 - [**@woshijiejue**](https://github.com/woshijiejue) —— [Leader-Lite](https://github.com/woshijiejue/Leader-Lite)
-  Scaffold · Legit（蹲起搭）的算法来源：边缘状态机、转向限速与放置闸门
+  Scaffold · Legit（蹲起搭）：边缘状态机、转向限速与放置闸门
 - [**@minecrafttzh**](https://github.com/minecrafttzh) —— [OpenVape4.21](https://github.com/minecrafttzh/OpenVape4.21)
-  KillAura AI 转头的算法与回归模型来源
+  KillAura AI 转头：转向算法与回归模型
+
+### 贡献者
+
 - [**DeepSeek**](https://www.deepseek.com/) —— 上述模块到 Minecraft 26.2 / Epsilon 的移植、
   平台 API 适配（1.8.9 → 26.2）、反作弊相关排查与本文档
 
