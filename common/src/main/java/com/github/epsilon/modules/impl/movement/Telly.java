@@ -115,7 +115,19 @@ public class Telly extends Module {
     private float scriptedRotationYaw = 0.0f;
     private float scriptedRotationPitch = 0.0f;
 
-    private final double SENSITIVITY_QUANTUM = 0.03404715;
+    /**
+     * 当前客户端的鼠标网格步长，与 {@code RotationUtils.applySensitivityPatch} 内部
+     * 使用的 multiplier 同式：{@code f³ * 8 * 0.15}，{@code f = sensitivity * 0.6 + 0.2}。
+     *
+     * <p>源版把该值硬编码为 1.8.9 固定灵敏度下的 0.03404715。在 Epsilon 里脚本旋转最后
+     * 还要经过 {@code applySensitivityPatch} 再按本机灵敏度量化一次，硬编码值通常不足一格，
+     * 会被直接舍入成 0 —— 防检测抖动就此消失，旋转退化成机器般规整。用本机网格作为
+     * 量子，抖动恰好是 ±1 格真实鼠标位移，量化后原样保留。</p>
+     */
+    private double mouseQuantum() {
+        double f = mc.options.sensitivity().get() * 0.6 + 0.2;
+        return f * f * f * 8.0 * 0.15;
+    }
     private final int[] YAW_NUDGE_PATTERN = {0, 1, -1, 2, -2};
     private int rotationStepCounter = 0;
     private final double ACTIVATION_ACROSS_MIN = 0.38;
@@ -866,7 +878,7 @@ public class Telly extends Module {
 
         double yawInput = Math.abs(tellyWrapAngle(player.getYRot() - expectedYaw));
         double pitchInput = Math.abs(player.getXRot() - expectedPitch);
-        double noiseFloor = SENSITIVITY_QUANTUM * 0.45;
+        double noiseFloor = mouseQuantum() * 0.45;
 
         long elapsed = Math.max(0L, now - takeoverLastFrameAt);
         takeoverLastFrameAt = now;
@@ -981,7 +993,7 @@ public class Telly extends Module {
         }
 
         rotationStepCounter++;
-        correctedTargetYaw += (float) (SENSITIVITY_QUANTUM * YAW_NUDGE_PATTERN[rotationStepCounter % 5]);
+        correctedTargetYaw += (float) (mouseQuantum() * YAW_NUDGE_PATTERN[rotationStepCounter % 5]);
 
         rotationTargetYaw = rotationStartYaw + tellyWrapAngle(correctedTargetYaw - rotationStartYaw);
         rotationTargetPitch = clamp(targetPitch, -90.0f, 90.0f);
@@ -1016,8 +1028,9 @@ public class Telly extends Module {
     }
 
     private float quantizeFrom(float origin, float value) {
-        double steps = Math.round((value - origin) / SENSITIVITY_QUANTUM);
-        return (float) (origin + steps * SENSITIVITY_QUANTUM);
+        double quantum = mouseQuantum();
+        double steps = Math.round((value - origin) / quantum);
+        return (float) (origin + steps * quantum);
     }
 
     // ─── Movement application ───────────────────────────────────────────────
