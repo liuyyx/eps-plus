@@ -1996,6 +1996,8 @@
         "disable safewalk": "Disable SafeWalk",
         "show activation hitbox": "Show Activation Hitbox",
         "debug activation": "Debug Activation",
+        "rotation speed": "Rotation Speed",
+        "telly ticks": "Telly Ticks",
         "print status": "Print Status"
       },
       "kill effect": {

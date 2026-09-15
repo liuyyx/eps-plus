@@ -63,6 +63,17 @@ public class Telly extends Module {
      */
     private final BoolSetting debugActivation = boolSetting("Debug Activation", true);
     private final BoolSetting printStatus = boolSetting("Print Status", true);
+    /**
+     * 静默旋转每刻最大转角（度）。对应 leader LegitTelly 的 forward/back/placeSpeed，
+     * 那里默认 180（等于不限速）；但 180°/刻 人手做不到，是典型可检测特征，
+     * 因此默认取人类可达到的 60，并可调。
+     */
+    private final IntSetting rotationSpeed = intSetting("Rotation Speed", 60, 5, 180, 5);
+    /**
+     * 起跳后保持「对准行进方向」相位的刻数（与 leader LegitTelly 的 Telly Ticks 同义）。
+     * 到点后进入主体相位。
+     */
+    private final IntSetting tellyTicks = intSetting("Telly Ticks", 1, 0, 6, 1);
 
     // ─── State fields ───────────────────────────────────────────────────────
     private boolean armed = false;
@@ -115,15 +126,11 @@ public class Telly extends Module {
     private boolean ignoreSprintUntilRelease = false;
 
     // Rotation
-    private boolean rotationActive = false;
-    private long rotationStartedAt = 0L;
-    private long rotationDuration = 50L;
-    private float rotationStartYaw = 0.0f;
-    private float rotationStartPitch = 0.0f;
-    private float rotationTargetYaw = 0.0f;
-    private float rotationTargetPitch = 0.0f;
-    private float scriptedRotationYaw = 0.0f;
-    private float scriptedRotationPitch = 0.0f;
+    // 说明：原实现用 player.setYRot/setXRot 直接把伪造角度写成玩家真实视角，
+    // 已删除。现在只维护自己累积的托管角（见 updateSilentRotation），
+    // 通过 RotationManager 以发包方式伪装朝向，玩家视角全程不动。
+    private float legitSilentYaw = 0.0f;
+    private float legitSilentPitch = 0.0f;
 
     /**
      * 当前客户端的鼠标网格步长，与 {@code RotationUtils.applySensitivityPatch} 内部
@@ -131,15 +138,12 @@ public class Telly extends Module {
      *
      * <p>源版把该值硬编码为 1.8.9 固定灵敏度下的 0.03404715。在 Epsilon 里脚本旋转最后
      * 还要经过 {@code applySensitivityPatch} 再按本机灵敏度量化一次，硬编码值通常不足一格，
-     * 会被直接舍入成 0 —— 防检测抖动就此消失，旋转退化成机器般规整。用本机网格作为
-     * 量子，抖动恰好是 ±1 格真实鼠标位移，量化后原样保留。</p>
+     * 会被直接舍入成 0 —— 防检测抖动就此消失，旋转退化成机器般规整。</p>
      */
     private double mouseQuantum() {
         double f = mc.options.sensitivity().get() * 0.6 + 0.2;
         return f * f * f * 8.0 * 0.15;
     }
-    private final int[] YAW_NUDGE_PATTERN = {0, 1, -1, 2, -2};
-    private int rotationStepCounter = 0;
     // 激活容差。
     // 源版这三个常量（2° / 0.38~0.65 / 0.25~0.75）是在 RavenBS 那套 client.raycastBlock
     // 几何下调出来的。移植到 Epsilon 后实测：反复尝试时常以 0.38°、0.01、0.03 之差落空，
@@ -166,17 +170,10 @@ public class Telly extends Module {
             .withCull(false)
             .build();
 
-    // Curves
-    private final float[] yawCurve = {
-            91.68f, 98.88f, 78.94f, 37.45f, 1.61f, -21.69f, -33.98f,
-            -35.80f, -34.64f, -33.85f, -33.06f, -31.55f, -29.26f, -26.65f,
-            -24.19f, -21.07f, -18.84f, -17.06f, -8.87f, 2.61f, 41.94f
-    };
-    private final float[] pitchCurve = {
-            64.31f, 59.95f, 60.57f, 61.46f, 60.64f, 58.89f, 56.91f,
-            56.63f, 58.65f, 61.63f, 64.20f, 66.74f, 68.69f, 70.64f,
-            73.01f, 75.37f, 77.46f, 78.56f, 78.90f, 77.22f, 72.25f
-    };
+    // 桥接循环的相位数。原实现用 yawCurve/pitchCurve 驱动旋转，已改为
+    // updateSilentRotation 逐刻限速驱动（曲线里的单帧 -35.8° 跳变是典型可检测特征），
+    // 这里只保留循环长度，用于推进 forwardCurve/strafeCurve 的移动节奏。
+    private static final int CYCLE_PHASES = 21;
     private final float[] forwardCurve = {
             1.0f, 1.0f, 0.0f, 0.0f, -1.0f, -1.0f, -1.0f,
             -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f,
@@ -279,7 +276,7 @@ public class Telly extends Module {
         enforceSafeWalkDisabledForRun();
         if (running) {
             mc.options.keyAttack.setDown(false);
-            applySmoothedRotation();
+            updateSilentRotation();
         }
         if (armed && !running) updateActivationPrompt();
         if (!running) return;
@@ -370,8 +367,9 @@ public class Telly extends Module {
         updateActivatePromptFade();
         drawActivationHitbox(event.getPoseStack());
         if (!running) return;
-        if (detectManualCameraTakeover()) return;
-        applySmoothedRotation();
+        // 旋转只在 PlayerTickEvent.Pre 里更新（与 leader 一致，逐刻限速）。
+        // 这里不再调用曲线驱动 —— 那会每帧以不限速的 180 直接跳到曲线值。
+        detectManualCameraTakeover();
     }
 
     @EventHandler
@@ -452,7 +450,6 @@ public class Telly extends Module {
         promptBrokeAt = 0L;
         setupTick = 0;
         cyclePhase = 19;
-        rotationActive = false;
         activationMovementHeld = false;
         printModuleStatus("Armed. Sneak looking down, wait for green, hold rmb and release sneak");
     }
@@ -483,15 +480,14 @@ public class Telly extends Module {
         freezeLastTickAt = System.currentTimeMillis();
         activationMovementHeld = false;
         tellyAutoPlaceWindow = true;
-        scriptedRotationYaw = player.getYRot();
-        scriptedRotationPitch = player.getXRot();
+        legitSilentYaw = player.getYRot();
+        legitSilentPitch = player.getXRot();
         takeoverDetectionAt = 0L;
         takeoverCameraValid = false;
         clearInitialMovementHolds();
         resetControllerState();
         mc.options.keyAttack.setDown(false);
         applyMovement(-1.0f, -1.0f, false, false);
-        setRotationTarget(baseYaw, 74.52f, 50L);
         applyUse(true);
         printModuleStatus("Started");
     }
@@ -501,7 +497,6 @@ public class Telly extends Module {
         running = false;
         setupTick = 0;
         cyclePhase = 19;
-        rotationActive = false;
         activationMovementHeld = false;
         tellyAutoPlaceWindow = false;
         autoPlaceDebugActive = false;
@@ -511,8 +506,9 @@ public class Telly extends Module {
         latestStraightPlacedPos = null;
         adaptiveAimValid = false;
         adaptiveAimUpdatedAt = 0L;
-        scriptedRotationYaw = 0.0f;
-        scriptedRotationPitch = 0.0f;
+        legitSilentYaw = 0.0f;
+        legitSilentPitch = 0.0f;
+        resetLegitPhase();
         takeoverDetectionAt = 0L;
         takeoverCameraValid = false;
         takeoverCameraYaw = 0.0f;
@@ -980,8 +976,8 @@ public class Telly extends Module {
         if (player == null) return false;
 
         long now = System.currentTimeMillis();
-        float expectedYaw = scriptedRotationYaw;
-        float expectedPitch = scriptedRotationPitch;
+        float expectedYaw = legitSilentYaw;
+        float expectedPitch = legitSilentPitch;
         if (!takeoverCameraValid) {
             takeoverCameraValid = true;
             takeoverCameraYaw = player.getYRot();
@@ -1046,11 +1042,6 @@ public class Telly extends Module {
                 boolean setupJump = setupTick >= 6;
                 applyMovement(-1.0f, -1.0f, setupJump, false);
                 applyUse(true);
-                if (setupTick == 11) {
-                    setRotationTarget(baseYaw + yawCurve[19], pitchCurve[19], 50L);
-                } else {
-                    setRotationTarget(baseYaw, 74.52f, 50L);
-                }
                 setupTick++;
                 return;
             }
@@ -1081,71 +1072,83 @@ public class Telly extends Module {
         applyMovement(forwardCurve[phase], strafe, jumping, sprinting);
         applyUse(use);
 
-        int nextPhase = (phase + 1) % yawCurve.length;
-        setRotationTarget(baseYaw + yawCurve[nextPhase], pitchCurve[nextPhase], 50L);
-        cyclePhase = nextPhase;
+        // 相位只推进移动/放置节奏；旋转交给 updateSilentRotation 逐刻限速驱动。
+        cyclePhase = (phase + 1) % CYCLE_PHASES;
     }
 
-    // ─── Rotation system ────────────────────────────────────────────────────
-    private void setRotationTarget(float targetYaw, float targetPitch, long duration) {
+    // ─── 静默旋转（对齐 leader LegitTelly 模型）─────────────────────────────
+    // 与之前实现的三点关键区别：
+    //  1) 只维护自己累积的托管角，**绝不调用 player.setYRot/setXRot**。
+    //     那两行会把伪造角度变成玩家真实视角：玩家看到视角被扳动，服务器也看到
+    //     一条真实且机器式的曲线。leader 只发 event.setRotation 包，是真正的静默旋转。
+    //  2) 逐刻限速逼近目标，而不是预烘焙曲线 + 不限速的 180 一步到位。
+    //     曲线里存在 37.45° → 1.61°（单帧 −35.8°）这种跳变，人手做不到。
+    //  3) 目标角默认就是「玩家自己的视角」，只有对准阶段才看行进方向 ——
+    //     静态帧里没有可识别的运动签名。
+    private int legitPhase = 0;
+    private int legitPhaseTicks = 0;
+    private boolean legitWasAirborne = false;
+
+    private void resetLegitPhase() {
+        legitPhase = 0;
+        legitPhaseTicks = 0;
+        legitWasAirborne = false;
+    }
+
+    /**
+     * leader LegitTelly 式的静默旋转：
+     * 相位 0 地面 → 1 起跳后对准行进方向（看平）→ 2 空中主体，随后放置。
+     * 每刻按限速逼近目标并提交给旋转管理器，全程不改动玩家自身视角。
+     */
+    private void updateSilentRotation() {
         LocalPlayer player = mc.player;
         if (player == null) return;
 
-        applySmoothedRotation();
-        rotationStartYaw = player.getYRot();
-        rotationStartPitch = player.getXRot();
-        float correctedTargetYaw = targetYaw;
-        boolean adaptivePlacementTarget = running
-                && tellyAutoPlaceWindow
-                && firstTellyPlacementPending
-                && adaptiveAimValid
-                && System.currentTimeMillis() - adaptiveAimUpdatedAt <= 125L;
-        if (adaptivePlacementTarget) {
-            correctedTargetYaw = adaptiveAimYaw;
-            targetPitch = adaptiveAimPitch;
-        } else if (running) {
-            correctedTargetYaw += antiSwayYawOffset;
+        boolean onGround = player.onGround();
+        if (onGround && legitWasAirborne) {
+            resetLegitPhase();
+        }
+        if (!onGround && !legitWasAirborne && legitPhase == 0) {
+            legitPhase = 1;
+            legitPhaseTicks = 0;
+            legitSilentYaw = player.getYRot();
+            legitSilentPitch = player.getXRot();
+        }
+        if (legitPhase == 1) {
+            legitPhaseTicks++;
+            if (legitPhaseTicks >= tellyTicks.getValue()) {
+                legitPhase = 2;
+                legitPhaseTicks = 0;
+            }
         }
 
-        rotationStepCounter++;
-        correctedTargetYaw += (float) (mouseQuantum() * YAW_NUDGE_PATTERN[rotationStepCounter % 5]);
+        // 目标角：默认保持玩家自己的视角；对准阶段改为行进方向 + 看平
+        float targetYaw = player.getYRot();
+        float targetPitch = player.getXRot();
+        if (legitPhase == 1) {
+            // 对准行进方向（与 leader 的 getCurrentYaw()/MoveUtil.adjustYaw 同义），并看平
+            targetYaw = player.getYRot() + (float) Math.toDegrees(Math.atan2(-currentStrafe, currentForward));
+            targetPitch = 0.0f;
+        }
 
-        rotationTargetYaw = rotationStartYaw + tellyWrapAngle(correctedTargetYaw - rotationStartYaw);
-        rotationTargetPitch = clamp(targetPitch, -90.0f, 90.0f);
-        rotationStartedAt = System.currentTimeMillis();
-        rotationDuration = Math.max(1L, duration);
-        rotationActive = true;
-    }
+        // 逐刻限速：偏航取设定速度，俯仰为其 0.55 倍（与源版同式）
+        float yawStep = Math.max(1.0f, Math.min(180.0f, rotationSpeed.getValue().floatValue()));
+        float pitchStep = Math.max(1.0f, yawStep * 0.55f);
+        legitSilentYaw += clampFloat(tellyWrapAngle(targetYaw - legitSilentYaw), -yawStep, yawStep);
+        legitSilentPitch += clampFloat(targetPitch - legitSilentPitch, -pitchStep, pitchStep);
+        legitSilentPitch = clamp(legitSilentPitch, -90.0f, 90.0f);
 
-    private void applySmoothedRotation() {
-        if (!rotationActive) return;
-        LocalPlayer player = mc.player;
-        if (player == null) return;
+        // 提交：speed 取实际位移长度，保证本刻全额施加（灵敏度网格量化交给管线）
+        Rot2f base = RotationManager.INSTANCE.lastRotations;
+        double distance = Math.hypot(
+                tellyWrapAngle(legitSilentYaw - base.getYaw()),
+                legitSilentPitch - base.getPitch()
+        );
+        if (distance > 1.0E-6) {
+            RotationManager.INSTANCE.setRotations(new Rot2f(legitSilentYaw, legitSilentPitch), distance);
+        }
 
-        double progress = (double) (System.currentTimeMillis() - rotationStartedAt) / (double) rotationDuration;
-        if (progress < 0.0) progress = 0.0;
-        if (progress > 1.0) progress = 1.0;
-
-        float desiredYaw = rotationStartYaw + (rotationTargetYaw - rotationStartYaw) * (float) progress;
-        float desiredPitch = rotationStartPitch + (rotationTargetPitch - rotationStartPitch) * (float) progress;
-        float quantizedYaw = quantizeFrom(rotationStartYaw, desiredYaw);
-        float quantizedPitch = quantizeFrom(rotationStartPitch, desiredPitch);
-
-        scriptedRotationYaw = quantizedYaw;
-        scriptedRotationPitch = clamp(quantizedPitch, -90.0f, 90.0f);
-        player.setYRot(scriptedRotationYaw);
-        player.setXRot(scriptedRotationPitch);
-
-        // Apply to rotation manager for server-side rotation spoofing
-        RotationManager.INSTANCE.setRotations(new Rot2f(scriptedRotationYaw, scriptedRotationPitch), 180.0);
-
-        if (progress >= 1.0) rotationActive = false;
-    }
-
-    private float quantizeFrom(float origin, float value) {
-        double quantum = mouseQuantum();
-        double steps = Math.round((value - origin) / quantum);
-        return (float) (origin + steps * quantum);
+        legitWasAirborne = !onGround;
     }
 
     // ─── Movement application ───────────────────────────────────────────────

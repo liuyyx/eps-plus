@@ -1996,6 +1996,8 @@
         "disable safewalk": "禁用安全行走",
         "show activation hitbox": "显示激活判定框",
         "debug activation": "激活诊断",
+        "rotation speed": "旋转速度",
+        "telly ticks": "Telly刻数",
         "print status": "打印状态"
       },
       "kill effect": {
