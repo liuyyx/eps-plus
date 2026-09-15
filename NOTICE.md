@@ -88,3 +88,35 @@ CC0-1.0 does not require attribution; this notice is included voluntarily.
 
 License reference:
 https://creativecommons.org/publicdomain/zero/1.0/
+
+## RavenBS-Plus-Plus
+
+- Repository: [OlziYT/RavenBS-Plus-Plus](https://github.com/OlziYT/RavenBS-Plus-Plus)
+- Target: Minecraft 1.8.9 (Forge)
+- Author: [@OlziYT](https://github.com/OlziYT)
+- Used in Epsilon: the `Telly` module.
+
+The telly bridging algorithm - edge detection, the 21 frame rotation script,
+block candidate search and placement strategy - was ported from this project's
+telly script to Epsilon's Minecraft 26.2 module, rotation and event systems.
+
+## Leader-Lite
+
+- Repository: [woshijiejue/Leader-Lite](https://github.com/woshijiejue/Leader-Lite)
+- Target: Minecraft 1.8.9 (Forge)
+- Author: [@woshijiejue](https://github.com/woshijiejue)
+- Used in Epsilon: the `Legit` mode of the `Scaffold` module.
+
+The sneak-rise bridging algorithm - edge state machine, rotation rate limiting
+and the placement gate - was ported from this project's Legit mode to Epsilon's
+Minecraft 26.2 module, rotation and event systems.
+
+## OpenVape4.21
+
+- Repository: [minecrafttzh/OpenVape4.21](https://github.com/minecrafttzh/OpenVape4.21)
+- Author: [@minecrafttzh](https://github.com/minecrafttzh)
+- Used in Epsilon: the `Ai` aim mode of the `KillAura` module.
+
+The AI rotation mode - feeding a combat regression model's per-tick yaw/pitch
+deltas into the rotation pipeline - was ported from this project to Epsilon's
+Minecraft 26.2 module and rotation systems.
