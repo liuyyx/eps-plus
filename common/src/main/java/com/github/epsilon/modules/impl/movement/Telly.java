@@ -621,8 +621,11 @@ public class Telly extends Module {
      */
     private void drawActivationHitbox(PoseStack poseStack) {
         if (!showActivationHitbox.getValue() || !armed || running) return;
-        if (promptAlpha < 0.05f || activatePromptAt == 0L) return;
+        if (mc.player == null || mc.level == null) return;
 
+        // 注意：这里刻意不要求 activatePromptAt != 0。
+        // 若沿用源版的写法，框只在「已经对准、计时已开始」之后才出现，
+        // 那就没法拿来找位置 —— 而它唯一的价值恰恰是告诉你该往哪儿看。
         BlockHitResult hit = raycastBlock(4.5);
         if (hit != null && hit.getType() != HitResult.Type.MISS) {
             int face = directionToInt(hit.getDirection());
@@ -661,8 +664,11 @@ public class Telly extends Module {
         int red = (promptFadeRgb >> 16) & 0xFF;
         int green = (promptFadeRgb >> 8) & 0xFF;
         int blue = promptFadeRgb & 0xFF;
-        int fillColor = (Math.max(4, (int) (60.0f * promptAlpha)) << 24) | (red << 16) | (green << 8) | blue;
-        int edgeColor = (Math.max(16, (int) (220.0f * promptAlpha)) << 24) | (red << 16) | (green << 8) | blue;
+        // 未进入激活计时（promptAlpha 仍为 0）时给一个可见下限，
+        // 否则作为瞄准辅助时框的透明度接近 0，看上去等于不存在。
+        float visibility = Math.max(promptAlpha, 0.5f);
+        int fillColor = (Math.max(8, (int) (60.0f * visibility)) << 24) | (red << 16) | (green << 8) | blue;
+        int edgeColor = (Math.max(40, (int) (220.0f * visibility)) << 24) | (red << 16) | (green << 8) | blue;
 
         Vec3 camera = mc.getEntityRenderDispatcher().camera.position();
 
