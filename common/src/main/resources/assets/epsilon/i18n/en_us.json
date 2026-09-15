@@ -1995,6 +1995,7 @@
         "auto swap": "Auto Swap",
         "disable safewalk": "Disable SafeWalk",
         "show activation hitbox": "Show Activation Hitbox",
+        "debug activation": "Debug Activation",
         "print status": "Print Status"
       },
       "kill effect": {

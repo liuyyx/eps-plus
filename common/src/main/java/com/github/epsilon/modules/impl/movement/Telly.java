@@ -54,6 +54,12 @@ public class Telly extends Module {
     private final BoolSetting autoSwap = boolSetting("Auto Swap", true);
     private final BoolSetting disableSafeWalk = boolSetting("Disable SafeWalk", true);
     private final BoolSetting showActivationHitbox = boolSetting("Show Activation Hitbox", true);
+    /**
+     * 激活诊断：每秒往聊天栏输出一次探测结果与被卡住的条件。
+     * 激活判据涉及「俯仰角 / 命中面 / 站位 / 命中点区域 / 行进朝向 / 唇距」六项，
+     * 逐项都成立才算通过；开启本开关可直接定位是哪一项不满足。
+     */
+    private final BoolSetting debugActivation = boolSetting("Debug Activation", false);
     private final BoolSetting printStatus = boolSetting("Print Status", true);
 
     // ─── State fields ───────────────────────────────────────────────────────
@@ -63,6 +69,8 @@ public class Telly extends Module {
     private long promptBrokeAt = 0L;
     private float promptAlpha = 0.0f;
     private long promptFadeLastAt = 0L;
+    /** Debug Activation 输出的节流时间戳（每秒最多一行）。 */
+    private long lastActivationDebugAt = 0L;
     private int promptFadeRgb = 0xFF5555;
     private int[] hitboxLastPos = null;
     private int hitboxLastFace = -1;
@@ -526,11 +534,73 @@ public class Telly extends Module {
         return 75.0f;
     }
 
+    /**
+     * 逐项复核激活判据，返回第一个不满足的条件（全部满足返回 {@code null}）。
+     * 仅用于 {@code Debug Activation} 的输出，不参与实际逻辑。
+     */
+    private String activationProbeReason(LocalPlayer player) {
+        if (player.getXRot() < activationPitch()) {
+            return String.format("俯仰角 %.1f < %.0f（需要更低头）", player.getXRot(), activationPitch());
+        }
+        if (!isActivationYawAligned(player.getYRot())) {
+            float nearest = Math.round((player.getYRot() - 45.0f) / 90.0f) * 90.0f + 45.0f;
+            return String.format("朝向偏离对角线 %.2f° > 2°（需正对 45°+k·90°）",
+                    Math.abs(tellyWrapAngle(player.getYRot() - nearest)));
+        }
+        BlockHitResult hit = raycastBlock(4.5);
+        if (hit == null || hit.getType() == HitResult.Type.MISS) return "射线 4.5 格内未命中方块";
+        Direction face = hit.getDirection();
+        if (face == Direction.UP || face == Direction.DOWN) {
+            return "命中面是 " + face + "（判据要求侧面）";
+        }
+        Vec3 localHit = hit.getLocation().subtract(new Vec3(hit.getBlockPos()));
+        if (!isInActivationFaceCenter(directionToInt(face), localHit)) {
+            return String.format("命中点不在区域内 local=(%.2f, %.2f, %.2f)，要求 across∈[0.38,0.65]、y∈[0.25,0.75]",
+                    localHit.x, localHit.y, localHit.z);
+        }
+        int[] travel = travelDirectionFromYaw(player.getYRot());
+        int travelFace = travel[0] > 0 ? 5 : travel[0] < 0 ? 4 : travel[1] > 0 ? 3 : 2;
+        if (directionToInt(face) != travelFace) {
+            return "命中面 " + directionToInt(face) + " ≠ 行进方向面 " + travelFace;
+        }
+        BlockPos bp = hit.getBlockPos();
+        int[] pos = {bp.getX(), bp.getY(), bp.getZ()};
+        if (!isPlayerOnActivationBlock(player, pos)) {
+            return String.format("未站在命中方块上（脚下方块 y=%d，命中方块 y=%d）",
+                    floor(player.position().y - 0.01), pos[1]);
+        }
+        int aheadX = pos[0] + travel[0];
+        int aheadZ = pos[2] + travel[1];
+        if (!isReplaceableName(blockNameAt(aheadX, pos[1] + 1, aheadZ), false)) {
+            return "前方上方不是可替换方块（" + blockNameAt(aheadX, pos[1] + 1, aheadZ) + "）";
+        }
+        Vec3 playerPos = player.position();
+        double lipDistance;
+        int f = directionToInt(face);
+        if (f == 5) lipDistance = (pos[0] + 1) - playerPos.x;
+        else if (f == 4) lipDistance = playerPos.x - pos[0];
+        else if (f == 3) lipDistance = (pos[2] + 1) - playerPos.z;
+        else lipDistance = playerPos.z - pos[2];
+        if (lipDistance > 0.65) {
+            return String.format("距边缘 %.2f > 0.65（需更靠边）", lipDistance);
+        }
+        return null;
+    }
+
     private void updateActivationPrompt() {
         LocalPlayer player = mc.player;
         if (player == null || mc.gui.screen() != null) {
             clearActivationPrompt();
             return;
+        }
+
+        if (debugActivation.getValue()) {
+            long now = System.currentTimeMillis();
+            if (now - lastActivationDebugAt >= 1000L) {
+                lastActivationDebugAt = now;
+                String reason = activationProbeReason(player);
+                printModuleStatus(reason == null ? "激活条件全部满足" : "未通过 → " + reason);
+            }
         }
 
         setActivationMovementHold(activationPromptReady() && mc.mouseHandler.isRightPressed());
