@@ -53,7 +53,7 @@ public class Telly extends Module {
     // ─── Settings ───────────────────────────────────────────────────────────
     private final BoolSetting autoSwap = boolSetting("Auto Swap", true);
     private final BoolSetting disableSafeWalk = boolSetting("Disable SafeWalk", true);
-    private final BoolSetting showActivationHitbox = boolSetting("Show Activation Hitbox", false);
+    private final BoolSetting showActivationHitbox = boolSetting("Show Activation Hitbox", true);
     private final BoolSetting printStatus = boolSetting("Print Status", true);
 
     // ─── State fields ───────────────────────────────────────────────────────
@@ -711,7 +711,10 @@ public class Telly extends Module {
 
         Direction face = hit.getDirection();
         if (face == Direction.UP || face == Direction.DOWN) return false;
-        Vec3 localHit = hit.getLocation().subtract(new Vec3(hit.getBlockPos()).add(0.5, 0.5, 0.5));
+        // 偏移必须相对方块「角点」取（范围 [0,1]），与 ACTIVATION_ACROSS_*/HEIGHT_* 常量
+        // 以及 drawActivationFaceRegion 的绘制区域同一基准。若误改成相对方块中心
+        // （[-0.5,0.5]），判定窗口会缩到约 1/4 且整体偏移，导致几乎永远无法激活。
+        Vec3 localHit = hit.getLocation().subtract(new Vec3(hit.getBlockPos()));
         if (!isInActivationFaceCenter(directionToInt(face), localHit)) return false;
 
         int[] travel = travelDirectionFromYaw(player.getYRot());
