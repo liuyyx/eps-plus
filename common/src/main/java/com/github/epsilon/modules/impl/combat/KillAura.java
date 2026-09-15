@@ -180,7 +180,28 @@ public class KillAura extends Module {
     @Override
     protected void onDisable() {
         resetState();
+        releaseAiRotation();
         DeobfESP.retainRisingEffects();
+    }
+
+    /**
+     * AI 模式把「模型步长」当作速度提交给旋转管线，收敛时该值趋近 0；而
+     * {@link RotationManager} 会把这个速度复用为「托管角 lerp 回玩家视角」的速率。
+     * 若不重新提交，{@link RotationUtils#smooth} 的鼠标灵敏度网格量化会把亚网格步长
+     * 舍入为 0，托管角便永久停在目标方向，头再也转不回来。
+     *
+     * <p>这里以模块设定的角速度、玩家当前视角为目标提交一次，使托管角正常收敛，
+     * 随后由 {@code RotationManager.onSendPosition} 的归位判据释放。
+     * 普通模式提交的本来就是正常速度，无需干预。</p>
+     */
+    private void releaseAiRotation() {
+        if (!aimMode.is(AimMode.Ai) || mc.player == null) return;
+
+        RotationManager.INSTANCE.setRotations(
+                new Rot2f(mc.player.getYRot(), mc.player.getXRot()),
+                rotationSpeed.getValue(),
+                rotationPriority.getValue()
+        );
     }
 
     @EventHandler

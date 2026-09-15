@@ -1,8 +1,10 @@
 package com.github.epsilon.modules.impl.movement;
 
+import com.github.epsilon.assets.resources.ResourceLocationUtils;
 import com.github.epsilon.events.bus.EventHandler;
 import com.github.epsilon.events.bus.EventPriority;
 import com.github.epsilon.events.impl.*;
+import com.github.epsilon.graphics.immediate.LuminImmediateRenderer;
 import com.github.epsilon.managers.ModuleManager;
 import com.github.epsilon.managers.rotation.RotationManager;
 import com.github.epsilon.modules.Category;
@@ -11,9 +13,16 @@ import com.github.epsilon.settings.impl.*;
 import com.github.epsilon.utils.client.KeybindUtils;
 import com.github.epsilon.utils.player.InvUtils;
 import com.github.epsilon.utils.rotation.Rot2f;
+import com.mojang.blaze3d.PrimitiveTopology;
+import com.mojang.blaze3d.pipeline.DepthStencilState;
+import com.mojang.blaze3d.pipeline.RenderPipeline;
+import com.mojang.blaze3d.platform.CompareOp;
 import com.mojang.blaze3d.platform.InputConstants;
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
@@ -26,6 +35,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
+import org.joml.Matrix4f;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.*;
@@ -113,6 +123,21 @@ public class Telly extends Module {
     private final double ACTIVATION_HEIGHT_MIN = 0.25;
     private final double ACTIVATION_HEIGHT_MAX = 0.75;
     private final float ACTIVATION_YAW_TOLERANCE = 2.0f;
+
+    // 激活命中框渲染管线：无深度测试、不剔除，与 ESP 系列保持一致。
+    private static final RenderPipeline ACTIVATION_FACE_PIPELINE = RenderPipeline.builder(RenderPipelines.DEBUG_FILLED_SNIPPET)
+            .withLocation(ResourceLocationUtils.getIdentifier("pipeline/telly_activation_face"))
+            .withDepthStencilState(new DepthStencilState(CompareOp.ALWAYS_PASS, false))
+            .withCull(false)
+            .withVertexBinding(0, DefaultVertexFormat.POSITION_COLOR)
+            .withPrimitiveTopology(PrimitiveTopology.QUADS)
+            .build();
+
+    private static final RenderPipeline ACTIVATION_EDGE_PIPELINE = RenderPipeline.builder(RenderPipelines.LINES_SNIPPET)
+            .withLocation(ResourceLocationUtils.getIdentifier("pipeline/telly_activation_edge"))
+            .withDepthStencilState(new DepthStencilState(CompareOp.ALWAYS_PASS, false))
+            .withCull(false)
+            .build();
 
     // Curves
     private final float[] yawCurve = {
@@ -316,6 +341,7 @@ public class Telly extends Module {
     private void onRender3D(Render3DEvent event) {
         if (nullCheck()) return;
         updateActivatePromptFade();
+        drawActivationHitbox(event.getPoseStack());
         if (!running) return;
         if (detectManualCameraTakeover()) return;
         applySmoothedRotation();
@@ -324,7 +350,7 @@ public class Telly extends Module {
     @EventHandler
     private void onRender2D(Render2DEvent event) {
         if (nullCheck()) return;
-        drawActivatePrompt();
+        drawActivatePrompt(event);
     }
 
     @EventHandler
@@ -572,17 +598,101 @@ public class Telly extends Module {
         promptAlpha = clamp(promptAlpha, 0.0f, 1.0f);
     }
 
-    private void drawActivatePrompt() {
+    private void drawActivatePrompt(Render2DEvent event) {
         if (promptAlpha < 0.05f) return;
         if (!armed || running) return;
+
         String text = "Activate?";
         int alpha = (int) (promptAlpha * 255.0f);
         if (alpha < 16) alpha = 16;
-        // Render via MC font
         int color = (alpha << 24) | promptFadeRgb;
-        float x = mc.getWindow().getGuiScaledWidth() / 2.0f - mc.font.width(text) / 2.0f;
-        float y = mc.getWindow().getGuiScaledHeight() / 2.0f + 10.0f;
-        // Note: rendering requires PoseStack from Render2DEvent; simplified here
+        int x = (int) (mc.getWindow().getGuiScaledWidth() / 2.0f - mc.font.width(text) / 2.0f);
+        int y = (int) (mc.getWindow().getGuiScaledHeight() / 2.0f + 10.0f);
+
+        event.getGuiGraphics().text(mc.font, text, x, y, color, true);
+    }
+
+    /**
+     * 「Show Activation Hitbox」命中框：高亮可激活方块面上、下蹲需要对准的矩形区域。
+     * <p>
+     * 相机偏移由 {@link Render3DEvent} 的 PoseStack 承载（与 ESP 系列同一约定），
+     * 因此这里只做一次 {@code -camera} 平移后即可直接用世界坐标提交顶点。
+     * </p>
+     */
+    private void drawActivationHitbox(PoseStack poseStack) {
+        if (!showActivationHitbox.getValue() || !armed || running) return;
+        if (promptAlpha < 0.05f || activatePromptAt == 0L) return;
+
+        BlockHitResult hit = raycastBlock(4.5);
+        if (hit != null && hit.getType() != HitResult.Type.MISS) {
+            int face = directionToInt(hit.getDirection());
+            if (face >= 2) {
+                BlockPos blockPos = hit.getBlockPos();
+                hitboxLastPos = new int[]{blockPos.getX(), blockPos.getY(), blockPos.getZ()};
+                hitboxLastFace = face;
+            }
+        }
+        if (hitboxLastPos == null || hitboxLastFace < 2) return;
+
+        int[] pos = hitboxLastPos;
+        int face = hitboxLastFace;
+
+        double yMin = pos[1] + ACTIVATION_HEIGHT_MIN;
+        double yMax = pos[1] + ACTIVATION_HEIGHT_MAX;
+        double x1, x2, z1, z2;
+        if (face == 5) {
+            x1 = x2 = pos[0] + 1.005;
+            z1 = pos[2] + ACTIVATION_ACROSS_MIN;
+            z2 = pos[2] + ACTIVATION_ACROSS_MAX;
+        } else if (face == 4) {
+            x1 = x2 = pos[0] - 0.005;
+            z1 = pos[2] + (1.0 - ACTIVATION_ACROSS_MAX);
+            z2 = pos[2] + (1.0 - ACTIVATION_ACROSS_MIN);
+        } else if (face == 3) {
+            z1 = z2 = pos[2] + 1.005;
+            x1 = pos[0] + (1.0 - ACTIVATION_ACROSS_MAX);
+            x2 = pos[0] + (1.0 - ACTIVATION_ACROSS_MIN);
+        } else {
+            z1 = z2 = pos[2] - 0.005;
+            x1 = pos[0] + ACTIVATION_ACROSS_MIN;
+            x2 = pos[0] + ACTIVATION_ACROSS_MAX;
+        }
+
+        int red = (promptFadeRgb >> 16) & 0xFF;
+        int green = (promptFadeRgb >> 8) & 0xFF;
+        int blue = promptFadeRgb & 0xFF;
+        int fillColor = (Math.max(4, (int) (60.0f * promptAlpha)) << 24) | (red << 16) | (green << 8) | blue;
+        int edgeColor = (Math.max(16, (int) (220.0f * promptAlpha)) << 24) | (red << 16) | (green << 8) | blue;
+
+        Vec3 camera = mc.getEntityRenderDispatcher().camera.position();
+
+        poseStack.pushPose();
+        poseStack.translate(-camera.x, -camera.y, -camera.z);
+        Matrix4f matrix = poseStack.last().pose();
+
+        LuminImmediateRenderer.PosColorQuads fill = LuminImmediateRenderer.beginPosColorQuads(ACTIVATION_FACE_PIPELINE);
+        fill.vertex(matrix, (float) x1, (float) yMin, (float) z1, fillColor);
+        fill.vertex(matrix, (float) x2, (float) yMin, (float) z2, fillColor);
+        fill.vertex(matrix, (float) x2, (float) yMax, (float) z2, fillColor);
+        fill.vertex(matrix, (float) x1, (float) yMax, (float) z1, fillColor);
+        fill.end();
+
+        float normalX = face == 5 ? 1.0f : face == 4 ? -1.0f : 0.0f;
+        float normalZ = face == 3 ? 1.0f : face == 2 ? -1.0f : 0.0f;
+        PoseStack.Pose pose = poseStack.last();
+
+        LuminImmediateRenderer.Lines edge = LuminImmediateRenderer.beginLines(ACTIVATION_EDGE_PIPELINE);
+        edge.vertex(matrix, pose, (float) x1, (float) yMin, (float) z1, edgeColor, normalX, 0.0f, normalZ, 2.0f);
+        edge.vertex(matrix, pose, (float) x2, (float) yMin, (float) z2, edgeColor, normalX, 0.0f, normalZ, 2.0f);
+        edge.vertex(matrix, pose, (float) x2, (float) yMin, (float) z2, edgeColor, normalX, 0.0f, normalZ, 2.0f);
+        edge.vertex(matrix, pose, (float) x2, (float) yMax, (float) z2, edgeColor, normalX, 0.0f, normalZ, 2.0f);
+        edge.vertex(matrix, pose, (float) x2, (float) yMax, (float) z2, edgeColor, normalX, 0.0f, normalZ, 2.0f);
+        edge.vertex(matrix, pose, (float) x1, (float) yMax, (float) z1, edgeColor, normalX, 0.0f, normalZ, 2.0f);
+        edge.vertex(matrix, pose, (float) x1, (float) yMax, (float) z1, edgeColor, normalX, 0.0f, normalZ, 2.0f);
+        edge.vertex(matrix, pose, (float) x1, (float) yMin, (float) z1, edgeColor, normalX, 0.0f, normalZ, 2.0f);
+        edge.end();
+
+        poseStack.popPose();
     }
 
     // ─── Activation geometry ────────────────────────────────────────────────
