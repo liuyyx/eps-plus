@@ -45,6 +45,7 @@ import net.minecraft.world.phys.Vec3;
 import java.awt.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 
 public class Scaffold extends Module {
 
@@ -177,6 +178,7 @@ public class Scaffold extends Module {
     private final IntSetting rotationBackSpeed = intSetting("Rotation Back Speed", 180, 10, 180, 10, () -> mode.is(Mode.TellyBridge));
     private final IntSetting tellyTicks = intSetting("Telly Ticks", 1, 0, 6, 1, () -> mode.is(Mode.TellyBridge));
     private final IntSetting legitSneakDelay = intSetting("Legit Sneak Delay", 4, 1, 5, 1, () -> mode.is(Mode.Legit));
+    private final IntSetting legitSneakRandom = intSetting("Legit Sneak Random", 2, 0, 5, 1, () -> mode.is(Mode.Legit));
     private final IntSetting legitModeSpeed = intSetting("Legit Mode Speed", 180, 1, 180, 1, () -> mode.is(Mode.Legit));
 
     private final BoolSetting swingHand = boolSetting("Swing Hand", true);
@@ -207,6 +209,14 @@ public class Scaffold extends Module {
     private int legitEdgeState = 0;
     private int legitEdgeTimer = 0;
     private boolean legitWasOnEdge = false;
+
+    /**
+     * 转向未到位时的放置闸门（与 leader 的 {@code rotationTick} 同义）。
+     * 目标角偏离当前托管角超过 {@code legitModeSpeed} 容差时置 1，逐刻递减；
+     * 非 0 期间不放置，避免转向过程中的放置包朝向与服务器所见不一致而被丢弃。
+     */
+    private int legitRotationTick = 0;
+    private final Random legitRandom = new Random();
 
     private final List<RenderInfo> renderBoxes = new ArrayList<>();
 
@@ -416,8 +426,21 @@ public class Scaffold extends Module {
     }
 
     private void handleLegit() {
+        // 每刻递减一次（等价于 leader 在 tick 处理入口的 rotationTick--）。
+        if (legitRotationTick > 0) legitRotationTick--;
+
+        float beforeYaw = RotationManager.INSTANCE.getRotation().getYaw();
         rotation = getRotation(blockPos, direction);
         RotationManager.INSTANCE.setRotations(rotation, legitModeSpeed.getValue());
+
+        // 剩余偏角超过容差 => 本刻仍在转向，标记延后放置。
+        // 转向尚未到位时发出的放置包，其朝向与服务器所见不一致，会被服务器丢弃
+        // （单机无此校验，故只在联机时表现为“吞方块”）。
+        if (Math.abs(Mth.wrapDegrees(rotation.getYaw() - beforeYaw)) > legitModeSpeed.getValue()) {
+            legitRotationTick = Math.max(legitRotationTick, 1);
+        }
+        if (legitRotationTick > 0) return;
+
         if (legitCanPlace()) {
             place();
         }
@@ -442,7 +465,10 @@ public class Scaffold extends Module {
                 case 0 -> {
                     if (justReachedEdge || legitEdgeTimer == 0) {
                         legitEdgeState = 1;
-                        legitEdgeTimer = legitSneakDelay.getValue();
+                        // 蹲起时长 = 基准 + [0, random]；每次进入状态 1 重新掷一次，
+                        // 避免固定刻数形成可被反作弊识别的周期性节奏。
+                        legitEdgeTimer = legitSneakDelay.getValue()
+                                + (legitSneakRandom.getValue() > 0 ? legitRandom.nextInt(legitSneakRandom.getValue() + 1) : 0);
                     }
                 }
                 case 1 -> {
@@ -470,6 +496,7 @@ public class Scaffold extends Module {
         legitEdgeState = 0;
         legitEdgeTimer = 0;
         legitWasOnEdge = false;
+        legitRotationTick = 0;
     }
 
     /**
