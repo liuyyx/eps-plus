@@ -619,7 +619,14 @@ public class Telly extends Module {
         if (promptAlpha < 0.05f) return;
         if (!armed || running) return;
 
-        String text = "Activate?";
+        // 提示必须说清「按哪个键」，而不是只显示 "Activate?"。
+        // 触发条件是「按住右键 + 松开潜行」，只按右键不松潜行是永远触发不了的，
+        // 光看一个问号无从得知。
+        String text = activationPromptReady()
+                ? "松开 " + mc.options.keyShift.getTranslatedKeyMessage().getString()
+                        + " ＋ 按住 " + mc.options.keyUse.getTranslatedKeyMessage().getString()
+                : "潜行对准边缘，等待变绿…";
+
         int alpha = (int) (promptAlpha * 255.0f);
         if (alpha < 16) alpha = 16;
         int color = (alpha << 24) | promptFadeRgb;
