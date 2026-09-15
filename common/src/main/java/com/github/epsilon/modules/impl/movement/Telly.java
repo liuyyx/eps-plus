@@ -399,9 +399,12 @@ public class Telly extends Module {
         if (armed && event.getButton() == 1 && event.getAction() == GLFW.GLFW_RELEASE) {
             setActivationMovementHold(false);
         }
-        if (armed && activationSuppressUse() && event.getButton() == 1) {
-            event.cancel();
-        }
+        // 此处刻意不再 event.cancel() 右键事件。
+        // 取消 MousePressEvent 会让 MixinMouseHandler 调 ci.cancel()，原版 MouseHandler
+        // 便不会更新 isRightPressed —— 而激活触发正需要读这个物理鼠标状态
+        // （!潜行 && isRightPressed() && 对准）。取消它等于把触发条件之一永久置假。
+        // 抑制原版右键使用由 updateActivationPrompt 里的 keyUse.setDown(false) 负责，
+        // 那只改按键映射，不影响物理鼠标状态。
     }
 
     @EventHandler
