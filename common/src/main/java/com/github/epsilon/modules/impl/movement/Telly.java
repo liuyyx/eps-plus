@@ -88,7 +88,6 @@ public class Telly extends Module {
     private int[] hitboxLastPos = null;
     private int hitboxLastFace = -1;
     private boolean activationMovementHeld = false;
-    private boolean antiSwayTapUsed = false;
     private final HashSet<String> cancelledGhostBlocks = new HashSet<>();
     private boolean tellyAutoPlaceWindow = false;
     private boolean autoPlaceDebugActive = false;
@@ -96,12 +95,9 @@ public class Telly extends Module {
     private boolean safeWalkWasEnabled = false;
 
     private int setupTick = 0;
-    private int cyclePhase = 19;
     private float baseYaw = 0.0f;
     private int travelX = 0;
     private int travelZ = 0;
-    private double antiSwayLane = 0.0;
-    private float antiSwayYawOffset = 0.0f;
     private int bridgeLaneBlock = 0;
     private int bridgeStartProgress = 0;
     private int[] latestStraightPlacedPos = null;
@@ -170,20 +166,9 @@ public class Telly extends Module {
             .withCull(false)
             .build();
 
-    // 桥接循环的相位数。原实现用 yawCurve/pitchCurve 驱动旋转，已改为
-    // updateSilentRotation 逐刻限速驱动（曲线里的单帧 -35.8° 跳变是典型可检测特征），
-    // 这里只保留循环长度，用于推进 forwardCurve/strafeCurve 的移动节奏。
-    private static final int CYCLE_PHASES = 21;
-    private final float[] forwardCurve = {
-            1.0f, 1.0f, 0.0f, 0.0f, -1.0f, -1.0f, -1.0f,
-            -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f,
-            -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, 1.0f
-    };
-    private final float[] strafeCurve = {
-            -1.0f, -1.0f, -1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
-            0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
-            0.0f, 0.0f, 0.0f, -1.0f, -1.0f, -1.0f, -1.0f
-    };
+    // 移动不再走脚本序列：改用玩家自己的输入 + 落地时注入跳跃
+    // （对齐 leader LegitTelly）。原先的 forwardCurve/strafeCurve 恒为 ±1/0，
+    // 是 Intave move.vert 直接命中的机器特征，已删除。
 
     // Placement constants
     private final double[] FACE_HIT_OFFSETS = {0.5, 0.25, 0.75, 0.15, 0.85};
@@ -449,7 +434,6 @@ public class Telly extends Module {
         activatePromptAt = 0L;
         promptBrokeAt = 0L;
         setupTick = 0;
-        cyclePhase = 19;
         activationMovementHeld = false;
         printModuleStatus("Armed. Sneak looking down, wait for green, hold rmb and release sneak");
     }
@@ -465,16 +449,12 @@ public class Telly extends Module {
         disableSafeWalkForRun();
         baseYaw = player.getYRot();
         calculateTravelDirection(baseYaw);
-        antiSwayLane = travelX != 0 ? player.getZ() : player.getX();
-        antiSwayYawOffset = 0.0f;
-        antiSwayTapUsed = false;
         cancelledGhostBlocks.clear();
         initializeStraightBridgeLane(player);
         firstTellyPlacementPending = false;
         adaptiveAimValid = false;
         adaptiveAimUpdatedAt = 0L;
         setupTick = 0;
-        cyclePhase = 19;
         armed = false;
         running = true;
         freezeLastTickAt = System.currentTimeMillis();
@@ -487,7 +467,7 @@ public class Telly extends Module {
         clearInitialMovementHolds();
         resetControllerState();
         mc.options.keyAttack.setDown(false);
-        applyMovement(-1.0f, -1.0f, false, false);
+        // 不再强按后退/右移键 —— 移动交给玩家自己（与 leader LegitTelly 一致）。
         applyUse(true);
         printModuleStatus("Started");
     }
@@ -496,12 +476,9 @@ public class Telly extends Module {
         armed = false;
         running = false;
         setupTick = 0;
-        cyclePhase = 19;
         activationMovementHeld = false;
         tellyAutoPlaceWindow = false;
         autoPlaceDebugActive = false;
-        antiSwayYawOffset = 0.0f;
-        antiSwayTapUsed = false;
         firstTellyPlacementPending = false;
         latestStraightPlacedPos = null;
         adaptiveAimValid = false;
@@ -1037,43 +1014,38 @@ public class Telly extends Module {
         suppressSneakInput();
         enforceSafeWalkDisabledForRun();
 
+        LocalPlayer player = mc.player;
+        if (player == null) return;
+
         if (setupTick >= 0) {
             if (setupTick < 12) {
-                boolean setupJump = setupTick >= 6;
-                applyMovement(-1.0f, -1.0f, setupJump, false);
                 applyUse(true);
                 setupTick++;
                 return;
             }
             setupTick = -1;
             takeoverDetectionAt = System.currentTimeMillis() + 125L;
-            LocalPlayer takeoverPlayer = mc.player;
-            takeoverCameraValid = takeoverPlayer != null;
+            takeoverCameraValid = true;
             takeoverAccumulated = 0.0f;
             takeoverLastFrameAt = System.currentTimeMillis();
-            if (takeoverPlayer != null) {
-                takeoverCameraYaw = takeoverPlayer.getYRot();
-                takeoverCameraPitch = takeoverPlayer.getXRot();
-            }
+            takeoverCameraYaw = player.getYRot();
+            takeoverCameraPitch = player.getXRot();
             captureInitialMovementHolds();
-            cyclePhase = 19;
             firstTellyPlacementPending = true;
             adaptiveAimValid = false;
             clearCachedCandidate();
-            updateAdaptivePlacementAim(mc.player);
+            updateAdaptivePlacementAim(player);
         }
 
-        int phase = cyclePhase;
-        float strafe = strafeCurve[phase];
-        boolean sprinting = phase == 0 || phase == 1;
-        boolean jumping = phase >= 1 && phase <= 19;
-        boolean use = phase >= 7;
-
-        applyMovement(forwardCurve[phase], strafe, jumping, sprinting);
-        applyUse(use);
-
-        // 相位只推进移动/放置节奏；旋转交给 updateSilentRotation 逐刻限速驱动。
-        cyclePhase = (phase + 1) % CYCLE_PHASES;
+        // 移动：不播放脚本序列，沿用玩家自己的输入，只在落地且按着前进时注入跳跃。
+        // 与 leader LegitTelly 的 onMoveInput 同构：
+        //   if (isLegitTellyMode() && onGround && MoveUtil.isForwardPressed()) jump = true;
+        // 原先那套 21 帧 WASD 曲线（forwardCurve/strafeCurve 恒为 ±1、0）是最显眼的机器
+        // 特征，Intave 的 move.vert 正是抓这个 —— 真人按键有力度与微调，不会有完美方波。
+        if (player.onGround() && mc.options.keyUp.isDown()) {
+            mc.options.keyJump.setDown(true);
+        }
+        applyUse(true);
     }
 
     // ─── 静默旋转（对齐 leader LegitTelly 模型）─────────────────────────────
@@ -1138,7 +1110,12 @@ public class Telly extends Module {
         legitSilentPitch += clampFloat(targetPitch - legitSilentPitch, -pitchStep, pitchStep);
         legitSilentPitch = clamp(legitSilentPitch, -90.0f, 90.0f);
 
-        // 提交：speed 取实际位移长度，保证本刻全额施加（灵敏度网格量化交给管线）
+        // 提交给旋转管理器（发包伪装），同时按要求驱动玩家视角：
+        // telly 的设计就是让视角跟着脚本走，因此这里必须写回 player.setYRot/setXRot。
+        // 保留逐刻限速 —— 这是与源版一致的部分，避免单帧数十度的跳变。
+        player.setYRot(legitSilentYaw);
+        player.setXRot(legitSilentPitch);
+
         Rot2f base = RotationManager.INSTANCE.lastRotations;
         double distance = Math.hypot(
                 tellyWrapAngle(legitSilentYaw - base.getYaw()),
@@ -1152,19 +1129,9 @@ public class Telly extends Module {
     }
 
     // ─── Movement application ───────────────────────────────────────────────
-    private void applyMovement(float forward, float strafe, boolean jumping, boolean sprinting) {
-        float correctedStrafe = strafe;
-        if (running) correctedStrafe = applyAntiSwayCorrection(forward, strafe);
-        else antiSwayYawOffset = 0.0f;
-
-        mc.options.keyUp.setDown(forward > 0.03f);
-        mc.options.keyDown.setDown(forward < -0.03f);
-        mc.options.keyLeft.setDown(correctedStrafe > 0.5f);
-        mc.options.keyRight.setDown(correctedStrafe < -0.5f);
-        mc.options.keyJump.setDown(jumping);
-        mc.options.keySprint.setDown(sprinting);
-        mc.options.keyShift.setDown(false);
-    }
+    // applyMovement / applyAntiSwayCorrection 已删除：
+    // 移动改由玩家自己的输入驱动，模块只在落地时注入跳跃（见 onPostPlayerInput）。
+    // 原先它们会把 WASD 按键按 21 帧曲线强制置位，是 Intave move.vert 命中的机器特征。
 
     private void suppressSneakInput() {
         mc.options.keyShift.setDown(false);
@@ -1181,50 +1148,6 @@ public class Telly extends Module {
             travelX = 0;
             travelZ = rawZ >= 0.0 ? 1 : -1;
         }
-    }
-
-    private float applyAntiSwayCorrection(float forward, float recordedStrafe) {
-        LocalPlayer player = mc.player;
-        if (player == null) return recordedStrafe;
-
-        Vec3 position = player.position();
-        Vec3 motion = player.getDeltaMovement();
-        double lanePosition = travelX != 0 ? position.z : position.x;
-        double laneVelocity = travelX != 0 ? motion.z : motion.x;
-        double error = antiSwayLane - lanePosition;
-
-        if (Math.abs(error) < 0.015 && Math.abs(laneVelocity) < 0.008) {
-            antiSwayTapUsed = false;
-            antiSwayYawOffset *= 0.65f;
-            if (Math.abs(antiSwayYawOffset) < 0.03f) antiSwayYawOffset = 0.0f;
-            return recordedStrafe;
-        }
-
-        double desiredLaneVelocity = error * 0.42 - laneVelocity * 0.78;
-        desiredLaneVelocity = clamp(desiredLaneVelocity, -0.16, 0.16);
-        double velocityCorrection = desiredLaneVelocity - laneVelocity;
-
-        double radians = Math.toRadians(player.getYRot());
-        double sin = Math.sin(radians);
-        double cos = Math.cos(radians);
-        double yawLaneDerivative = travelX != 0
-                ? -forward * sin + recordedStrafe * cos
-                : -forward * cos - recordedStrafe * sin;
-        double desiredYawOffset = 0.0;
-        if (Math.abs(yawLaneDerivative) >= 0.12) {
-            desiredYawOffset = Math.toDegrees(velocityCorrection * 0.55 / yawLaneDerivative);
-        }
-        desiredYawOffset = clamp(desiredYawOffset, -2.25, 2.25);
-        antiSwayYawOffset = antiSwayYawOffset * 0.60f + (float) desiredYawOffset * 0.40f;
-
-        double strafeLaneAxis = travelX != 0 ? sin : cos;
-        boolean tapHelps = Math.abs(strafeLaneAxis) >= 0.20 && velocityCorrection * strafeLaneAxis > 0.0;
-        if (tapHelps && !antiSwayTapUsed && Math.abs(velocityCorrection) >= 0.03 && recordedStrafe < 0.5f) {
-            antiSwayTapUsed = true;
-            return recordedStrafe + 1.0f;
-        }
-
-        return recordedStrafe;
     }
 
     // ─── Use key ────────────────────────────────────────────────────────────
