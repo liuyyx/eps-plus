@@ -1993,12 +1993,13 @@
       "telly": {
         "_value": "Telly桥",
         "auto swap": "自动切换",
-        "disable safewalk": "禁用安全行走",
-        "show activation hitbox": "显示激活判定框",
-        "debug activation": "激活诊断",
-        "rotation speed": "旋转速度",
         "telly ticks": "Telly刻数",
-        "print status": "打印状态"
+        "forward speed": "起跳转速",
+        "back speed": "回正转速",
+        "place speed": "放置转速",
+        "place delay": "放置延迟",
+        "swing": "挥手",
+        "move fix": "移动修正"
       },
       "kill effect": {
         "_value": "击杀特效",

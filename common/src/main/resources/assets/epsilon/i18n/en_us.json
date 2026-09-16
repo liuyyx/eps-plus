@@ -1993,12 +1993,13 @@
       "telly": {
         "_value": "Telly",
         "auto swap": "Auto Swap",
-        "disable safewalk": "Disable SafeWalk",
-        "show activation hitbox": "Show Activation Hitbox",
-        "debug activation": "Debug Activation",
-        "rotation speed": "Rotation Speed",
         "telly ticks": "Telly Ticks",
-        "print status": "Print Status"
+        "forward speed": "Forward Speed",
+        "back speed": "Back Speed",
+        "place speed": "Place Speed",
+        "place delay": "Place Delay",
+        "swing": "Swing",
+        "move fix": "Move Fix"
       },
       "kill effect": {
         "_value": "Kill Effect",
