@@ -1888,8 +1888,6 @@
         "sensitivity quantum": "Sensitivity Quantum",
         "yaw nudge scale": "Yaw Nudge Scale",
         "setup inertia ticks": "Setup Inertia Ticks",
-        "snap range": "Snap Range",
-        "snap step": "Snap Step",
         "takeover degrees": "Takeover Degrees",
         "reset defaults": "Reset Defaults"
       },

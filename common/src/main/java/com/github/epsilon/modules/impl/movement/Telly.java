@@ -123,11 +123,11 @@ public class Telly extends Module {
     /**
      * 超前「已铺桥面」超过这么多格就刹车等桥补齐。
      *
-     * <p>实测：正常运行时玩家稳定超前 lastPlacedPos 2.0~2.5 格（玩家朝桥的前沿走）。
-     * 阈值 1 ⇒ 持续掐前进输入，placedOk 只有 19~60；完全无护栏 ⇒ 6~12（4 格就踩空）；
-     * 取 2 是折中。
+     * <p>⚠️ 默认 1 是「能搭很多格子」那个状态的取值。实测：设为 1 ⇒ placedOk 19~60；
+     * 设为 2 ⇒ 刹车点后移；完全关闭护栏 ⇒ 6~12（4 格就踩空）。
+     * 三者都能调，取 1 是为了回到用户认可的那个手感。
      */
-    private final IntSetting overshootLimit = intSetting("Overshoot Limit", 2, 0, 8, 1).group(sgGuard);
+    private final IntSetting overshootLimit = intSetting("Overshoot Limit", 1, 0, 8, 1).group(sgGuard);
     /** 横向偏离 lane 超过这么多格就刹车（脚本原值无此逻辑）。 */
     private final DoubleSetting offLaneLimit = doubleSetting("Off Lane Limit", 1.0, 0.1, 5.0, 0.1).group(sgGuard);
 
@@ -150,10 +150,6 @@ public class Telly extends Module {
     /** setup 阶段起跳前的惯性 tick 数。脚本原值 6；砍到 2 更容易在边缘踩空。 */
     private final IntSetting setupInertiaTicks = intSetting("Setup Inertia Ticks", 6, 0, 12, 1).group(sgDevPlace);
 
-    /** 按住潜行计时期间，把视角吸向 45°+k·90° 网格的最大校正范围（度）。 */
-    private final DoubleSetting snapRange = doubleSetting("Snap Range", 10.0, 0.0, 45.0, 0.5).group(sgDevAct);
-    /** 上述校正的每 tick 步长（度）。 */
-    private final DoubleSetting snapStep = doubleSetting("Snap Step", 1.0, 0.1, 10.0, 0.1).group(sgDevAct);
     /** 相机偏离脚本朝向多少度就判定为玩家接管。脚本原值 ≈0.015（累积到 25）；5 是实测值。 */
     private final DoubleSetting takeoverDegrees = doubleSetting("Takeover Degrees", 5.0, 1.0, 45.0, 0.5).group(sgDevAct);
 
@@ -660,7 +656,6 @@ public class Telly extends Module {
                         + " onGround=" + player.onGround());
             }
             if (activationSuppressUse()) setPressed("use", false);
-            aimAtActivationGrid(player);
             if (activationPromptReady() && physicalRightMouseDown()) {
                 // 蹲着 + 对准绿框 + 按住右键 = 直接触发；触发后右键可随意松开。
                 disableSafeWalkForRun();
@@ -679,24 +674,11 @@ public class Telly extends Module {
         clearActivationPrompt();
     }
 
-    /**
-     * 按住潜行计时期间，把视角平滑推向最近的 {@code 45°+k·90°} 网格。
-     *
-     * <p>为什么需要：激活时 {@code baseYaw} 就取这个网格值，它决定桥的走向与整条 21 帧曲线序列。
-     * 触发瞬间若带几度偏差，整轮搭桥都会扛着同一个偏置，站位余量随之不对称 ——
-     * 用户实测「瞄准偏一侧就接不上、偏另一侧就不掉」正是这个表现。
-     *
-     * <p>约束：校正量超过 {@code Snap Range} 设置值直接放弃（说明玩家在找位置，别扳他）；
-     * 每 tick 最多走 {@code Snap Step} 度，平滑推入而非瞬移。
-     */
-    private void aimAtActivationGrid(LocalPlayer player) {
-        float target = Math.round((player.getYRot() - 45.0f) / 90.0f) * 90.0f + 45.0f;
-        float delta = tellyWrapAngle(target - player.getYRot());
-        float snapRangeValue = snapRange.getValue().floatValue();
-        float snapStepValue = snapStep.getValue().floatValue();
-        if (Math.abs(delta) > snapRangeValue || Math.abs(delta) < 0.02f) return;
-        player.setYRot(player.getYRot() + clampFloat(delta, -snapStepValue, snapStepValue));
-    }
+    // 原先这里有个 aimAtActivationGrid：按住潜行期间把视角平滑吸向 45°+k·90° 网格。
+    // **已移除**（用户要求回到「能搭很多格子、只是慢慢偏」的那个状态）。移除原因：
+    // 它会把朝向对齐成精确的整度数（BEGIN yaw 变成 -315.00 / -495.00 这类值），
+    // 真人不可能每次都停在整度数上 —— 实测随后 Intave 报了 `acting computer-like #1`。
+    // 触发后 beginAutomation 里的那一次 45° 对齐仍然保留（只做一次，不影响观感特征）。
 
     private void clearActivationPrompt() {
         rememberActivationPromptColor();
@@ -3636,14 +3618,8 @@ public class Telly extends Module {
     /**
      * 玩家是否已冲到「已铺桥面」之外太远。
      *
-     * <p>⚠️ 阈值是实测调出来的，别改回 1、也别放开到 3：
-     * <ul>
-     *   <li>玩家朝桥的前沿走，正常运行时稳定超前 {@code lastPlacedPos} <b>2.0~2.5</b> 格；
-     *   <li>阈值 <b>1</b> ⇒ 持续掐前进输入，placedOk 只有 19~60；
-     *   <li>完全无护栏 ⇒ 超前继续扩大，placedOk 掉到 <b>6~12</b>（4 格就踩空）；
-     *   <li>阈值 <b>3</b> ⇒ 正常 2.5 已进入危险区却仍放行，等于变相无护栏。
-     * </ul>
-     * 取 <b>2</b>：2.0 以下全放行，一旦逼近 2.5 的掉落区就刹车等桥补齐。
+     * <p>阈值由 {@code Guard / Overshoot Limit} 设置控制（默认 1 —— 用户认可的「能搭很多格子」状态）。
+     * 实测参考：1 ⇒ placedOk 19~60；2 ⇒ 刹车后移；关闭护栏 ⇒ 6~12（4 格就踩空）。
      */
     private boolean isPlayerAheadOfBridge(LocalPlayer player) {
         if (player == null || lastPlacedPos == null) return false;
