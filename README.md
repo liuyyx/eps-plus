@@ -2,6 +2,7 @@
 
 > Minecraft **26.2** 多加载器辅助客户端（Fabric / NeoForge）。
 > 本仓库是 [NekoyaHouse/Epsilon](https://github.com/NekoyaHouse/Epsilon) 的分支，在保持上游架构不变的前提下，额外移植了几个模块。
+> deepseek连个脚本都写不明白我操了。。。
 
 <p align="left">
   <img alt="MC" src="https://img.shields.io/badge/Minecraft-26.2-4c1?style=flat-square">
