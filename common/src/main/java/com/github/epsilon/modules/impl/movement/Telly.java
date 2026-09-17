@@ -18,6 +18,7 @@ import com.github.epsilon.managers.NotificationManager;
 import com.github.epsilon.modules.Category;
 import com.github.epsilon.modules.Module;
 import com.github.epsilon.settings.impl.BoolSetting;
+import com.github.epsilon.settings.impl.IntSetting;
 import com.github.epsilon.utils.client.KeybindUtils;
 import com.google.common.base.Suppliers;
 import com.mojang.blaze3d.platform.InputConstants;
@@ -84,6 +85,13 @@ public class Telly extends Module {
     private final BoolSetting print = boolSetting("Print", false);
     /** 调试日志开关：控制写进 latest.log 的 [Telly] 诊断行。默认开，排查完可自行关闭。 */
     private final BoolSetting debugLog = boolSetting("Debug Log", true);
+    /**
+     * 激活手势的「按住潜行」计时（毫秒）：蹲满这段时间提示才转绿、允许触发。
+     *
+     * <p>脚本原值固定 1000ms，但源客户端的 {@code activationPromptReady} 本来就是宿主侧的手感参数，
+     * 与算法无关，做成设置便于按自己的节奏调。
+     */
+    private final IntSetting activationTime = intSetting("Activation Time", 1000, 200, 3000, 100);
 
     private final Supplier<TextRenderer> promptRenderer = Suppliers.memoize(() -> TextRenderer.create(128 * 1024));
 
@@ -555,11 +563,13 @@ public class Telly extends Module {
     }
 
     private boolean activationPromptReady() {
-        return activatePromptAt != 0L && clientTime() - activatePromptAt >= 1000L;
+        return activatePromptAt != 0L && clientTime() - activatePromptAt >= activationTime.getValue();
     }
 
+    /** 计时过 85% 后先吞掉右键，避免玩家提前按住右键把放置窗口提前打开。 */
     private boolean activationSuppressUse() {
-        return activatePromptAt != 0L && clientTime() - activatePromptAt >= 850L;
+        return activatePromptAt != 0L
+                && clientTime() - activatePromptAt >= (long) (activationTime.getValue() * 0.85);
     }
 
     private void updateActivationPrompt() {
@@ -754,7 +764,8 @@ public class Telly extends Module {
         } else if (activationPromptReady()) {
             sb.append(" 计时√可触发");
         } else {
-            sb.append(String.format(Locale.ROOT, " 计时%.0f%%", (clientTime() - activatePromptAt) / 10.0));
+            sb.append(String.format(Locale.ROOT, " 计时%.0f%%",
+                    (clientTime() - activatePromptAt) * 100.0 / Math.max(1, activationTime.getValue())));
         }
         return sb.toString();
     }
@@ -1509,8 +1520,10 @@ public class Telly extends Module {
         if (desiredLaneVelocity < -0.16) desiredLaneVelocity = -0.16;
         double velocityCorrection = desiredLaneVelocity - laneVelocity;
 
-        // 走位方向由摆动视角决定（见 YAW_CURVE 处的机制说明），所以导数要按真实视角算。
-        double radians = Math.toRadians(player.getYRot());
+        // 导数按「稳定朝向」算：走位方向确实随 YAW_CURVE 摆动（见曲线处的机制说明），
+        // 但摆动是周期对称的；用瞬时相机角会把 sin/cos 一起带进抖动，算出的修正量方向不稳，
+        // 横向误差就一点点累积起来（实测：每格只偏一丁点，走几十格后明显跑偏）。
+        double radians = Math.toRadians(baseYaw);
         double sin = Math.sin(radians);
         double cos = Math.cos(radians);
         double yawLaneDerivative = travelX != 0

@@ -1870,7 +1870,8 @@
         "disable safewalk": "禁用 SafeWalk",
         "show activation hitbox": "显示激活命中框",
         "print": "状态打印",
-        "debug log": "调试日志"
+        "debug log": "调试日志",
+        "activation time": "激活计时"
       },
       "scaffold": {
         "_value": "自动搭路",

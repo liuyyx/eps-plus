@@ -1870,7 +1870,8 @@
         "disable safewalk": "Disable SafeWalk",
         "show activation hitbox": "Show Activation Hitbox",
         "print": "Print",
-        "debug log": "Debug Log"
+        "debug log": "Debug Log",
+        "activation time": "Activation Time"
       },
       "scaffold": {
         "_value": "Scaffold",
