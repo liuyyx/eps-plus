@@ -18,7 +18,7 @@ import com.github.epsilon.managers.NotificationManager;
 import com.github.epsilon.modules.Category;
 import com.github.epsilon.modules.Module;
 import com.github.epsilon.settings.impl.BoolSetting;
-import com.github.epsilon.settings.impl.IntSetting;
+import com.github.epsilon.settings.impl.DoubleSetting;
 import com.github.epsilon.utils.client.KeybindUtils;
 import com.google.common.base.Suppliers;
 import com.mojang.blaze3d.platform.InputConstants;
@@ -86,12 +86,25 @@ public class Telly extends Module {
     /** 调试日志开关：控制写进 latest.log 的 [Telly] 诊断行。默认开，排查完可自行关闭。 */
     private final BoolSetting debugLog = boolSetting("Debug Log", true);
     /**
-     * 激活手势的「按住潜行」计时（毫秒）：蹲满这段时间提示才转绿、允许触发。
+     * 激活手势的「按住潜行」等待时间（秒）：蹲满这段时间提示才由红转绿、允许触发。
      *
-     * <p>脚本原值固定 1000ms，但源客户端的 {@code activationPromptReady} 本来就是宿主侧的手感参数，
-     * 与算法无关，做成设置便于按自己的节奏调。
+     * <p>脚本原值固定 1.0 秒，但这是宿主侧的手感参数、与算法无关，做成滑块便于按自己的节奏调。
      */
-    private final IntSetting activationTime = intSetting("Activation Time", 1000, 200, 3000, 100);
+    private final DoubleSetting activationTime = doubleSetting("Activation Time", 1.0, 0.1, 2.0, 0.1);
+
+    /**
+     * 激活时把朝向吸附到的「基准角」网格：{@code round((yaw - 该值)/90)*90 + 该值}。
+     *
+     * <p>⚠️ 默认 <b>44</b> 而不是 45，两个理由：
+     * <ol>
+     *   <li>45 是整度数，吸附后 {@code BEGIN yaw} 会变成 -315.00 / -495.00 这类精确值，
+     *       真人做不到 —— 实测那样会被 Intave 报 {@code acting computer-like}；
+     *   <li>45° 恰好是 {@code calculateTravelDirection} 里 {@code rawX = sin - cos} 的零点
+     *       （象限分界），浮点抖动会让 travelX/travelZ 在两侧跳。44 稳稳落在同侧。
+     * </ol>
+     * 激活判据是 45°±2°，滑块范围 42~48 都还在容差内。
+     */
+    private final DoubleSetting snapBase = doubleSetting("Snap Degrees", 44.0, 42.0, 48.0, 0.1);
 
     private final Supplier<TextRenderer> promptRenderer = Suppliers.memoize(() -> TextRenderer.create(128 * 1024));
 
@@ -163,17 +176,6 @@ public class Telly extends Module {
     private static final double ACTIVATION_HEIGHT_MAX = 0.75;
     private static final float ACTIVATION_YAW_TOLERANCE = 2.0f;
 
-    /*
-     * 激活时把朝向吸附到的「基准角」网格：round((yaw - BASE)/90)*90 + BASE。
-     *
-     * ⚠️ 用 44° 而不是 45°，两个理由：
-     *   1) 45 是整度数，吸附后 BEGIN yaw 会变成 -315.00 / -495.00 这类精确值，真人做不到 ——
-     *      实测那样会被 Intave 报 acting computer-like。44 更像手抖停下来的角度。
-     *   2) 45° 恰好是 calculateTravelDirection 里 rawX = sin - cos 的零点（象限分界），
-     *      浮点抖动会让 travelX/travelZ 在两侧跳；44° 稳稳落在分界同侧，判定稳定。
-     * 激活判据是 45°±2°（ACTIVATION_YAW_TOLERANCE），44° 只差 1°，仍可正常激活。
-     */
-    private static final float ACTIVATION_SNAP_BASE = 44.0f;
     /** 吸附的最大校正范围（度）：超出说明玩家在主动找位置，不干预。 */
     private static final float ACTIVATION_SNAP_RANGE = 10.0f;
     /** 吸附的每 tick 步长（度）：平滑推入而非瞬移。 */
@@ -578,14 +580,19 @@ public class Telly extends Module {
         if (bestSlot != -1) mc.player.getInventory().setSelectedSlot(bestSlot);
     }
 
+    /** 等待时间换算为毫秒，供内部计时比较。 */
+    private long activationTimeMs() {
+        return (long) (activationTime.getValue() * 1000.0);
+    }
+
     private boolean activationPromptReady() {
-        return activatePromptAt != 0L && clientTime() - activatePromptAt >= activationTime.getValue();
+        return activatePromptAt != 0L && clientTime() - activatePromptAt >= activationTimeMs();
     }
 
     /** 计时过 85% 后先吞掉右键，避免玩家提前按住右键把放置窗口提前打开。 */
     private boolean activationSuppressUse() {
         return activatePromptAt != 0L
-                && clientTime() - activatePromptAt >= (long) (activationTime.getValue() * 0.85);
+                && clientTime() - activatePromptAt >= (long) (activationTimeMs() * 0.85);
     }
 
     private void updateActivationPrompt() {
@@ -630,7 +637,7 @@ public class Telly extends Module {
     }
 
     /**
-     * 按住潜行计时期间，把视角平滑推向最近的 {@code ACTIVATION_SNAP_BASE + k·90°} 网格（默认 44°）。
+     * 按住潜行计时期间，把视角平滑推向最近的「Snap Degrees 网格」（默认 44°+k·90°）。
      *
      * <p>为什么需要：激活时 {@code baseYaw} 就取这个网格值，它决定桥的走向与整条 21 帧曲线序列。
      * 触发瞬间若带几度偏差，整轮搭桥都会扛着同一个偏置。
@@ -639,7 +646,8 @@ public class Telly extends Module {
      * 每 tick 最多走 {@link #ACTIVATION_SNAP_STEP} 度，平滑推入而非瞬移。
      */
     private void aimAtActivationGrid(LocalPlayer player) {
-        float target = Math.round((player.getYRot() - ACTIVATION_SNAP_BASE) / 90.0f) * 90.0f + ACTIVATION_SNAP_BASE;
+        float base = snapBase.getValue().floatValue();
+        float target = Math.round((player.getYRot() - base) / 90.0f) * 90.0f + base;
         float delta = tellyWrapAngle(target - player.getYRot());
         if (Math.abs(delta) > ACTIVATION_SNAP_RANGE || Math.abs(delta) < 0.02f) return;
         player.setYRot(player.getYRot() + clampFloat(delta, -ACTIVATION_SNAP_STEP, ACTIVATION_SNAP_STEP));
@@ -797,8 +805,9 @@ public class Telly extends Module {
         } else if (activationPromptReady()) {
             sb.append(" 计时√可触发");
         } else {
+            long elapsedLimitMs = Math.max(1L, activationTimeMs());
             sb.append(String.format(Locale.ROOT, " 计时%.0f%%",
-                    (clientTime() - activatePromptAt) * 100.0 / Math.max(1, activationTime.getValue())));
+                    (clientTime() - activatePromptAt) * 100.0 / elapsedLimitMs));
         }
         return sb.toString();
     }
@@ -1175,7 +1184,8 @@ public class Telly extends Module {
                 + " fall=" + String.format(Locale.ROOT, "%.2f", player.fallDistance));
         // 对齐到 44° 网格（与按住潜行期间的吸附一致）：触发瞬间的瞄准偏差绝不能固化进 baseYaw，
         // 否则后续每一刻的旋转目标都带同一偏差，桥会越搭越歪（第一格就接不上）。
-        float alignedYaw = Math.round((player.getYRot() - ACTIVATION_SNAP_BASE) / 90.0f) * 90.0f + ACTIVATION_SNAP_BASE;
+        float alignBase = snapBase.getValue().floatValue();
+        float alignedYaw = Math.round((player.getYRot() - alignBase) / 90.0f) * 90.0f + alignBase;
         baseYaw = alignedYaw;
         player.setYRot(alignedYaw);
         setActivationMovementHold(false);

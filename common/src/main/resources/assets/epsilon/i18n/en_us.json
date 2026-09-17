@@ -1871,7 +1871,8 @@
         "show activation hitbox": "Show Activation Hitbox",
         "print": "Print",
         "debug log": "Debug Log",
-        "activation time": "Activation Time"
+        "activation time": "Activation Time",
+        "snap degrees": "Snap Degrees"
       },
       "scaffold": {
         "_value": "Scaffold",

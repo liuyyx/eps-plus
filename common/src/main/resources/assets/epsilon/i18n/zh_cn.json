@@ -1871,7 +1871,8 @@
         "show activation hitbox": "显示激活命中框",
         "print": "状态打印",
         "debug log": "调试日志",
-        "activation time": "激活计时"
+        "activation time": "激活计时",
+        "snap degrees": "吸附基准角"
       },
       "scaffold": {
         "_value": "自动搭路",
