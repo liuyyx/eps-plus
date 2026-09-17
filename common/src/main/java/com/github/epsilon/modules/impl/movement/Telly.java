@@ -17,11 +17,7 @@ import com.github.epsilon.managers.ModuleManager;
 import com.github.epsilon.managers.NotificationManager;
 import com.github.epsilon.modules.Category;
 import com.github.epsilon.modules.Module;
-import com.github.epsilon.settings.Setting;
-import com.github.epsilon.settings.SettingGroup;
 import com.github.epsilon.settings.impl.BoolSetting;
-import com.github.epsilon.settings.impl.ButtonSetting;
-import com.github.epsilon.settings.impl.DoubleSetting;
 import com.github.epsilon.settings.impl.IntSetting;
 import com.github.epsilon.utils.client.KeybindUtils;
 import com.google.common.base.Suppliers;
@@ -95,96 +91,7 @@ public class Telly extends Module {
      * <p>脚本原值固定 1000ms，但源客户端的 {@code activationPromptReady} 本来就是宿主侧的手感参数，
      * 与算法无关，做成设置便于按自己的节奏调。
      */
-    // 组必须声明在使用它们的设置字段之前：Java 字段按声明顺序初始化，
-    // 若设置写在组前面，.group(sgXxx) 拿到的会是 null。
-    private final SettingGroup sgGuard = settingGroup("Guard");
-    private final SettingGroup sgSway = settingGroup("Anti Sway");
-    private final SettingGroup sgRot = settingGroup("Rotation");
-    private final SettingGroup sgDevPlace = settingGroup("Placement");
-    private final SettingGroup sgDevAct = settingGroup("Activation");
-
-    private final IntSetting activationTime = intSetting("Activation Time", 1000, 200, 3000, 100).group(sgDevAct);
-
-    /*
-     * ===== Dev Tuning =====
-     *
-     * 把影响「搭得远不远 / 会不会掉」的参数全部暴露出来，便于现场逐个试。
-     * 注释里标注的「脚本原值」就是可还原的基线。
-     *
-     * ⚠️ 这些参数**互相耦合**（例如放宽 sway 限幅就必须同时动 response/damping 才有意义），
-     * 单改一个常常看不出效果。已试过并否证的组合记在各自注释里，别再重复试：
-     *   - 放宽 sway 限幅 2.25→4：sway 用满了，横向误差 err 纹丝不动（±0.5 不变）。
-     *   - 把 sway 修正从「相机」改到「走位」：同样无效。
-     *   - antiSwayLane 取方块中心（让玩家居中）：err 收敛到 0，但 placedOk 从 100+ 掉到 19/37
-     *     —— telly 靠「站在方块边缘」向后搭，居中会把放置距离拉远半格。
-     */
-    /** 护栏总开关。关掉 = 完全按脚本原样跑（不刹车）。 */
-    private final BoolSetting guardEnabled = boolSetting("Enabled", true).group(sgGuard);
-    /**
-     * 超前「已铺桥面」超过这么多格就刹车等桥补齐。
-     *
-     * <p>⚠️ 默认 1 是「能搭很多格子」那个状态的取值。实测：设为 1 ⇒ placedOk 19~60；
-     * 设为 2 ⇒ 刹车点后移；完全关闭护栏 ⇒ 6~12（4 格就踩空）。
-     * 三者都能调，取 1 是为了回到用户认可的那个手感。
-     */
-    private final IntSetting overshootLimit = intSetting("Overshoot Limit", 1, 0, 8, 1).group(sgGuard);
-    /** 横向偏离 lane 超过这么多格就刹车（脚本原值无此逻辑）。 */
-    private final DoubleSetting offLaneLimit = doubleSetting("Off Lane Limit", 1.0, 0.1, 5.0, 0.1).group(sgGuard);
-
-    /** 每帧允许的转向修正上限（度）。脚本原值 2.25。 */
-    private final DoubleSetting swayYawLimit = doubleSetting("Yaw Limit", 2.25, 0.0, 15.0, 0.05).group(sgSway);
-    /** 位置误差 → 期望横向速度的系数。脚本原值 0.42。 */
-    private final DoubleSetting swayResponse = doubleSetting("Response", 0.42, 0.0, 2.0, 0.01).group(sgSway);
-    /** 当前横向速度的阻尼系数。脚本原值 0.78。 */
-    private final DoubleSetting swayDamping = doubleSetting("Damping", 0.78, 0.0, 2.0, 0.01).group(sgSway);
-    /** 期望横向速度上限（格/tick）。脚本原值 0.16。 */
-    private final DoubleSetting swayMaxVelocity = doubleSetting("Max Velocity", 0.16, 0.0, 1.0, 0.01).group(sgSway);
-    /** 速度修正 → 转向角的增益。脚本原值 0.55。 */
-    private final DoubleSetting swayGain = doubleSetting("Gain", 0.55, 0.0, 2.0, 0.01).group(sgSway);
-
-    /** 旋转量化步长（度）。脚本原值 0.03404715；源客户端按本机灵敏度算约 0.085。 */
-    private final DoubleSetting sensitivityQuantum = doubleSetting("Sensitivity Quantum", 0.03404715, 0.001, 0.2, 0.005).group(sgRot);
-    /** YAW_NUDGE_PATTERN `{0,1,-1,2,-2}` 的倍率；抖动幅度 = 本倍率 × 量子。脚本原值 1.0。 */
-    private final DoubleSetting yawNudgeScale = doubleSetting("Yaw Nudge Scale", 1.0, 0.0, 5.0, 0.1).group(sgRot);
-
-    /** setup 阶段起跳前的惯性 tick 数。脚本原值 6；砍到 2 更容易在边缘踩空。 */
-    private final IntSetting setupInertiaTicks = intSetting("Setup Inertia Ticks", 6, 0, 12, 1).group(sgDevPlace);
-
-    /**
-     * 激活时把朝向吸附到的「基准角」网格：{@code round((yaw - base)/90)*90 + base}。
-     *
-     * <p>⚠️ 默认 <b>44°</b> 而不是 45°，两个理由：
-     * <ol>
-     *   <li><b>躲机器特征</b>：45 是整度数，吸附后 {@code BEGIN yaw} 会变成 -315.00 / -495.00 这类
-     *       精确值，真人做不到 —— 实测那样会被 Intave 报 {@code acting computer-like #1}。
-     *       44° 是「像手抖停在的角度」。</li>
-     *   <li><b>稳定 travel 判定</b>：45° 恰好是 {@code calculateTravelDirection} 里
-     *       {@code rawX = sin - cos} 的零点（象限分界），浮点抖动会让 travelX/travelZ 在两侧跳。
-     *       44° 落在分界同侧，判定稳定。</li>
-     * </ol>
-     * 注意激活判据 {@code ACTIVATION_YAW_TOLERANCE} 是 45°±2°，44° 只差 1°，仍可正常激活。
-     */
-    private final DoubleSetting snapDegrees = doubleSetting("Snap Degrees", 44.0, 0.0, 90.0, 0.5).group(sgDevAct);
-    /** 按住潜行计时期间，把视角吸向上述网格的最大校正范围（度）。 */
-    private final DoubleSetting snapRange = doubleSetting("Snap Range", 10.0, 0.0, 45.0, 0.5).group(sgDevAct);
-    /** 上述校正的每 tick 步长（度），保证平滑推入而非瞬移。 */
-    private final DoubleSetting snapStep = doubleSetting("Snap Step", 1.0, 0.1, 10.0, 0.1).group(sgDevAct);
-
-    /** 相机偏离脚本朝向多少度就判定为玩家接管。脚本原值 ≈0.015（累积到 25）；5 是实测值。 */
-    private final DoubleSetting takeoverDegrees = doubleSetting("Takeover Degrees", 5.0, 1.0, 45.0, 0.5).group(sgDevAct);
-
-    /**
-     * Dev Tuning 调乱了一键还原：遍历所有设置调用 {@link Setting#reset()}。
-     *
-     * <p>{@code reset()} 直接把 value 置回 defaultValue（不触发 onChanged）—— 对本模块这些
-     * 纯数值设置来说没有副作用需求，够用。按钮自身也在 settings 列表里，跳过它。
-     */
-    private final ButtonSetting resetDefaults = buttonSetting("Reset Defaults", () -> {
-        for (Setting<?> setting : List.copyOf(settings)) {
-            if (!(setting instanceof ButtonSetting)) setting.reset();
-        }
-        NotificationManager.INSTANCE.info("Telly", "Settings reset to defaults");
-    });
+    private final IntSetting activationTime = intSetting("Activation Time", 1000, 200, 3000, 100);
 
     private final Supplier<TextRenderer> promptRenderer = Suppliers.memoize(() -> TextRenderer.create(128 * 1024));
 
@@ -247,6 +154,7 @@ public class Telly extends Module {
     private float scriptedRotationYaw = 0.0f;
     private float scriptedRotationPitch = 0.0f;
 
+    private static final double SENSITIVITY_QUANTUM = 0.03404715;
     private static final int[] YAW_NUDGE_PATTERN = {0, 1, -1, 2, -2};
     private int rotationStepCounter = 0;
     private static final double ACTIVATION_ACROSS_MIN = 0.38;
@@ -256,9 +164,26 @@ public class Telly extends Module {
     private static final float ACTIVATION_YAW_TOLERANCE = 2.0f;
 
     /**
-     * 激活诊断的刷新间隔（毫秒）。 */
+     * 「玩家手动接管」判据：相机相对脚本给的朝向偏了多少度就认为玩家在动视角、让位给他。
+     *
+     * <p>⚠️ 这里**有意偏离**脚本原实现。原版门限是 {@code SENSITIVITY_QUANTUM * 0.45 ≈ 0.015°}
+     * 再累积到 25 —— 实测它会把「按住右键+潜行时手指的微小移动」也攒成接管，
+     * 16 轮实测里几乎每一轮都被它提前掐断（placedOk 停在 10~55），表现为「有时成功有时失败」。
+     * 5° 是明显属于人为操作、而手抖达不到的量级。
+     */
+    private static final double MANUAL_TAKEOVER_DEGREES = 5.0;
+
+    /** 激活诊断的刷新间隔（毫秒）。 */
     private static final long ACTIVATION_DIAGNOSTICS_INTERVAL_MS = 100L;
 
+    /**
+     * setup 阶段起跳前的「建立后向惯性」tick 数：脚本原值 {@code setupTick >= 6} 才起跳。
+     *
+     * <p>⚠️ 踩过的坑：曾把它改成 2（想「早点跳更快」），实测反而更容易掉桥 —— 前 6 tick
+     * 的后退正是把玩家从方块边缘带回可落脚区域的手段，砍掉它就等于在边缘直接起跳。
+     * <b>这里是脚本原值，不要调。</b>
+     */
+    private static final int SETUP_INERTIA_TICKS = 6;
     private long lastActivationDiagnosticsAt = 0L;
     /** 屏幕底部单行显示的激活诊断文本；null = 不显示。 */
     private String activationDiagnosticsLine = null;
@@ -279,14 +204,6 @@ public class Telly extends Module {
      * placedOk 从 105/137 崩到 9~28 —— **摆动是够取候选的手段，不能锁死。**
      */
     private final Map<String, Integer> placementFailCounts = new LinkedHashMap<>();
-    /**
-     * 最近成功放置过的格子，用于**精确**判定「服务端吞方块」。
-     *
-     * <p>原先的条件只有「在 lane 上 + 包内是空气」，任何相邻格更新都会命中 —— 单机实测刷出
-     * 6 条全是噪声（{@code name=air}，那格本来就没放过东西），据此得出的「区块边界吞方块」
-     * 结论不成立。现在只在**我们真的放过、又被改回空气**时才报。
-     */
-    private final Set<String> recentPlacedKeys = new HashSet<>();
     private boolean runDiagBelowAir = false;
     private float runDiagSway = 0f;
     private float runDiagTargetPitch = 0f;
@@ -476,7 +393,7 @@ public class Telly extends Module {
             if (setupTick < 12) {
                 // 用户方案：先「轻微往回冲一小段」建立后退惯性，再起跳 ——
                 // 从边缘静止直接起跳没有初速，退一点点再跳会明显更快，桥更容易接上。
-                boolean setupJump = setupTick >= setupInertiaTicks.getValue();
+                boolean setupJump = setupTick >= SETUP_INERTIA_TICKS;
                 applyMovement(-1.0f, -1.0f, setupJump, false);
                 applyUse(true);
                 dbg("setup t=" + setupTick
@@ -520,9 +437,10 @@ public class Telly extends Module {
         boolean jumping = phase >= 1 && phase <= 19;
         boolean use = phase >= 7;
 
-        // 护栏：玩家冲到「已铺桥面」之外太远时归零移动，等桥补齐。
-        // 阈值取 2 —— 实测正常超前 2.0~2.5、掉落发生在 2.5+，所以刹车点落在中间。
-        // 阈值 1 会过度刹车（placedOk 19~60），完全移除则会 6~12 就踩空。详见方法注释。
+        // 保险①：横向不能跑歪。telly 是沿一条通道后退搭桥，垂直于推进方向漂出 1 格
+        // 就会踩到桥外（用户实测：掉下去是「跑歪了」，不是纵向冲太快）。
+        // 保险②：纵向不能冲过头 —— 玩家不能站到"还没铺好的区域"上。
+        // 两种情况本 tick 都站定等桥/姿态对齐，旋转与放置照常。
         if (isPlayerOffLane(mc.player) || isPlayerAheadOfBridge(mc.player)) {
             applyMovement(0.0f, 0.0f, false, false);
         } else {
@@ -676,7 +594,6 @@ public class Telly extends Module {
                         + " onGround=" + player.onGround());
             }
             if (activationSuppressUse()) setPressed("use", false);
-            aimAtActivationGrid(player);
             if (activationPromptReady() && physicalRightMouseDown()) {
                 // 蹲着 + 对准绿框 + 按住右键 = 直接触发；触发后右键可随意松开。
                 disableSafeWalkForRun();
@@ -693,25 +610,6 @@ public class Telly extends Module {
 
         // 一旦离开「蹲着 + 对准」，计时作废（触发只可能发生在该状态下按住右键的那一刻）。
         clearActivationPrompt();
-    }
-
-    /**
-     * 按住潜行计时期间，把视角平滑推向「{@code Snap Degrees} 网格」（默认 44°+k·90°）。
-     *
-     * <p>为什么需要：激活时 {@code baseYaw} 就取这个网格值，它决定桥的走向与整条 21 帧曲线序列。
-     * 触发瞬间若带几度偏差，整轮搭桥都会扛着同一个偏置。
-     *
-     * <p>约束：校正量超过 {@code Snap Range} 直接放弃（说明玩家在找位置，别扳他）；
-     * 每 tick 最多走 {@code Snap Step} 度，平滑推入而非瞬移。
-     */
-    private void aimAtActivationGrid(LocalPlayer player) {
-        float base = snapDegrees.getValue().floatValue();
-        float target = Math.round((player.getYRot() - base) / 90.0f) * 90.0f + base;
-        float delta = tellyWrapAngle(target - player.getYRot());
-        float snapRangeValue = snapRange.getValue().floatValue();
-        float snapStepValue = snapStep.getValue().floatValue();
-        if (Math.abs(delta) > snapRangeValue || Math.abs(delta) < 0.02f) return;
-        player.setYRot(player.getYRot() + clampFloat(delta, -snapStepValue, snapStepValue));
     }
 
     private void clearActivationPrompt() {
@@ -1120,9 +1018,8 @@ public class Telly extends Module {
         takeoverCameraPitch = player.getXRot();
         takeoverLastFrameAt = now;
 
-        // 见 Takeover Degrees 设置：超过该角度才判定为玩家接管（脚本原值 ≈0.015° 累积到 25）。
-        double takeoverLimit = takeoverDegrees.getValue();
-        if (yawInput > takeoverLimit || pitchInput > takeoverLimit) {
+        // 见 MANUAL_TAKEOVER_DEGREES 的说明：超过 5° 才判定为玩家接管。
+        if (yawInput > MANUAL_TAKEOVER_DEGREES || pitchInput > MANUAL_TAKEOVER_DEGREES) {
             stopAutomation(true);
             return true;
         }
@@ -1201,7 +1098,7 @@ public class Telly extends Module {
             boolean becamePassable = changedState == null
                     || changedState.isAir()
                     || changedState.canBeReplaced();
-            if (running && becamePassable && recentPlacedKeys.contains(posKey(changed))) {
+            if (running && becamePassable && isStraightTellyTarget(changed)) {
                 dbg("SERVER-SWALLOW at=" + java.util.Arrays.toString(changed)
                         + " name=" + blockNameAt(changed[0], changed[1], changed[2])
                         + " tick=" + currentClientTick);
@@ -1243,22 +1140,13 @@ public class Telly extends Module {
                 + " onGround=" + player.onGround()
                 + " sneak=" + player.isShiftKeyDown()
                 + " fall=" + String.format(Locale.ROOT, "%.2f", player.fallDistance));
-        // 对齐到「Snap Degrees」网格（默认 44°+k·90°），与按住潜行期间的吸附保持一致：
-        // 触发瞬间的瞄准偏差绝不能固化进 baseYaw，否则每一刻的旋转目标都带同一偏差，桥会越搭越歪。
-        // 用 44 而非 45 —— 既躲开整度数特征（Intave 的 computer-like），又避开 45° 这个
-        // calculateTravelDirection 的象限零点（浮点抖动会让 travelX/travelZ 两侧跳）。
-        float alignBase = snapDegrees.getValue().floatValue();
-        float alignedYaw = Math.round((player.getYRot() - alignBase) / 90.0f) * 90.0f + alignBase;
+        // 对齐到最近的 45°+k·90°：触发瞬间的瞄准偏差绝不能固化进 baseYaw，
+        // 否则后续每一刻的旋转目标都带同一偏差，桥会越搭越歪（第一格就接不上）。
+        float alignedYaw = Math.round((player.getYRot() - 45.0f) / 90.0f) * 90.0f + 45.0f;
         baseYaw = alignedYaw;
         player.setYRot(alignedYaw);
         setActivationMovementHold(false);
         calculateTravelDirection(baseYaw);
-        // ⚠️ 这里必须取[玩家精确坐标]，不是方块中心 —— 看似"偏差 0.5 格"像 bug，其实是设计。
-        //
-        // 曾改成 Math.floor(rawLane) + 0.5 让玩家居中：antiSway 的误差确实收敛到 0 了
-        // （落点日志 err 从 ±0.5 变成 ≈0），但 placedOk 立刻从 100+ 掉到 19/37 ——
-        // 因为 telly 的本质是「站在方块边缘向后搭」，贴着边缘时下一格才在够得着的范围内，
-        // 居中等于把放置距离拉远半格，桥就接不上。
         antiSwayLane = travelX != 0 ? player.position().z : player.position().x;
         antiSwayYawOffset = 0.0f;
         antiSwayTapUsed = false;
@@ -1455,8 +1343,7 @@ public class Telly extends Module {
         }
 
         rotationStepCounter++;
-        correctedTargetYaw += (float) (sensitivityQuantum.getValue() * yawNudgeScale.getValue()
-                * YAW_NUDGE_PATTERN[rotationStepCounter % 5]);
+        correctedTargetYaw += (float) (SENSITIVITY_QUANTUM * YAW_NUDGE_PATTERN[rotationStepCounter % 5]);
 
         rotationTargetYaw = rotationStartYaw + tellyWrapAngle(correctedTargetYaw - rotationStartYaw);
         rotationTargetPitch = clamp(targetPitch, -90.0f, 90.0f);
@@ -1487,10 +1374,8 @@ public class Telly extends Module {
     }
 
     private float quantizeFrom(float origin, float value) {
-        double quantum = sensitivityQuantum.getValue();
-        if (quantum <= 0.0) return value;
-        double steps = Math.round((value - origin) / quantum);
-        return (float) (origin + steps * quantum);
+        double steps = Math.round((value - origin) / SENSITIVITY_QUANTUM);
+        return (float) (origin + steps * SENSITIVITY_QUANTUM);
     }
 
     // =====================================================================
@@ -1630,10 +1515,9 @@ public class Telly extends Module {
             return recordedStrafe;
         }
 
-        double maxVelocity = swayMaxVelocity.getValue();
-        double desiredLaneVelocity = error * swayResponse.getValue() - laneVelocity * swayDamping.getValue();
-        if (desiredLaneVelocity > maxVelocity) desiredLaneVelocity = maxVelocity;
-        if (desiredLaneVelocity < -maxVelocity) desiredLaneVelocity = -maxVelocity;
+        double desiredLaneVelocity = error * 0.42 - laneVelocity * 0.78;
+        if (desiredLaneVelocity > 0.16) desiredLaneVelocity = 0.16;
+        if (desiredLaneVelocity < -0.16) desiredLaneVelocity = -0.16;
         double velocityCorrection = desiredLaneVelocity - laneVelocity;
 
         // 导数按「稳定朝向」算：走位方向确实随 YAW_CURVE 摆动（见曲线处的机制说明），
@@ -1647,11 +1531,10 @@ public class Telly extends Module {
                 : -forward * cos - recordedStrafe * sin;
         double desiredYawOffset = 0.0;
         if (Math.abs(yawLaneDerivative) >= 0.12) {
-            desiredYawOffset = Math.toDegrees(velocityCorrection * swayGain.getValue() / yawLaneDerivative);
+            desiredYawOffset = Math.toDegrees(velocityCorrection * 0.55 / yawLaneDerivative);
         }
-        double yawLimit = swayYawLimit.getValue();
-        if (desiredYawOffset > yawLimit) desiredYawOffset = yawLimit;
-        if (desiredYawOffset < -yawLimit) desiredYawOffset = -yawLimit;
+        if (desiredYawOffset > 2.25) desiredYawOffset = 2.25;
+        if (desiredYawOffset < -2.25) desiredYawOffset = -2.25;
         antiSwayYawOffset = antiSwayYawOffset * 0.60f + (float) desiredYawOffset * 0.40f;
 
         double strafeLaneAxis = travelX != 0 ? sin : cos;
@@ -1995,7 +1878,6 @@ public class Telly extends Module {
         }
 
         if (!isBlockBelowPlayerReplaceable(player)) {
-            logNoPlacement(player, "below-not-replaceable");
             clearCachedCandidate();
             if (useSuppressed) restoreUseToPhysicalState();
             return;
@@ -2018,7 +1900,6 @@ public class Telly extends Module {
         }
 
         if (candidate == null) {
-            logNoPlacement(player, "candidate-null");
             clearCachedCandidate();
             return;
         }
@@ -2083,29 +1964,6 @@ public class Telly extends Module {
         return false;
     }
 
-    /**
-     * 「候选搜索失败」诊断出口 —— 补齐 {@code placementFail} 覆盖不到的盲区。
-     *
-     * <p>当 {@code findBelowPlacement} 返回 null 或前置条件不满足时，{@code attemptPlacement}
-     * **根本不会被调用**，于是所有失败原因日志都不会打印。实测正是这种形态：连续 24 tick
-     * 一条放置都没有（{@code failHist} 只有 1 条），玩家冲出桥端 4 格后踩空。
-     * 这里把「为什么没走到放置」直接打出来。
-     */
-    private void logNoPlacement(LocalPlayer player, String reason) {
-        long now = clientTime();
-        if (now - lastPlacementFailLogAt < 250L) return;
-        lastPlacementFailLogAt = now;
-        dbg("NO-PLACE[" + reason + "]"
-                + " phase=" + cyclePhase
-                + " yaw=" + String.format(Locale.ROOT, "%.2f", player.getYRot())
-                + " pitch=" + String.format(Locale.ROOT, "%.2f", player.getXRot())
-                + " pos=" + fmtPos(player)
-                + " onGround=" + player.onGround()
-                + " belowAir=" + isBlockBelowPlayerReplaceable(player)
-                + " lastPlaced=" + (lastPlacedPos == null ? "null" : java.util.Arrays.toString(lastPlacedPos))
-                + " tick=" + currentClientTick);
-    }
-
     private boolean attemptPlacement(LocalPlayer player, Object[] candidate, ItemStack heldStack) {
         if (candidate == null) return false;
         int[] placedPos = candidatePlacedPos(candidate);
@@ -2165,16 +2023,12 @@ public class Telly extends Module {
         }
 
         lastPlacedPos = placedPos;
-        recentPlacedKeys.add(posKey(placedPos));
-        if (recentPlacedKeys.size() > 128) recentPlacedKeys.clear();
         lastSupportPos = supportPos;
         lastSupportFace = face;
         lastSuccessfulPlaceTick = currentClientTick;
         forceSuppressTick = currentClientTick;
         mc.player.swing(InteractionHand.MAIN_HAND);
         // 落点日志：写进 latest.log（不走聊天栏），用于定位"某一格放错/叠高"。
-        Vec3 placedAtPlayerPos = player.position();
-        double laneNow = travelX != 0 ? placedAtPlayerPos.z : placedAtPlayerPos.x;
         dbg("placed at=" + java.util.Arrays.toString(placedPos)
                 + " support=" + java.util.Arrays.toString(supportPos)
                 + " face=" + face
@@ -2188,13 +2042,6 @@ public class Telly extends Module {
                 + " physSneak=" + mc.options.keyShift.isDown()
                 + " sprint=" + player.isSprinting()
                 + " vH=" + String.format(Locale.ROOT, "%.3f", player.getDeltaMovement().horizontal().length())
-                // 横向漂移诊断：err = lane 基准 − 当前横向坐标（正 = 需往正侧修正）。
-                // 判断口径：
-                //   err 恒定   ⇒ 站位/基准问题（antiSwayLane 取自激活瞬间的玩家坐标）；
-                //   err 逐格增 ⇒ 修正量失效（antiSway 没把误差拉回来）。
-                + " lane=" + String.format(Locale.ROOT, "%.2f", laneNow)
-                + " err=" + String.format(Locale.ROOT, "%+.3f", antiSwayLane - laneNow)
-                + " sway=" + String.format(Locale.ROOT, "%+.2f", antiSwayYawOffset)
                 + " tick=" + currentClientTick);
         return true;
     }
@@ -3653,17 +3500,15 @@ public class Telly extends Module {
     }
 
     /**
-     * 玩家是否已冲到「已铺桥面」之外太远。
-     *
-     * <p>阈值由 {@code Guard / Overshoot Limit} 设置控制（默认 1 —— 用户认可的「能搭很多格子」状态）。
-     * 实测参考：1 ⇒ placedOk 19~60；2 ⇒ 刹车后移；关闭护栏 ⇒ 6~12（4 格就踩空）。
+     * 玩家是否已越过最后一个已放置方块（即站在尚未铺好的区域上）。
+     * 桥的推进方向由 travelX/travelZ 决定，沿该方向超出 1 格即视为冲过头。
      */
     private boolean isPlayerAheadOfBridge(LocalPlayer player) {
         if (player == null || lastPlacedPos == null) return false;
         Vec3 pos = player.position();
         int ahead = (floor(pos.x) - lastPlacedPos[0]) * travelX
                 + (floor(pos.z) - lastPlacedPos[2]) * travelZ;
-        return guardEnabled.getValue() && ahead > overshootLimit.getValue();
+        return ahead > 1;
     }
 
     /** 玩家是否已横向偏离桥的通道（垂直于推进方向超过 1 格）。 */
@@ -3671,7 +3516,7 @@ public class Telly extends Module {
         if (player == null) return false;
         if (travelX == 0 && travelZ == 0) return false;
         double lateral = travelX != 0 ? player.position().z : player.position().x;
-        return guardEnabled.getValue() && Math.abs(lateral - antiSwayLane) > offLaneLimit.getValue();
+        return Math.abs(lateral - antiSwayLane) > 1.0;
     }
 
     /** 调试日志出口：受 Debug Log 设置控制，只写 latest.log，不进聊天栏。 */
