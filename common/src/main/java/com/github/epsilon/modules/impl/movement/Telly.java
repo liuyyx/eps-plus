@@ -163,6 +163,22 @@ public class Telly extends Module {
     private static final double ACTIVATION_HEIGHT_MAX = 0.75;
     private static final float ACTIVATION_YAW_TOLERANCE = 2.0f;
 
+    /*
+     * 激活时把朝向吸附到的「基准角」网格：round((yaw - BASE)/90)*90 + BASE。
+     *
+     * ⚠️ 用 44° 而不是 45°，两个理由：
+     *   1) 45 是整度数，吸附后 BEGIN yaw 会变成 -315.00 / -495.00 这类精确值，真人做不到 ——
+     *      实测那样会被 Intave 报 acting computer-like。44 更像手抖停下来的角度。
+     *   2) 45° 恰好是 calculateTravelDirection 里 rawX = sin - cos 的零点（象限分界），
+     *      浮点抖动会让 travelX/travelZ 在两侧跳；44° 稳稳落在分界同侧，判定稳定。
+     * 激活判据是 45°±2°（ACTIVATION_YAW_TOLERANCE），44° 只差 1°，仍可正常激活。
+     */
+    private static final float ACTIVATION_SNAP_BASE = 44.0f;
+    /** 吸附的最大校正范围（度）：超出说明玩家在主动找位置，不干预。 */
+    private static final float ACTIVATION_SNAP_RANGE = 10.0f;
+    /** 吸附的每 tick 步长（度）：平滑推入而非瞬移。 */
+    private static final float ACTIVATION_SNAP_STEP = 1.0f;
+
     /**
      * 「玩家手动接管」判据：相机相对脚本给的朝向偏了多少度就认为玩家在动视角、让位给他。
      *
@@ -594,6 +610,7 @@ public class Telly extends Module {
                         + " onGround=" + player.onGround());
             }
             if (activationSuppressUse()) setPressed("use", false);
+            aimAtActivationGrid(player);
             if (activationPromptReady() && physicalRightMouseDown()) {
                 // 蹲着 + 对准绿框 + 按住右键 = 直接触发；触发后右键可随意松开。
                 disableSafeWalkForRun();
@@ -610,6 +627,22 @@ public class Telly extends Module {
 
         // 一旦离开「蹲着 + 对准」，计时作废（触发只可能发生在该状态下按住右键的那一刻）。
         clearActivationPrompt();
+    }
+
+    /**
+     * 按住潜行计时期间，把视角平滑推向最近的 {@code ACTIVATION_SNAP_BASE + k·90°} 网格（默认 44°）。
+     *
+     * <p>为什么需要：激活时 {@code baseYaw} 就取这个网格值，它决定桥的走向与整条 21 帧曲线序列。
+     * 触发瞬间若带几度偏差，整轮搭桥都会扛着同一个偏置。
+     *
+     * <p>约束：校正量超过 {@link #ACTIVATION_SNAP_RANGE} 直接放弃（说明玩家在找位置，别扳他）；
+     * 每 tick 最多走 {@link #ACTIVATION_SNAP_STEP} 度，平滑推入而非瞬移。
+     */
+    private void aimAtActivationGrid(LocalPlayer player) {
+        float target = Math.round((player.getYRot() - ACTIVATION_SNAP_BASE) / 90.0f) * 90.0f + ACTIVATION_SNAP_BASE;
+        float delta = tellyWrapAngle(target - player.getYRot());
+        if (Math.abs(delta) > ACTIVATION_SNAP_RANGE || Math.abs(delta) < 0.02f) return;
+        player.setYRot(player.getYRot() + clampFloat(delta, -ACTIVATION_SNAP_STEP, ACTIVATION_SNAP_STEP));
     }
 
     private void clearActivationPrompt() {
@@ -1140,9 +1173,9 @@ public class Telly extends Module {
                 + " onGround=" + player.onGround()
                 + " sneak=" + player.isShiftKeyDown()
                 + " fall=" + String.format(Locale.ROOT, "%.2f", player.fallDistance));
-        // 对齐到最近的 45°+k·90°：触发瞬间的瞄准偏差绝不能固化进 baseYaw，
+        // 对齐到 44° 网格（与按住潜行期间的吸附一致）：触发瞬间的瞄准偏差绝不能固化进 baseYaw，
         // 否则后续每一刻的旋转目标都带同一偏差，桥会越搭越歪（第一格就接不上）。
-        float alignedYaw = Math.round((player.getYRot() - 45.0f) / 90.0f) * 90.0f + 45.0f;
+        float alignedYaw = Math.round((player.getYRot() - ACTIVATION_SNAP_BASE) / 90.0f) * 90.0f + ACTIVATION_SNAP_BASE;
         baseYaw = alignedYaw;
         player.setYRot(alignedYaw);
         setActivationMovementHold(false);
