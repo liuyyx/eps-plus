@@ -155,6 +155,16 @@ public class Telly extends Module {
     private static final double ACTIVATION_HEIGHT_MAX = 0.75;
     private static final float ACTIVATION_YAW_TOLERANCE = 2.0f;
 
+    /**
+     * 「玩家手动接管」判据：相机相对脚本给的朝向偏了多少度就认为玩家在动视角、让位给他。
+     *
+     * <p>⚠️ 这里**有意偏离**脚本原实现。原版门限是 {@code SENSITIVITY_QUANTUM * 0.45 ≈ 0.015°}
+     * 再累积到 25 —— 实测它会把「按住右键+潜行时手指的微小移动」也攒成接管，
+     * 16 轮实测里几乎每一轮都被它提前掐断（placedOk 停在 10~55），表现为「有时成功有时失败」。
+     * 5° 是明显属于人为操作、而手抖达不到的量级。
+     */
+    private static final double MANUAL_TAKEOVER_DEGREES = 5.0;
+
     /** 激活诊断的刷新间隔（毫秒）。 */
     private static final long ACTIVATION_DIAGNOSTICS_INTERVAL_MS = 100L;
 
@@ -992,20 +1002,13 @@ public class Telly extends Module {
 
         double yawInput = Math.abs(tellyWrapAngle(player.getYRot() - expectedYaw));
         double pitchInput = Math.abs(player.getXRot() - expectedPitch);
-        double noiseFloor = SENSITIVITY_QUANTUM * 0.45;
-
-        long elapsed = Math.max(0L, now - takeoverLastFrameAt);
-        takeoverLastFrameAt = now;
-        takeoverAccumulated -= (float) (elapsed * 0.045);
-        if (takeoverAccumulated < 0.0f) takeoverAccumulated = 0.0f;
-        if (yawInput > noiseFloor || pitchInput > noiseFloor) {
-            takeoverAccumulated += (float) (yawInput + pitchInput);
-        }
 
         takeoverCameraYaw = player.getYRot();
         takeoverCameraPitch = player.getXRot();
+        takeoverLastFrameAt = now;
 
-        if (takeoverAccumulated >= 25.0f) {
+        // 见 MANUAL_TAKEOVER_DEGREES 的说明：超过 5° 才判定为玩家接管。
+        if (yawInput > MANUAL_TAKEOVER_DEGREES || pitchInput > MANUAL_TAKEOVER_DEGREES) {
             stopAutomation(true);
             return true;
         }
