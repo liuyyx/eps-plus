@@ -95,16 +95,20 @@ public class Telly extends Module {
     /**
      * 激活时把朝向吸附到的「基准角」网格：{@code round((yaw - 该值)/90)*90 + 该值}。
      *
-     * <p>⚠️ 默认 <b>44</b> 而不是 45，两个理由：
+     * <p>⚠️ 默认 <b>46.5</b>，不是 45。三个理由：
      * <ol>
-     *   <li>45 是整度数，吸附后 {@code BEGIN yaw} 会变成 -315.00 / -495.00 这类精确值，
-     *       真人做不到 —— 实测那样会被 Intave 报 {@code acting computer-like}；
-     *   <li>45° 恰好是 {@code calculateTravelDirection} 里 {@code rawX = sin - cos} 的零点
-     *       （象限分界），浮点抖动会让 travelX/travelZ 在两侧跳。44 稳稳落在同侧。
+     *   <li><b>实测最优</b>：用户实测 46.5 时不会掉（44 会掉），这是最终采用它的直接依据。
+     *   <li><b>躲机器特征</b>：45 是整度数，吸附后 {@code BEGIN yaw} 会变成 -315.00 / -495.00
+     *       这类精确值，真人做不到 —— 实测那样会被 Intave 报 {@code acting computer-like}。
+     *       46.5 是「像手抖停在的角度」。
+     *   <li><b>避开象限零点</b>：45° 恰好是 {@code calculateTravelDirection} 里
+     *       {@code rawX = sin - cos} 的零点（分界），浮点抖动会让 travelX/travelZ 两侧跳。
+     *       注意 44°（rawX ≈ -0.024）与 46.5°（rawX ≈ +0.037）落在分界<b>两侧</b>，
+     *       桥的走向轴不同 —— 这正是两者实测表现不同的原因。
      * </ol>
      * 激活判据是 45°±2°，滑块范围 42~48 都还在容差内。
      */
-    private final DoubleSetting snapBase = doubleSetting("Snap Degrees", 44.0, 42.0, 48.0, 0.1);
+    private final DoubleSetting snapBase = doubleSetting("Snap Degrees", 46.5, 42.0, 48.0, 0.1);
 
     private final Supplier<TextRenderer> promptRenderer = Suppliers.memoize(() -> TextRenderer.create(128 * 1024));
 
@@ -637,7 +641,7 @@ public class Telly extends Module {
     }
 
     /**
-     * 按住潜行计时期间，把视角平滑推向最近的「Snap Degrees 网格」（默认 44°+k·90°）。
+     * 按住潜行计时期间，把视角平滑推向最近的「Snap Degrees 网格」（默认 46.5°+k·90°）。
      *
      * <p>为什么需要：激活时 {@code baseYaw} 就取这个网格值，它决定桥的走向与整条 21 帧曲线序列。
      * 触发瞬间若带几度偏差，整轮搭桥都会扛着同一个偏置。
@@ -1182,8 +1186,8 @@ public class Telly extends Module {
                 + " onGround=" + player.onGround()
                 + " sneak=" + player.isShiftKeyDown()
                 + " fall=" + String.format(Locale.ROOT, "%.2f", player.fallDistance));
-        // 对齐到 44° 网格（与按住潜行期间的吸附一致）：触发瞬间的瞄准偏差绝不能固化进 baseYaw，
-        // 否则后续每一刻的旋转目标都带同一偏差，桥会越搭越歪（第一格就接不上）。
+        // 对齐到 Snap Degrees 网格（默认 46.5°，与按住潜行期间的吸附一致）：触发瞬间的瞄准偏差
+        // 绝不能固化进 baseYaw，否则后续每一刻的旋转目标都带同一偏差，桥会越搭越歪（第一格就接不上）。
         float alignBase = snapBase.getValue().floatValue();
         float alignedYaw = Math.round((player.getYRot() - alignBase) / 90.0f) * 90.0f + alignBase;
         baseYaw = alignedYaw;
