@@ -1890,7 +1890,8 @@
         "setup inertia ticks": "起跳前惯性刻数",
         "snap range": "吸附范围",
         "snap step": "吸附步长",
-        "takeover degrees": "接管判定角度"
+        "takeover degrees": "接管判定角度",
+        "reset defaults": "恢复默认"
       },
       "scaffold": {
         "_value": "自动搭路",

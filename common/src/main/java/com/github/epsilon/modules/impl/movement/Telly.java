@@ -17,8 +17,10 @@ import com.github.epsilon.managers.ModuleManager;
 import com.github.epsilon.managers.NotificationManager;
 import com.github.epsilon.modules.Category;
 import com.github.epsilon.modules.Module;
+import com.github.epsilon.settings.Setting;
 import com.github.epsilon.settings.SettingGroup;
 import com.github.epsilon.settings.impl.BoolSetting;
+import com.github.epsilon.settings.impl.ButtonSetting;
 import com.github.epsilon.settings.impl.DoubleSetting;
 import com.github.epsilon.settings.impl.IntSetting;
 import com.github.epsilon.utils.client.KeybindUtils;
@@ -154,6 +156,19 @@ public class Telly extends Module {
     private final DoubleSetting snapStep = doubleSetting("Snap Step", 1.0, 0.1, 10.0, 0.1).group(sgDevAct);
     /** 相机偏离脚本朝向多少度就判定为玩家接管。脚本原值 ≈0.015（累积到 25）；5 是实测值。 */
     private final DoubleSetting takeoverDegrees = doubleSetting("Takeover Degrees", 5.0, 1.0, 45.0, 0.5).group(sgDevAct);
+
+    /**
+     * Dev Tuning 调乱了一键还原：遍历所有设置调用 {@link Setting#reset()}。
+     *
+     * <p>{@code reset()} 直接把 value 置回 defaultValue（不触发 onChanged）—— 对本模块这些
+     * 纯数值设置来说没有副作用需求，够用。按钮自身也在 settings 列表里，跳过它。
+     */
+    private final ButtonSetting resetDefaults = buttonSetting("Reset Defaults", () -> {
+        for (Setting<?> setting : List.copyOf(settings)) {
+            if (!(setting instanceof ButtonSetting)) setting.reset();
+        }
+        NotificationManager.INSTANCE.info("Telly", "Settings reset to defaults");
+    });
 
     private final Supplier<TextRenderer> promptRenderer = Suppliers.memoize(() -> TextRenderer.create(128 * 1024));
 
