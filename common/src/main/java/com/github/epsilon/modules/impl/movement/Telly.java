@@ -173,6 +173,15 @@ public class Telly extends Module {
      */
     private static final double MANUAL_TAKEOVER_DEGREES = 5.0;
 
+    /**
+     * 按住潜行计时期间，把视角吸向 {@code 45°+k·90°} 网格的最大校正范围（度）与每 tick 步长（度）。
+     *
+     * <p>超出 {@code RANGE} 说明玩家正在主动找位置，不干预；用 {@code STEP} 限速是为了平滑推入，
+     * 而不是瞬间把视角扳过去。
+     */
+    private static final float ACTIVATION_SNAP_RANGE = 10.0f;
+    private static final float ACTIVATION_SNAP_STEP = 1.0f;
+
     /** 激活诊断的刷新间隔（毫秒）。 */
     private static final long ACTIVATION_DIAGNOSTICS_INTERVAL_MS = 100L;
 
@@ -204,6 +213,14 @@ public class Telly extends Module {
      * placedOk 从 105/137 崩到 9~28 —— **摆动是够取候选的手段，不能锁死。**
      */
     private final Map<String, Integer> placementFailCounts = new LinkedHashMap<>();
+    /**
+     * 最近成功放置过的格子，用于**精确**判定「服务端吞方块」。
+     *
+     * <p>原先的条件只有「在 lane 上 + 包内是空气」，任何相邻格更新都会命中 —— 单机实测刷出
+     * 6 条全是噪声（{@code name=air}，那格本来就没放过东西），据此得出的「区块边界吞方块」
+     * 结论不成立。现在只在**我们真的放过、又被改回空气**时才报。
+     */
+    private final Set<String> recentPlacedKeys = new HashSet<>();
     private boolean runDiagBelowAir = false;
     private float runDiagSway = 0f;
     private float runDiagTargetPitch = 0f;
@@ -437,15 +454,13 @@ public class Telly extends Module {
         boolean jumping = phase >= 1 && phase <= 19;
         boolean use = phase >= 7;
 
-        // 保险①：横向不能跑歪。telly 是沿一条通道后退搭桥，垂直于推进方向漂出 1 格
-        // 就会踩到桥外（用户实测：掉下去是「跑歪了」，不是纵向冲太快）。
-        // 保险②：纵向不能冲过头 —— 玩家不能站到"还没铺好的区域"上。
-        // 两种情况本 tick 都站定等桥/姿态对齐，旋转与放置照常。
-        if (isPlayerOffLane(mc.player) || isPlayerAheadOfBridge(mc.player)) {
-            applyMovement(0.0f, 0.0f, false, false);
-        } else {
-            applyMovement(FORWARD_CURVE[phase], strafe, jumping, sprinting);
-        }
+        // ⚠️ 这里**不加**「超前/偏航就归零移动」的护栏（曾经有，已移除）。
+        //
+        // 实测依据：桥沿推进方向铺、玩家也沿该方向走，因此「玩家的横向坐标超前 lastPlacedPos」
+        // 是本设计的常态 —— 日志里稳定超前 2.0~2.5 格，且每一轮都要触发 5~8 次。
+        // 那个判据（超前 > 1 格即归零）等于一直在掐掉前进输入，打断了「边退边搭」的节奏，
+        // placedOk 因此从 100+ 掉到 19~60，而掉落（fall=7.52）依旧没能防住。
+        applyMovement(FORWARD_CURVE[phase], strafe, jumping, sprinting);
         applyUse(use);
 
         int nextPhase = (phase + 1) % YAW_CURVE.length;
@@ -594,6 +609,7 @@ public class Telly extends Module {
                         + " onGround=" + player.onGround());
             }
             if (activationSuppressUse()) setPressed("use", false);
+            aimAtActivationGrid(player);
             if (activationPromptReady() && physicalRightMouseDown()) {
                 // 蹲着 + 对准绿框 + 按住右键 = 直接触发；触发后右键可随意松开。
                 disableSafeWalkForRun();
@@ -610,6 +626,23 @@ public class Telly extends Module {
 
         // 一旦离开「蹲着 + 对准」，计时作废（触发只可能发生在该状态下按住右键的那一刻）。
         clearActivationPrompt();
+    }
+
+    /**
+     * 按住潜行计时期间，把视角平滑推向最近的 {@code 45°+k·90°} 网格。
+     *
+     * <p>为什么需要：激活时 {@code baseYaw} 就取这个网格值，它决定桥的走向与整条 21 帧曲线序列。
+     * 触发瞬间若带几度偏差，整轮搭桥都会扛着同一个偏置，站位余量随之不对称 ——
+     * 用户实测「瞄准偏一侧就接不上、偏另一侧就不掉」正是这个表现。
+     *
+     * <p>约束：校正量超过 {@link #ACTIVATION_SNAP_RANGE} 直接放弃（说明玩家在找位置，别扳他）；
+     * 每 tick 最多走 {@link #ACTIVATION_SNAP_STEP} 度，平滑推入而非瞬移。
+     */
+    private void aimAtActivationGrid(LocalPlayer player) {
+        float target = Math.round((player.getYRot() - 45.0f) / 90.0f) * 90.0f + 45.0f;
+        float delta = tellyWrapAngle(target - player.getYRot());
+        if (Math.abs(delta) > ACTIVATION_SNAP_RANGE || Math.abs(delta) < 0.02f) return;
+        player.setYRot(player.getYRot() + clampFloat(delta, -ACTIVATION_SNAP_STEP, ACTIVATION_SNAP_STEP));
     }
 
     private void clearActivationPrompt() {
@@ -1098,7 +1131,7 @@ public class Telly extends Module {
             boolean becamePassable = changedState == null
                     || changedState.isAir()
                     || changedState.canBeReplaced();
-            if (running && becamePassable && isStraightTellyTarget(changed)) {
+            if (running && becamePassable && recentPlacedKeys.contains(posKey(changed))) {
                 dbg("SERVER-SWALLOW at=" + java.util.Arrays.toString(changed)
                         + " name=" + blockNameAt(changed[0], changed[1], changed[2])
                         + " tick=" + currentClientTick);
@@ -1147,6 +1180,12 @@ public class Telly extends Module {
         player.setYRot(alignedYaw);
         setActivationMovementHold(false);
         calculateTravelDirection(baseYaw);
+        // ⚠️ 这里必须取[玩家精确坐标]，不是方块中心 —— 看似"偏差 0.5 格"像 bug，其实是设计。
+        //
+        // 曾改成 Math.floor(rawLane) + 0.5 让玩家居中：antiSway 的误差确实收敛到 0 了
+        // （落点日志 err 从 ±0.5 变成 ≈0），但 placedOk 立刻从 100+ 掉到 19/37 ——
+        // 因为 telly 的本质是「站在方块边缘向后搭」，贴着边缘时下一格才在够得着的范围内，
+        // 居中等于把放置距离拉远半格，桥就接不上。
         antiSwayLane = travelX != 0 ? player.position().z : player.position().x;
         antiSwayYawOffset = 0.0f;
         antiSwayTapUsed = false;
@@ -1878,6 +1917,7 @@ public class Telly extends Module {
         }
 
         if (!isBlockBelowPlayerReplaceable(player)) {
+            logNoPlacement(player, "below-not-replaceable");
             clearCachedCandidate();
             if (useSuppressed) restoreUseToPhysicalState();
             return;
@@ -1900,6 +1940,7 @@ public class Telly extends Module {
         }
 
         if (candidate == null) {
+            logNoPlacement(player, "candidate-null");
             clearCachedCandidate();
             return;
         }
@@ -1964,6 +2005,29 @@ public class Telly extends Module {
         return false;
     }
 
+    /**
+     * 「候选搜索失败」诊断出口 —— 补齐 {@code placementFail} 覆盖不到的盲区。
+     *
+     * <p>当 {@code findBelowPlacement} 返回 null 或前置条件不满足时，{@code attemptPlacement}
+     * **根本不会被调用**，于是所有失败原因日志都不会打印。实测正是这种形态：连续 24 tick
+     * 一条放置都没有（{@code failHist} 只有 1 条），玩家冲出桥端 4 格后踩空。
+     * 这里把「为什么没走到放置」直接打出来。
+     */
+    private void logNoPlacement(LocalPlayer player, String reason) {
+        long now = clientTime();
+        if (now - lastPlacementFailLogAt < 250L) return;
+        lastPlacementFailLogAt = now;
+        dbg("NO-PLACE[" + reason + "]"
+                + " phase=" + cyclePhase
+                + " yaw=" + String.format(Locale.ROOT, "%.2f", player.getYRot())
+                + " pitch=" + String.format(Locale.ROOT, "%.2f", player.getXRot())
+                + " pos=" + fmtPos(player)
+                + " onGround=" + player.onGround()
+                + " belowAir=" + isBlockBelowPlayerReplaceable(player)
+                + " lastPlaced=" + (lastPlacedPos == null ? "null" : java.util.Arrays.toString(lastPlacedPos))
+                + " tick=" + currentClientTick);
+    }
+
     private boolean attemptPlacement(LocalPlayer player, Object[] candidate, ItemStack heldStack) {
         if (candidate == null) return false;
         int[] placedPos = candidatePlacedPos(candidate);
@@ -2023,6 +2087,8 @@ public class Telly extends Module {
         }
 
         lastPlacedPos = placedPos;
+        recentPlacedKeys.add(posKey(placedPos));
+        if (recentPlacedKeys.size() > 128) recentPlacedKeys.clear();
         lastSupportPos = supportPos;
         lastSupportFace = face;
         lastSuccessfulPlaceTick = currentClientTick;
@@ -3508,25 +3574,11 @@ public class Telly extends Module {
         return String.format(Locale.ROOT, "%.2f,%.2f,%.2f", pos.x, pos.y, pos.z);
     }
 
-    /**
-     * 玩家是否已越过最后一个已放置方块（即站在尚未铺好的区域上）。
-     * 桥的推进方向由 travelX/travelZ 决定，沿该方向超出 1 格即视为冲过头。
-     */
-    private boolean isPlayerAheadOfBridge(LocalPlayer player) {
-        if (player == null || lastPlacedPos == null) return false;
-        Vec3 pos = player.position();
-        int ahead = (floor(pos.x) - lastPlacedPos[0]) * travelX
-                + (floor(pos.z) - lastPlacedPos[2]) * travelZ;
-        return ahead > 1;
-    }
-
-    /** 玩家是否已横向偏离桥的通道（垂直于推进方向超过 1 格）。 */
-    private boolean isPlayerOffLane(LocalPlayer player) {
-        if (player == null) return false;
-        if (travelX == 0 && travelZ == 0) return false;
-        double lateral = travelX != 0 ? player.position().z : player.position().x;
-        return Math.abs(lateral - antiSwayLane) > 1.0;
-    }
+    // 原先这里有两个护栏：isPlayerAheadOfBridge（超前 lastPlacedPos > 1 格即归零移动）与
+    // isPlayerOffLane（横向偏离 > 1 格即归零）。**已删除**，原因见 onPostPlayerInput 处的说明：
+    // 桥沿推进方向铺、玩家也沿该方向走，「超前 lastPlacedPos」是本设计的常态
+    // （实测稳定 2.0~2.5 格、每轮触发 5~8 次），该判据等于持续掐掉前进输入 ——
+    // placedOk 被从 100+ 压到 19~60，而掉落（fall=7.52）依旧没能防住。
 
     /** 调试日志出口：受 Debug Log 设置控制，只写 latest.log，不进聊天栏。 */
     private void dbg(String message) {
