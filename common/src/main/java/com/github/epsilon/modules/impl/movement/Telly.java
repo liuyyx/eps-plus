@@ -2029,6 +2029,8 @@ public class Telly extends Module {
         forceSuppressTick = currentClientTick;
         mc.player.swing(InteractionHand.MAIN_HAND);
         // 落点日志：写进 latest.log（不走聊天栏），用于定位"某一格放错/叠高"。
+        Vec3 placedAtPlayerPos = player.position();
+        double laneNow = travelX != 0 ? placedAtPlayerPos.z : placedAtPlayerPos.x;
         dbg("placed at=" + java.util.Arrays.toString(placedPos)
                 + " support=" + java.util.Arrays.toString(supportPos)
                 + " face=" + face
@@ -2042,6 +2044,13 @@ public class Telly extends Module {
                 + " physSneak=" + mc.options.keyShift.isDown()
                 + " sprint=" + player.isSprinting()
                 + " vH=" + String.format(Locale.ROOT, "%.3f", player.getDeltaMovement().horizontal().length())
+                // 横向漂移诊断：err = lane 基准 − 当前横向坐标（正 = 需往正侧修正）。
+                // 判断口径：
+                //   err 恒定   ⇒ 站位/基准问题（antiSwayLane 取自激活瞬间的玩家坐标）；
+                //   err 逐格增 ⇒ 修正量失效（antiSway 没把误差拉回来）。
+                + " lane=" + String.format(Locale.ROOT, "%.2f", laneNow)
+                + " err=" + String.format(Locale.ROOT, "%+.3f", antiSwayLane - laneNow)
+                + " sway=" + String.format(Locale.ROOT, "%+.2f", antiSwayYawOffset)
                 + " tick=" + currentClientTick);
         return true;
     }
