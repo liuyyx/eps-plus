@@ -454,13 +454,14 @@ public class Telly extends Module {
         boolean jumping = phase >= 1 && phase <= 19;
         boolean use = phase >= 7;
 
-        // ⚠️ 这里**不加**「超前/偏航就归零移动」的护栏（曾经有，已移除）。
-        //
-        // 实测依据：桥沿推进方向铺、玩家也沿该方向走，因此「玩家的横向坐标超前 lastPlacedPos」
-        // 是本设计的常态 —— 日志里稳定超前 2.0~2.5 格，且每一轮都要触发 5~8 次。
-        // 那个判据（超前 > 1 格即归零）等于一直在掐掉前进输入，打断了「边退边搭」的节奏，
-        // placedOk 因此从 100+ 掉到 19~60，而掉落（fall=7.52）依旧没能防住。
-        applyMovement(FORWARD_CURVE[phase], strafe, jumping, sprinting);
+        // 护栏：玩家冲到「已铺桥面」之外太远时归零移动，等桥补齐。
+        // 阈值取 2 —— 实测正常超前 2.0~2.5、掉落发生在 2.5+，所以刹车点落在中间。
+        // 阈值 1 会过度刹车（placedOk 19~60），完全移除则会 6~12 就踩空。详见方法注释。
+        if (isPlayerOffLane(mc.player) || isPlayerAheadOfBridge(mc.player)) {
+            applyMovement(0.0f, 0.0f, false, false);
+        } else {
+            applyMovement(FORWARD_CURVE[phase], strafe, jumping, sprinting);
+        }
         applyUse(use);
 
         int nextPhase = (phase + 1) % YAW_CURVE.length;
@@ -3574,11 +3575,33 @@ public class Telly extends Module {
         return String.format(Locale.ROOT, "%.2f,%.2f,%.2f", pos.x, pos.y, pos.z);
     }
 
-    // 原先这里有两个护栏：isPlayerAheadOfBridge（超前 lastPlacedPos > 1 格即归零移动）与
-    // isPlayerOffLane（横向偏离 > 1 格即归零）。**已删除**，原因见 onPostPlayerInput 处的说明：
-    // 桥沿推进方向铺、玩家也沿该方向走，「超前 lastPlacedPos」是本设计的常态
-    // （实测稳定 2.0~2.5 格、每轮触发 5~8 次），该判据等于持续掐掉前进输入 ——
-    // placedOk 被从 100+ 压到 19~60，而掉落（fall=7.52）依旧没能防住。
+    /**
+     * 玩家是否已冲到「已铺桥面」之外太远。
+     *
+     * <p>⚠️ 阈值是实测调出来的，别改回 1、也别放开到 3：
+     * <ul>
+     *   <li>玩家朝桥的前沿走，正常运行时稳定超前 {@code lastPlacedPos} <b>2.0~2.5</b> 格；
+     *   <li>阈值 <b>1</b> ⇒ 持续掐前进输入，placedOk 只有 19~60；
+     *   <li>完全无护栏 ⇒ 超前继续扩大，placedOk 掉到 <b>6~12</b>（4 格就踩空）；
+     *   <li>阈值 <b>3</b> ⇒ 正常 2.5 已进入危险区却仍放行，等于变相无护栏。
+     * </ul>
+     * 取 <b>2</b>：2.0 以下全放行，一旦逼近 2.5 的掉落区就刹车等桥补齐。
+     */
+    private boolean isPlayerAheadOfBridge(LocalPlayer player) {
+        if (player == null || lastPlacedPos == null) return false;
+        Vec3 pos = player.position();
+        int ahead = (floor(pos.x) - lastPlacedPos[0]) * travelX
+                + (floor(pos.z) - lastPlacedPos[2]) * travelZ;
+        return ahead > 2;
+    }
+
+    /** 玩家是否已横向偏离桥的通道（垂直于推进方向超过 1 格）。 */
+    private boolean isPlayerOffLane(LocalPlayer player) {
+        if (player == null) return false;
+        if (travelX == 0 && travelZ == 0) return false;
+        double lateral = travelX != 0 ? player.position().z : player.position().x;
+        return Math.abs(lateral - antiSwayLane) > 1.0;
+    }
 
     /** 调试日志出口：受 Debug Log 设置控制，只写 latest.log，不进聊天栏。 */
     private void dbg(String message) {
