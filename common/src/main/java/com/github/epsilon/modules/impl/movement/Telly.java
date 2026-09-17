@@ -150,6 +150,26 @@ public class Telly extends Module {
     /** setup 阶段起跳前的惯性 tick 数。脚本原值 6；砍到 2 更容易在边缘踩空。 */
     private final IntSetting setupInertiaTicks = intSetting("Setup Inertia Ticks", 6, 0, 12, 1).group(sgDevPlace);
 
+    /**
+     * 激活时把朝向吸附到的「基准角」网格：{@code round((yaw - base)/90)*90 + base}。
+     *
+     * <p>⚠️ 默认 <b>44°</b> 而不是 45°，两个理由：
+     * <ol>
+     *   <li><b>躲机器特征</b>：45 是整度数，吸附后 {@code BEGIN yaw} 会变成 -315.00 / -495.00 这类
+     *       精确值，真人做不到 —— 实测那样会被 Intave 报 {@code acting computer-like #1}。
+     *       44° 是「像手抖停在的角度」。</li>
+     *   <li><b>稳定 travel 判定</b>：45° 恰好是 {@code calculateTravelDirection} 里
+     *       {@code rawX = sin - cos} 的零点（象限分界），浮点抖动会让 travelX/travelZ 在两侧跳。
+     *       44° 落在分界同侧，判定稳定。</li>
+     * </ol>
+     * 注意激活判据 {@code ACTIVATION_YAW_TOLERANCE} 是 45°±2°，44° 只差 1°，仍可正常激活。
+     */
+    private final DoubleSetting snapDegrees = doubleSetting("Snap Degrees", 44.0, 0.0, 90.0, 0.5).group(sgDevAct);
+    /** 按住潜行计时期间，把视角吸向上述网格的最大校正范围（度）。 */
+    private final DoubleSetting snapRange = doubleSetting("Snap Range", 10.0, 0.0, 45.0, 0.5).group(sgDevAct);
+    /** 上述校正的每 tick 步长（度），保证平滑推入而非瞬移。 */
+    private final DoubleSetting snapStep = doubleSetting("Snap Step", 1.0, 0.1, 10.0, 0.1).group(sgDevAct);
+
     /** 相机偏离脚本朝向多少度就判定为玩家接管。脚本原值 ≈0.015（累积到 25）；5 是实测值。 */
     private final DoubleSetting takeoverDegrees = doubleSetting("Takeover Degrees", 5.0, 1.0, 45.0, 0.5).group(sgDevAct);
 
@@ -656,6 +676,7 @@ public class Telly extends Module {
                         + " onGround=" + player.onGround());
             }
             if (activationSuppressUse()) setPressed("use", false);
+            aimAtActivationGrid(player);
             if (activationPromptReady() && physicalRightMouseDown()) {
                 // 蹲着 + 对准绿框 + 按住右键 = 直接触发；触发后右键可随意松开。
                 disableSafeWalkForRun();
@@ -674,11 +695,24 @@ public class Telly extends Module {
         clearActivationPrompt();
     }
 
-    // 原先这里有个 aimAtActivationGrid：按住潜行期间把视角平滑吸向 45°+k·90° 网格。
-    // **已移除**（用户要求回到「能搭很多格子、只是慢慢偏」的那个状态）。移除原因：
-    // 它会把朝向对齐成精确的整度数（BEGIN yaw 变成 -315.00 / -495.00 这类值），
-    // 真人不可能每次都停在整度数上 —— 实测随后 Intave 报了 `acting computer-like #1`。
-    // 触发后 beginAutomation 里的那一次 45° 对齐仍然保留（只做一次，不影响观感特征）。
+    /**
+     * 按住潜行计时期间，把视角平滑推向「{@code Snap Degrees} 网格」（默认 44°+k·90°）。
+     *
+     * <p>为什么需要：激活时 {@code baseYaw} 就取这个网格值，它决定桥的走向与整条 21 帧曲线序列。
+     * 触发瞬间若带几度偏差，整轮搭桥都会扛着同一个偏置。
+     *
+     * <p>约束：校正量超过 {@code Snap Range} 直接放弃（说明玩家在找位置，别扳他）；
+     * 每 tick 最多走 {@code Snap Step} 度，平滑推入而非瞬移。
+     */
+    private void aimAtActivationGrid(LocalPlayer player) {
+        float base = snapDegrees.getValue().floatValue();
+        float target = Math.round((player.getYRot() - base) / 90.0f) * 90.0f + base;
+        float delta = tellyWrapAngle(target - player.getYRot());
+        float snapRangeValue = snapRange.getValue().floatValue();
+        float snapStepValue = snapStep.getValue().floatValue();
+        if (Math.abs(delta) > snapRangeValue || Math.abs(delta) < 0.02f) return;
+        player.setYRot(player.getYRot() + clampFloat(delta, -snapStepValue, snapStepValue));
+    }
 
     private void clearActivationPrompt() {
         rememberActivationPromptColor();
@@ -1209,9 +1243,12 @@ public class Telly extends Module {
                 + " onGround=" + player.onGround()
                 + " sneak=" + player.isShiftKeyDown()
                 + " fall=" + String.format(Locale.ROOT, "%.2f", player.fallDistance));
-        // 对齐到最近的 45°+k·90°：触发瞬间的瞄准偏差绝不能固化进 baseYaw，
-        // 否则后续每一刻的旋转目标都带同一偏差，桥会越搭越歪（第一格就接不上）。
-        float alignedYaw = Math.round((player.getYRot() - 45.0f) / 90.0f) * 90.0f + 45.0f;
+        // 对齐到「Snap Degrees」网格（默认 44°+k·90°），与按住潜行期间的吸附保持一致：
+        // 触发瞬间的瞄准偏差绝不能固化进 baseYaw，否则每一刻的旋转目标都带同一偏差，桥会越搭越歪。
+        // 用 44 而非 45 —— 既躲开整度数特征（Intave 的 computer-like），又避开 45° 这个
+        // calculateTravelDirection 的象限零点（浮点抖动会让 travelX/travelZ 两侧跳）。
+        float alignBase = snapDegrees.getValue().floatValue();
+        float alignedYaw = Math.round((player.getYRot() - alignBase) / 90.0f) * 90.0f + alignBase;
         baseYaw = alignedYaw;
         player.setYRot(alignedYaw);
         setActivationMovementHold(false);
