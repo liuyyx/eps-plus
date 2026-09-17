@@ -125,8 +125,8 @@ public class ModuleManager {
         addModule(Strafe.INSTANCE);
         addModule(Stuck.INSTANCE);
         addModule(TargetStrafe.INSTANCE);
-        addModule(Velocity.INSTANCE);
         addModule(Telly.INSTANCE);
+        addModule(Velocity.INSTANCE);
 
         // Render
         addModule(KillEffect.INSTANCE);

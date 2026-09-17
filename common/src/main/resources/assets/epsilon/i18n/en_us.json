@@ -1864,6 +1864,14 @@
         "require press": "Require Press",
         "blocks only": "Blocks Only"
       },
+      "telly": {
+        "_value": "Telly",
+        "auto swap": "Auto Swap",
+        "disable safewalk": "Disable SafeWalk",
+        "show activation hitbox": "Show Activation Hitbox",
+        "print": "Print",
+        "debug log": "Debug Log"
+      },
       "scaffold": {
         "_value": "Scaffold",
         "blacklisted blocks": "Blacklisted Blocks",
@@ -1989,17 +1997,6 @@
         "swing hand": "Swing Hand",
         "delay ticks": "Delay Ticks",
         "jump reset": "Jump Reset"
-      },
-      "telly": {
-        "_value": "Telly",
-        "auto swap": "Auto Swap",
-        "telly ticks": "Telly Ticks",
-        "forward speed": "Forward Speed",
-        "back speed": "Back Speed",
-        "place speed": "Place Speed",
-        "place delay": "Place Delay",
-        "swing": "Swing",
-        "move fix": "Move Fix"
       },
       "kill effect": {
         "_value": "Kill Effect",

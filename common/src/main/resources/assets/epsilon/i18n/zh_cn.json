@@ -1864,6 +1864,14 @@
         "require press": "需要按住使用键",
         "blocks only": "仅手持方块"
       },
+      "telly": {
+        "_value": "Telly桥",
+        "auto swap": "自动切换",
+        "disable safewalk": "禁用 SafeWalk",
+        "show activation hitbox": "显示激活命中框",
+        "print": "状态打印",
+        "debug log": "调试日志"
+      },
       "scaffold": {
         "_value": "自动搭路",
         "blacklisted blocks": "黑名单方块",
@@ -1989,17 +1997,6 @@
         "swing hand": "挥手",
         "delay ticks": "延迟刻数",
         "jump reset": "跳跃重置"
-      },
-      "telly": {
-        "_value": "Telly桥",
-        "auto swap": "自动切换",
-        "telly ticks": "Telly刻数",
-        "forward speed": "起跳转速",
-        "back speed": "回正转速",
-        "place speed": "放置转速",
-        "place delay": "放置延迟",
-        "swing": "挥手",
-        "move fix": "移动修正"
       },
       "kill effect": {
         "_value": "击杀特效",
