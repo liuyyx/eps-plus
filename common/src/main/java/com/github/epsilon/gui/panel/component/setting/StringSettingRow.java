@@ -72,7 +72,7 @@ public class StringSettingRow extends SettingRow<StringSetting> {
 
     @Override
     public boolean mouseClicked(UiRect bounds, MouseButtonEvent event, boolean isDoubleClick) {
-        if (event.button() != 0) {
+        if (event.button() != InputConstants.MOUSE_BUTTON_LEFT) {
             return false;
         }
         UiRect fieldBounds = getFieldBounds(bounds);
@@ -420,7 +420,7 @@ public class StringSettingRow extends SettingRow<StringSetting> {
     }
 
     private boolean isControlDown() {
-        return InputConstants.isKeyDown(mc.getWindow(), 341) || InputConstants.isKeyDown(mc.getWindow(), 345);
+        return InputConstants.isKeyDown(InputConstants.KEY_LCONTROL) || InputConstants.isKeyDown(InputConstants.KEY_RCONTROL);
     }
 
     private TextRenderer textMetrics() {

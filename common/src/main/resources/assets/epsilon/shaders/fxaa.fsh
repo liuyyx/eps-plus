@@ -6,7 +6,7 @@ layout(std140) uniform FxaaInfo {
     vec4 ScreenSize;
 };
 
-in vec2 texCoord;
+layout(location = 0) in vec2 texCoord;
 
 layout(location = 0) out vec4 fragColor;
 

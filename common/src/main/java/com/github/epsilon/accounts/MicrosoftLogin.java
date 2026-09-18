@@ -1,15 +1,16 @@
 package com.github.epsilon.accounts;
 
+import com.mojang.blaze3d.Blaze3D;
 import com.github.epsilon.Constants;
 import com.github.epsilon.utils.network.Http;
 import com.google.gson.annotations.SerializedName;
 import com.mojang.datafixers.util.Pair;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
-import net.minecraft.util.Util;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.net.URI;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
 import java.nio.charset.StandardCharsets;
@@ -54,7 +55,7 @@ public class MicrosoftLogin {
 
         startServer();
         String url = "https://login.live.com/oauth20_authorize.srf?client_id=" + CLIENT_ID + "&response_type=code&redirect_uri=http://127.0.0.1:" + PORT + "&scope=XboxLive.signin%20offline_access&prompt=select_account";
-        Util.getPlatform().openUri(url);
+        Blaze3D.openUri(URI.create(url));
 
         return url;
     }

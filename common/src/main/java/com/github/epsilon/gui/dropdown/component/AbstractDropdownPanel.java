@@ -1,5 +1,6 @@
 package com.github.epsilon.gui.dropdown.component;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import com.github.epsilon.assets.i18n.TranslateComponent;
 import com.github.epsilon.graphics.text.StaticFontLoader;
 import com.github.epsilon.gui.dropdown.DropdownScreen;
@@ -169,14 +170,14 @@ public abstract class AbstractDropdownPanel implements DropdownPanel {
         updateScroll(cachedContentHeight, cachedVisibleContentHeight, false);
 
         if (isHeaderHovered(mouseX, mouseY)) {
-            if (button == 0) {
+            if (button == InputConstants.MOUSE_BUTTON_LEFT) {
                 dragging = true;
                 dragOffsetX = (float) (x - mouseX);
                 dragOffsetY = (float) (y - mouseY);
                 DropdownScreen.INSTANCE.react(ReisaDropdownCompanion.Action.DRAG);
                 return true;
             }
-            if (button == 1) {
+            if (button == InputConstants.MOUSE_BUTTON_RIGHT) {
                 opened = !opened;
                 DropdownScreen.INSTANCE.react(opened
                         ? ReisaDropdownCompanion.Action.PANEL_OPEN
@@ -185,7 +186,7 @@ public abstract class AbstractDropdownPanel implements DropdownPanel {
             }
         }
 
-        if (button == 0 && scrollBar.mouseClicked(mouseX, mouseY, getScrollbarViewport(), scroll, maxScroll, cachedContentHeight)) {
+        if (button == InputConstants.MOUSE_BUTTON_LEFT && scrollBar.mouseClicked(mouseX, mouseY, getScrollbarViewport(), scroll, maxScroll, cachedContentHeight)) {
             float newScroll = scrollBar.mouseDragged(mouseY, getScrollbarViewport(), maxScroll, cachedContentHeight);
             if (newScroll >= 0.0f) {
                 setScrollImmediate(newScroll);
@@ -202,10 +203,10 @@ public abstract class AbstractDropdownPanel implements DropdownPanel {
 
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
-        if (button == 0 && scrollBar.mouseReleased()) {
+        if (button == InputConstants.MOUSE_BUTTON_LEFT && scrollBar.mouseReleased()) {
             return true;
         }
-        if (button == 0 && dragging) {
+        if (button == InputConstants.MOUSE_BUTTON_LEFT && dragging) {
             dragging = false;
             return true;
         }

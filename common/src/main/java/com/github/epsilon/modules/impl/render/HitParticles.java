@@ -9,11 +9,11 @@ import com.github.epsilon.modules.Category;
 import com.github.epsilon.modules.Module;
 import com.github.epsilon.settings.impl.*;
 import com.github.epsilon.utils.math.MathUtils;
-import com.mojang.blaze3d.pipeline.BlendFunction;
-import com.mojang.blaze3d.pipeline.ColorTargetState;
-import com.mojang.blaze3d.pipeline.DepthStencilState;
-import com.mojang.blaze3d.pipeline.RenderPipeline;
-import com.mojang.blaze3d.platform.CompareOp;
+import com.mojang.renderpearl.api.pipeline.BlendFunction;
+import com.mojang.renderpearl.api.pipeline.ColorTargetState;
+import com.mojang.renderpearl.api.pipeline.DepthStencilState;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
+import com.mojang.renderpearl.api.pipeline.CompareOp;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
 import net.minecraft.client.Camera;
@@ -215,7 +215,7 @@ public class HitParticles extends Module {
             poseStack.scale(particleScale, particleScale, particleScale);
             poseStack.translate(size / 2.0f, size / 2.0f, size / 2.0f);
             applyCameraRotation(poseStack);
-            poseStack.mulPose(Axis.ZP.rotationDegrees(nextRotation()));
+            poseStack.rotateDegrees(Axis.ZP, nextRotation());
             poseStack.translate(-size / 2.0f, -size / 2.0f, -size / 2.0f);
 
             Matrix4f matrix = poseStack.last().pose();
@@ -239,8 +239,8 @@ public class HitParticles extends Module {
 
         private void applyCameraRotation(PoseStack poseStack) {
             Camera camera = mc.gameRenderer.mainCamera();
-            poseStack.mulPose(Axis.YP.rotationDegrees(-camera.yRot()));
-            poseStack.mulPose(Axis.XP.rotationDegrees(camera.xRot()));
+            poseStack.rotateDegrees(Axis.YP, -camera.yRot());
+            poseStack.rotateDegrees(Axis.XP, camera.xRot());
         }
 
         private float nextRotation() {

@@ -13,6 +13,7 @@ import com.github.epsilon.utils.player.ChatUtils;
 import com.github.epsilon.utils.rotation.Priority;
 import com.github.epsilon.utils.rotation.Rot2f;
 import com.github.epsilon.utils.rotation.RotationUtils;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.CameraType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.protocol.game.ClientboundPlayerCombatKillPacket;
@@ -24,7 +25,6 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Vector3d;
-import org.lwjgl.glfw.GLFW;
 
 public class FreeCamera extends Module {
 
@@ -220,7 +220,7 @@ public class FreeCamera extends Module {
 
     @EventHandler(priority = EventPriority.HIGH)
     public void onKey(KeyPressEvent event) {
-        if (onInput(event.getKey(), event.getAction()) && !KeybindUtils.isPressed(GLFW.GLFW_KEY_F3)) {
+        if (onInput(event.getKey(), event.getAction()) && !KeybindUtils.isPressed(InputConstants.KEY_F3)) {
             event.cancel();
         }
     }
@@ -234,22 +234,22 @@ public class FreeCamera extends Module {
 
     private boolean onInput(int key, int action) {
         if (KeybindUtils.getKey(mc.options.keyUp) == key) {
-            forward = action != GLFW.GLFW_RELEASE;
+            forward = action != InputConstants.RELEASE;
             mc.options.keyUp.setDown(false);
         } else if (KeybindUtils.getKey(mc.options.keyDown) == key) {
-            backward = action != GLFW.GLFW_RELEASE;
+            backward = action != InputConstants.RELEASE;
             mc.options.keyDown.setDown(false);
         } else if (KeybindUtils.getKey(mc.options.keyRight) == key) {
-            right = action != GLFW.GLFW_RELEASE;
+            right = action != InputConstants.RELEASE;
             mc.options.keyRight.setDown(false);
         } else if (KeybindUtils.getKey(mc.options.keyLeft) == key) {
-            left = action != GLFW.GLFW_RELEASE;
+            left = action != InputConstants.RELEASE;
             mc.options.keyLeft.setDown(false);
         } else if (KeybindUtils.getKey(mc.options.keyJump) == key) {
-            up = action != GLFW.GLFW_RELEASE;
+            up = action != InputConstants.RELEASE;
             mc.options.keyJump.setDown(false);
         } else if (KeybindUtils.getKey(mc.options.keyShift) == key) {
-            down = action != GLFW.GLFW_RELEASE;
+            down = action != InputConstants.RELEASE;
             mc.options.keyShift.setDown(false);
         } else {
             return false;

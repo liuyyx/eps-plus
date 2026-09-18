@@ -9,7 +9,7 @@ import com.github.epsilon.gui.lib.UiTextMetrics;
 import com.github.epsilon.gui.lib.UiTree;
 import com.github.epsilon.gui.theme.MD3Theme;
 import com.github.epsilon.managers.FriendManager;
-import org.lwjgl.glfw.GLFW;
+import com.mojang.blaze3d.platform.InputConstants;
 
 import java.util.List;
 
@@ -77,7 +77,7 @@ public class FriendDropdownPanel extends AbstractDropdownPanel {
 
     @Override
     protected boolean mouseClickedContent(double mouseX, double mouseY, int button) {
-        if (button != 0) return false;
+        if (button != InputConstants.MOUSE_BUTTON_LEFT) return false;
         float fieldX = x + PADDING;
         float fieldY = y + DropdownTheme.PANEL_HEADER_HEIGHT + PADDING - scroll;
         float fieldW = width - PADDING * 2.0f - 24.0f;
@@ -105,7 +105,7 @@ public class FriendDropdownPanel extends AbstractDropdownPanel {
 
     @Override
     public void onGlobalMouseClicked(double mouseX, double mouseY, int button) {
-        if (button != 0) return;
+        if (button != InputConstants.MOUSE_BUTTON_LEFT) return;
         float fieldX = x + PADDING;
         float fieldY = y + DropdownTheme.PANEL_HEADER_HEIGHT + PADDING - scroll;
         float fieldW = width - PADDING * 2.0f - 24.0f;
@@ -117,11 +117,11 @@ public class FriendDropdownPanel extends AbstractDropdownPanel {
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
         if (!inputField.isFocused()) return false;
-        if (keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER) {
+        if (keyCode == InputConstants.KEY_RETURN || keyCode == InputConstants.KEY_NUMPADENTER) {
             addFriend();
             return true;
         }
-        if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
+        if (keyCode == InputConstants.KEY_ESCAPE) {
             inputField.blur();
             return true;
         }

@@ -1,5 +1,6 @@
 package com.github.epsilon.gui.panel.view;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import com.github.epsilon.Constants;
 import com.github.epsilon.assets.i18n.EpsilonTranslations;
 import com.github.epsilon.graphics.renderers.TextRenderer;
@@ -183,7 +184,7 @@ public class CategoryRailPanel {
     }
 
     public boolean mouseClicked(MouseButtonEvent event, boolean isDoubleClick) {
-        if (bounds == null || event.button() != 0) {
+        if (bounds == null || event.button() != InputConstants.MOUSE_BUTTON_LEFT) {
             return false;
         }
         if (getMenuButtonBounds().contains(event.x(), event.y())) {

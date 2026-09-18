@@ -14,8 +14,8 @@ import com.github.epsilon.managers.sound.SoundManager;
 import com.github.epsilon.settings.impl.EnumSetting;
 import com.github.epsilon.utils.render.animation.Animation;
 import com.github.epsilon.utils.render.animation.Easing;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.util.Mth;
-import org.lwjgl.glfw.GLFW;
 
 import java.awt.*;
 
@@ -86,7 +86,7 @@ public class EnumWidget extends SettingWidget<EnumSetting<?>> {
 
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        if (expanded && keyCode == GLFW.GLFW_KEY_ESCAPE) {
+        if (expanded && keyCode == InputConstants.KEY_ESCAPE) {
             expanded = false;
             SoundManager.INSTANCE.playInUi(SoundKey.SETTINGS_CLOSE);
             DropdownScreen.INSTANCE.react(ReisaDropdownCompanion.Action.CANCEL);
@@ -144,7 +144,7 @@ public class EnumWidget extends SettingWidget<EnumSetting<?>> {
     }
 
     private boolean handleFieldClick(int button) {
-        if ((button == GLFW.GLFW_MOUSE_BUTTON_RIGHT || button == GLFW.GLFW_MOUSE_BUTTON_LEFT)
+        if ((button == InputConstants.MOUSE_BUTTON_RIGHT || button == InputConstants.MOUSE_BUTTON_LEFT)
                 && getHiddenModeCount() > 0) {
             expanded = !expanded;
             SoundManager.INSTANCE.playInUi(expanded ? SoundKey.SETTINGS_OPEN : SoundKey.SETTINGS_CLOSE);

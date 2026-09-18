@@ -7,6 +7,8 @@ import com.github.epsilon.modules.Category;
 import com.github.epsilon.modules.Module;
 import com.github.epsilon.settings.impl.BoolSetting;
 import com.github.epsilon.utils.player.InvUtils;
+import com.mojang.blaze3d.platform.InputConstants;
+import com.github.epsilon.utils.player.PlayerUtils;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.tags.ItemTags;
@@ -17,7 +19,6 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.Random;
 
@@ -53,7 +54,7 @@ public class AutoDtap extends Module {
 
     @EventHandler
     private void onMouse(MousePressEvent event) {
-        if (event.getButton() == GLFW.GLFW_MOUSE_BUTTON_RIGHT && event.getAction() == GLFW.GLFW_PRESS) {
+        if (event.getButton() == InputConstants.MOUSE_BUTTON_RIGHT && event.getAction() == InputConstants.PRESS) {
             rightClicked = true;
         }
     }
@@ -107,7 +108,7 @@ public class AutoDtap extends Module {
                                 false
                         );
                         mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND, topHit);
-                        mc.player.swing(InteractionHand.MAIN_HAND);
+                        PlayerUtils.swingHand(InteractionHand.MAIN_HAND);
 
                         stepDelay = 1 + random.nextInt(2);
                         step = 2; // 跳到恢复阶段
@@ -117,7 +118,7 @@ public class AutoDtap extends Module {
 
                         InvUtils.swap(obsidianSlot, false);
                         mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND, blockHit);
-                        mc.player.swing(InteractionHand.MAIN_HAND);
+                        PlayerUtils.swingHand(InteractionHand.MAIN_HAND);
 
                         InvUtils.swap(endCrystalSlot, false);
 
@@ -142,7 +143,7 @@ public class AutoDtap extends Module {
                         false
                 );
                 mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND, topHit);
-                mc.player.swing(InteractionHand.MAIN_HAND);
+                PlayerUtils.swingHand(InteractionHand.MAIN_HAND);
 
                 stepDelay = 1 + random.nextInt(2);
                 step = 2;

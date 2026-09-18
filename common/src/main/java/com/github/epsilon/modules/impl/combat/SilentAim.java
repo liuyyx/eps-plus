@@ -14,6 +14,7 @@ import com.github.epsilon.settings.impl.IntSetting;
 import com.github.epsilon.utils.rotation.Priority;
 import com.github.epsilon.utils.rotation.Rot2f;
 import com.github.epsilon.utils.rotation.RotationUtils;
+import com.github.epsilon.utils.player.PlayerUtils;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.LivingEntity;
@@ -54,7 +55,7 @@ public class SilentAim extends Module {
         HitResult hitResult = RotationManager.INSTANCE.getHitResult();
         if (hitResult != null && hitResult.getType() == HitResult.Type.ENTITY) {
             mc.gameMode.attack(mc.player, target);
-            mc.player.swing(InteractionHand.MAIN_HAND);
+            PlayerUtils.swingHand(InteractionHand.MAIN_HAND);
             redirecting = false;
         }
     }

@@ -11,6 +11,7 @@ import com.github.epsilon.settings.impl.BoolSetting;
 import com.github.epsilon.settings.impl.EnumSetting;
 import com.github.epsilon.settings.impl.IntSetting;
 import com.github.epsilon.utils.player.EnchantmentUtils;
+import com.github.epsilon.utils.player.InvHelper;
 import com.github.epsilon.utils.player.InvUtils;
 import com.github.epsilon.utils.player.PlayerUtils;
 import com.github.epsilon.utils.timer.TimerUtils;
@@ -22,7 +23,6 @@ import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.item.AxeItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.MaceItem;
 import net.minecraft.world.item.TridentItem;
@@ -148,8 +148,8 @@ public class AutoWeapon extends Module {
         ItemStack currentStack = mc.player.getMainHandItem();
 
         if (target != null && smartShieldBreak.getValue() && target instanceof LivingEntity living && living.isBlocking()) {
-            if (currentStack.getItem() instanceof AxeItem) return -1;
-            int axeSlot = InvUtils.findInHotbar(item -> item.getItem() instanceof AxeItem).slot();
+            if (InvHelper.isAxe(currentStack)) return -1;
+            int axeSlot = InvUtils.findInHotbar(InvHelper::isAxe).slot();
             if (axeSlot != -1) return axeSlot;
         }
 

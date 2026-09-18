@@ -4,19 +4,20 @@ import com.github.epsilon.assets.resources.ResourceLocationUtils;
 import com.github.epsilon.graphics.LuminBindGroupLayouts;
 import com.github.epsilon.graphics.LuminRenderSystem;
 import com.github.epsilon.graphics.immediate.LuminImmediateRenderer;
-import com.mojang.blaze3d.GpuFormat;
-import com.mojang.blaze3d.buffers.GpuBufferSlice;
+import com.mojang.renderpearl.api.GpuFormat;
+import com.mojang.renderpearl.api.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.buffers.Std140Builder;
 import com.mojang.blaze3d.buffers.Std140SizeCalculator;
 import com.mojang.blaze3d.pipeline.*;
-import com.mojang.blaze3d.platform.CompareOp;
-import com.mojang.blaze3d.systems.CommandEncoder;
-import com.mojang.blaze3d.systems.RenderPass;
+import com.mojang.renderpearl.api.pipeline.*;
+import com.mojang.renderpearl.api.pipeline.CompareOp;
+import com.mojang.renderpearl.api.commands.CommandEncoder;
+import com.mojang.renderpearl.api.commands.RenderPass;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.FilterMode;
-import com.mojang.blaze3d.textures.GpuTexture;
-import com.mojang.blaze3d.textures.GpuTextureView;
-import net.minecraft.client.renderer.DynamicUniformStorage;
+import com.mojang.renderpearl.api.textures.FilterMode;
+import com.mojang.renderpearl.api.textures.GpuTexture;
+import com.mojang.renderpearl.api.textures.GpuTextureView;
+import net.minecraft.client.renderer.DynamicGpuDataStorage;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.phys.AABB;
@@ -108,7 +109,7 @@ public class BlurShader {
         }
 
         if (input == null) {
-            input = new TextureTarget("Lumin Blur Input", sourceWidth, sourceHeight, false, GpuFormat.RGBA8_UNORM);
+            input = new TextureTarget("Lumin Blur Input", sourceWidth, sourceHeight, GpuFormat.RGBA8_UNORM, null);
         }
 
         if (this.input.width != sourceWidth || this.input.height != sourceHeight) {
@@ -159,10 +160,10 @@ public class BlurShader {
                 targetView,
                 Optional.empty()
         )) {
-            renderPass.setPipeline(pipeline);
+            renderPass.setPipeline(RenderSystem.getCompiledPipeline(pipeline));
             RenderSystem.bindDefaultUniforms(renderPass);
             renderPass.setUniform("BlurUniforms", blurUniforms);
-            renderPass.bindTexture("InputSampler", input.getColorTextureView(), RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR));
+            renderPass.setUniform("InputSampler", input.getColorTextureView(), RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR));
             renderPass.draw(3, 1, 0, 0);
         }
     }
@@ -188,7 +189,7 @@ public class BlurShader {
         }
 
         if (input == null) {
-            input = new TextureTarget("Lumin Blur Input", fb.width, fb.height, false, GpuFormat.RGBA8_UNORM);
+            input = new TextureTarget("Lumin Blur Input", fb.width, fb.height, GpuFormat.RGBA8_UNORM, null);
         }
 
         if (this.input.width != fb.width || this.input.height != fb.height) {
@@ -218,7 +219,7 @@ public class BlurShader {
 
         LuminImmediateRenderer.PosColorQuads renderer = LuminImmediateRenderer.beginPosColorQuads(this.boxPipeline, pass -> {
             pass.setUniform("BoxBlurUniforms", boxBlurUniforms);
-            pass.bindTexture("InputSampler", input.getColorTextureView(), RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR));
+            pass.setUniform("InputSampler", input.getColorTextureView(), RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR));
         });
         addBoxVertices(renderer, box);
         renderer.end();
@@ -301,7 +302,7 @@ public class BlurShader {
             float[] segmentRects,
             float[] segmentRadii,
             int segmentCount
-    ) implements DynamicUniformStorage.DynamicUniform {
+    ) implements DynamicGpuDataStorage.DynamicGpuData {
         @Override
         public void write(ByteBuffer buffer) {
             Std140Builder builder = Std140Builder.intoBuffer(buffer)
@@ -334,7 +335,7 @@ public class BlurShader {
 
     private record BoxBlurUniforms(
             float width, float height, float quality
-    ) implements DynamicUniformStorage.DynamicUniform {
+    ) implements DynamicGpuDataStorage.DynamicGpuData {
         @Override
         public void write(ByteBuffer buffer) {
             Std140Builder.intoBuffer(buffer).putVec4(width, height, quality, 0.0f);

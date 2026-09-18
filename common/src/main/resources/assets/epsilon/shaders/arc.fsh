@@ -1,11 +1,11 @@
 #version 410 core
 
-in vec2 f_Position;
-in vec4 f_StartColor;
-in vec4 f_MiddleColor;
-in vec4 f_EndColor;
-in vec4 f_Circle;
-in vec4 f_Sweep;
+layout(location = 0) in vec2 f_Position;
+layout(location = 1) in vec4 f_StartColor;
+layout(location = 2) in vec4 f_MiddleColor;
+layout(location = 3) in vec4 f_EndColor;
+layout(location = 4) in vec4 f_Circle;
+layout(location = 5) in vec4 f_Sweep;
 
 layout(location = 0) out vec4 fragColor;
 

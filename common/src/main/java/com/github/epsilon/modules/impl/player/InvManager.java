@@ -146,9 +146,9 @@ public class InvManager extends Module {
         }
         if (InvHelper.isSword(stack)) return InvHelper.getBestSword() == stack;
         if (InvHelper.isPickaxe(stack)) return InvHelper.getBestPickaxe() == stack;
-        if (stack.getItem() instanceof AxeItem && !InvHelper.isSharpnessAxe(stack))
+        if (InvHelper.isAxe(stack) && !InvHelper.isSharpnessAxe(stack))
             return InvHelper.getBestAxe() == stack;
-        if (stack.getItem() instanceof ShovelItem) return InvHelper.getBestShovel() == stack;
+        if (InvHelper.isShovel(stack)) return InvHelper.getBestShovel() == stack;
         if (stack.getItem() instanceof CrossbowItem) return InvHelper.getBestCrossbow() == stack;
         if (stack.getItem() instanceof BowItem && InvHelper.isPunchBow(stack))
             return InvHelper.getBestPunchBow() == stack;
@@ -394,7 +394,7 @@ public class InvManager extends Module {
             int slotIndex = this.axeSlot.getValue() - 1;
             ItemStack bestAxe = InvHelper.getBestAxe();
             ItemStack currentAxe = InvHelper.getInventoryStack(slotIndex);
-            if (bestAxe != null && bestAxe.getItem() instanceof AxeItem && (InvHelper.getToolScore(bestAxe) > InvHelper.getToolScore(currentAxe) || !(currentAxe.getItem() instanceof AxeItem)))
+            if (bestAxe != null && InvHelper.isAxe(bestAxe) && (InvHelper.getToolScore(bestAxe) > InvHelper.getToolScore(currentAxe) || !(InvHelper.isAxe(currentAxe))))
                 this.swapItem(slotIndex, bestAxe);
         }
 

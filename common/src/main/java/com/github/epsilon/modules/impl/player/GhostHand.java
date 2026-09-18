@@ -6,6 +6,7 @@ import com.github.epsilon.modules.Category;
 import com.github.epsilon.modules.Module;
 import com.github.epsilon.utils.rotation.RotationUtils;
 import it.unimi.dsi.fastutil.objects.ObjectOpenHashSet;
+import com.github.epsilon.utils.player.PlayerUtils;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
@@ -50,7 +51,7 @@ public class GhostHand extends Module {
                 for (InteractionHand hand : InteractionHand.values()) {
                     InteractionResult result = mc.gameMode.useItemOn(mc.player, hand, new BlockHitResult(Vec3.atCenterOf(pos), RotationUtils.getDirection(pos), pos, true));
                     if (result instanceof InteractionResult.Success || result instanceof InteractionResult.Fail) {
-                        mc.player.swing(hand);
+                        PlayerUtils.swingHand(hand);
                         event.cancel();
                         return;
                     }

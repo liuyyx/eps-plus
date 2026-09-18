@@ -1,5 +1,6 @@
 package com.github.epsilon.gui.dropdown.widget;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import com.github.epsilon.gui.dropdown.DropdownScreen;
 import com.github.epsilon.gui.dropdown.DropdownTheme;
 import com.github.epsilon.gui.dropdown.ReisaDropdownCompanion;
@@ -78,7 +79,7 @@ public abstract class AbstractSetSettingWidget<S extends Setting<?>> extends Set
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (button != 0 || !isFieldHovered(mouseX, mouseY)) return false;
+        if (button != InputConstants.MOUSE_BUTTON_LEFT || !isFieldHovered(mouseX, mouseY)) return false;
         openPopup();
         SoundManager.INSTANCE.playInUi(SoundKey.SETTINGS_OPEN);
         DropdownScreen.INSTANCE.react(ReisaDropdownCompanion.Action.PANEL_OPEN);

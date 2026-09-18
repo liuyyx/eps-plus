@@ -1,8 +1,8 @@
 #version 410 core
 
-in vec2 v_TexCoord;
-in vec4 v_Color;
-flat in vec4 v_GlyphUvBounds;
+layout(location = 0) in vec2 v_TexCoord;
+layout(location = 1) in vec4 v_Color;
+layout(location = 2) in vec4 v_GlyphUvBounds;
 
 uniform sampler2D Sampler0;
 

@@ -7,17 +7,19 @@ import com.github.epsilon.modules.impl.render.Shaders;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.mojang.blaze3d.vertex.PoseStack;
-import net.minecraft.client.DeltaTracker;
+import com.mojang.renderpearl.api.commands.RenderPass;
+import com.mojang.renderpearl.api.textures.GpuTextureView;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.FirstPersonHandsAndItemsRenderer;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.client.renderer.GlobalSettingsUniform;
-import net.minecraft.client.renderer.ItemInHandRenderer;
-import net.minecraft.client.renderer.SubmitNodeStorage;
 import net.minecraft.client.renderer.feature.FeatureRenderDispatcher;
+import net.minecraft.client.renderer.item.ItemModelResolver;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
+import net.minecraft.client.renderer.state.OptionsRenderState;
+import net.minecraft.client.renderer.state.level.PlayerRenderState;
 import net.minecraft.client.resources.model.ModelManager;
 import net.minecraft.world.phys.Vec3;
-import org.joml.Matrix4fc;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -37,48 +39,53 @@ public class MixinGameRenderer {
     private GlobalSettingsUniform globalSettingsUniform;
 
     @Inject(method = "<init>", at = @At("RETURN"))
-    private void initializeGlobalSettingsUniform(Minecraft minecraft, ItemInHandRenderer itemInHandRenderer, ModelManager modelManager, CallbackInfo ci) {
+    private void initializeGlobalSettingsUniform(Minecraft minecraft, FirstPersonHandsAndItemsRenderer firstPersonHandsAndItemsRenderer, ModelManager modelManager, ItemModelResolver itemModelResolver, CallbackInfo ci) {
         this.globalSettingsUniform.update(
                 minecraft.getWindow().getWidth(),
                 minecraft.getWindow().getHeight(),
                 0.0,
                 0L,
-                DeltaTracker.ZERO,
+                0.0F,
                 0,
                 Vec3.ZERO,
                 false
         );
     }
 
-    @WrapOperation(method = "renderItemInHand", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/feature/FeatureRenderDispatcher;renderAllFeatures(Lnet/minecraft/client/renderer/SubmitNodeStorage;)V"))
-    private void renderHandFeaturesWithOutline(FeatureRenderDispatcher dispatcher, SubmitNodeStorage storage, Operation<Void> original) {
+    /**
+     * 把手部描边渲染进手部目标。
+     *
+     * <p>26.3 的手部渲染帧由 {@code GameRenderer} 准备，{@code renderAllFeatures} 不包含描边阶段，
+     * 因此这里在原版渲染结束后补充手部描边的 RenderPass。
+     */
+    @WrapOperation(method = "renderItemInHand", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/feature/FeatureRenderDispatcher;renderAllFeatures(Lcom/mojang/renderpearl/api/commands/RenderPass;Lnet/minecraft/client/renderer/feature/FeatureRenderDispatcher$PreparedFrame;)V"))
+    private void renderHandFeaturesWithOutline(RenderPass renderPass, FeatureRenderDispatcher.PreparedFrame frame, Operation<Void> original) {
+        original.call(renderPass, frame);
         if (Shaders.INSTANCE.isEnabled() && Shaders.INSTANCE.hands.getValue()) {
-            try (FeatureRenderDispatcher.PreparedFrame frame = dispatcher.prepareFrame(storage)) {
-                frame.executeSolid();
-                frame.executeTranslucent();
-                frame.executeOutline();
-                frame.executeTranslucentAfterTerrain();
-                frame.executeAlwaysOnTop();
+            try {
+                ShaderManager.INSTANCE.renderHandOutline(frame);
             } finally {
                 ShaderManager.INSTANCE.endHandOutlineCapture();
             }
-        } else {
-            original.call(dispatcher, storage);
         }
     }
 
-    @Inject(method = "render", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/LevelRenderer;doEntityOutline()V", shift = At.Shift.BEFORE))
-    private void processShadersOutline(DeltaTracker deltaTracker, boolean advanceGameTime, CallbackInfo ci) {
+    /**
+     * 处理胸箱与手部描边。
+     *
+     * <p>26.3 的手部与屏幕特效渲染结束后，渲染调度器不再持有帧，才能为模块自己的描边提交缓存准备帧。
+     */
+    @Inject(method = "render3dHud", at = @At("RETURN"))
+    private void processShadersOutline(CameraRenderState cameraState, PlayerRenderState playerState, OptionsRenderState optionsState, boolean consistentDepthRequired, CallbackInfo ci) {
         Shaders shaders = Shaders.INSTANCE;
         if (shaders.isEnabled()) {
-            ShaderManager.INSTANCE.processOutlineTarget(minecraft.levelRenderer.entityOutlineTarget, shaders.entityShader);
             ShaderManager.INSTANCE.processChestOutlineTarget(minecraft.gameRenderer.mainRenderTarget());
             ShaderManager.INSTANCE.processHandOutlineTarget(minecraft.gameRenderer.mainRenderTarget());
         }
     }
 
     @Inject(method = "renderItemInHand", at = @At("HEAD"), cancellable = true)
-    private void renderItemInHand(CameraRenderState cameraState, float deltaPartialTick, Matrix4fc modelViewMatrix, CallbackInfo ci) {
+    private void renderItemInHand(CameraRenderState cameraState, PlayerRenderState playerState, GpuTextureView depthTextureView, CallbackInfo ci) {
         if (!FreeCamera.INSTANCE.renderHands()) {
             ci.cancel();
         }

@@ -1,11 +1,11 @@
 #version 410 core
 
-#moj_import <minecraft:dynamictransforms.glsl>
-#moj_import <minecraft:projection.glsl>
+#include <minecraft:dynamictransforms.glsl>
+#include <minecraft:projection.glsl>
 
 layout(location = 0) in vec3 Position;
 
-out vec2 f_Position;
+layout(location = 0) out vec2 f_Position;
 
 void main() {
     gl_Position = ProjMat * ModelViewMat * vec4(Position.xy, 0.0, 1.0);

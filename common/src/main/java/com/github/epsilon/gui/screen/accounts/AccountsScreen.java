@@ -25,6 +25,7 @@ import com.github.epsilon.gui.theme.EpsilonUiTheme;
 import com.github.epsilon.gui.theme.MD3Theme;
 import com.github.epsilon.managers.AccountManager;
 import com.github.epsilon.managers.ExecutorManager;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.IMEPreeditOverlay;
 import net.minecraft.client.gui.screens.Screen;
@@ -34,7 +35,6 @@ import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.input.PreeditEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
-import org.lwjgl.glfw.GLFW;
 
 import java.awt.*;
 import java.util.ArrayList;
@@ -419,7 +419,7 @@ public class AccountsScreen extends Screen {
         MouseButtonEvent e = LuminRenderSystem.toEpsilonMouseEvent(event);
         double mx = e.x();
         double my = e.y();
-        if (event.button() == 0) {
+        if (event.button() == InputConstants.MOUSE_BUTTON_LEFT) {
             if (headerBackBtn != null && headerBackBtn.contains(mx, my)) {
                 if (addMode != AddMode.NONE || microsoftWaiting || microsoftError) exitAddMode();
                 else close();
@@ -525,11 +525,11 @@ public class AccountsScreen extends Screen {
         }
 
         switch (event.key()) {
-            case GLFW.GLFW_KEY_DOWN -> {
+            case InputConstants.KEY_DOWN -> {
                 moveFocus(1);
                 return true;
             }
-            case GLFW.GLFW_KEY_UP -> {
+            case InputConstants.KEY_UP -> {
                 moveFocus(-1);
                 return true;
             }
@@ -543,7 +543,7 @@ public class AccountsScreen extends Screen {
                 login(focused);
                 return true;
             }
-            if (event.key() == GLFW.GLFW_KEY_DELETE && !searchField.isFocused()) {
+            if (event.key() == InputConstants.KEY_DELETE && !searchField.isFocused()) {
                 AccountRow row = visible.get(focusedIndex);
                 if (authenticating.get() == focused) return true;
                 if (row.isConfirmingDelete()) {
@@ -592,7 +592,7 @@ public class AccountsScreen extends Screen {
     }
 
     private static boolean isEnter(KeyEvent event) {
-        return event.key() == GLFW.GLFW_KEY_ENTER || event.key() == GLFW.GLFW_KEY_KP_ENTER;
+        return event.key() == InputConstants.KEY_RETURN || event.key() == InputConstants.KEY_NUMPADENTER;
     }
 
     private void moveFocus(int delta) {

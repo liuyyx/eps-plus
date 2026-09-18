@@ -3,11 +3,11 @@ package com.github.epsilon.utils.render.esp;
 import com.github.epsilon.assets.resources.ResourceLocationUtils;
 import com.github.epsilon.graphics.immediate.LuminImmediateRenderer;
 import com.github.epsilon.utils.render.ColorUtils;
-import com.mojang.blaze3d.pipeline.BlendFunction;
-import com.mojang.blaze3d.pipeline.ColorTargetState;
-import com.mojang.blaze3d.pipeline.DepthStencilState;
-import com.mojang.blaze3d.pipeline.RenderPipeline;
-import com.mojang.blaze3d.platform.CompareOp;
+import com.mojang.renderpearl.api.pipeline.BlendFunction;
+import com.mojang.renderpearl.api.pipeline.ColorTargetState;
+import com.mojang.renderpearl.api.pipeline.DepthStencilState;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
+import com.mojang.renderpearl.api.pipeline.CompareOp;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
 import net.minecraft.client.Camera;
@@ -60,9 +60,9 @@ public class CaptureMarkESP {
         poseStack.translate(ex, ey + target.getBbHeight() * 0.5, ez);
 
         Camera camera = mc.gameRenderer.mainCamera();
-        poseStack.mulPose(Axis.YP.rotationDegrees(-camera.yRot()));
-        poseStack.mulPose(Axis.XP.rotationDegrees(camera.xRot()));
-        poseStack.mulPose(Axis.ZP.rotationDegrees(rotation));
+        poseStack.rotateDegrees(Axis.YP, -camera.yRot());
+        poseStack.rotateDegrees(Axis.XP, camera.xRot());
+        poseStack.rotateDegrees(Axis.ZP, rotation);
 
         LuminImmediateRenderer.PosTexColorQuads renderer = LuminImmediateRenderer.beginPosTexColorQuads(TARGET_ICON_PIPELINE, CAPTUREMARK_TEX);
 

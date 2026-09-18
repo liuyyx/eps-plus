@@ -19,6 +19,7 @@ import net.minecraft.network.protocol.game.ClientboundEntityEventPacket;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityEvent;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 
 import java.awt.*;
@@ -84,6 +85,7 @@ public class PopChams extends Module {
         private final float walkPosition;
         private final float walkSpeed;
         private final float attackAnimation;
+        private final LivingEntity.SwingDescription swing;
         private final double startY;
 
         private GhostPlayer(Player player) {
@@ -92,7 +94,7 @@ public class PopChams extends Module {
             float tickDelta = mc.level.tickRateManager().isFrozen() ? 1.0f : mc.getDeltaTracker().getGameTimeDeltaPartialTick(true);
             walkPosition = player.walkAnimation.position(tickDelta);
             walkSpeed = player.walkAnimation.speed(tickDelta);
-            attackAnimation = player.getAttackAnim(tickDelta);
+            attackAnimation = player.getSwingAnimation(tickDelta);
             startY = player.getY();
 
             copyPosition(player);
@@ -103,7 +105,7 @@ public class PopChams extends Module {
             yBodyRotO = yBodyRot;
             getAttributes().assignAllValues(player.getAttributes());
             setPose(player.getPose());
-            swingingArm = player.swingingArm;
+            swing = player.getCurrentSwing();
         }
 
         private boolean render(Render3DEvent event) {
@@ -119,8 +121,6 @@ public class PopChams extends Module {
             setOldPosAndRot();
             yHeadRotO = yHeadRot;
             yBodyRotO = yBodyRot;
-            oAttackAnim = attackAnimation;
-            attackAnim = attackAnimation;
 
             double scale = 1.0 + scaleModifier.getValue() * timer;
             if (scale <= 0.0) return true;
@@ -136,6 +136,16 @@ public class PopChams extends Module {
 
             WireframeEntityRenderer.render(event.getPoseStack(), this, scale, side, line, 2.0f);
             return false;
+        }
+
+        @Override
+        public float getSwingAnimation(float partialTicks) {
+            return attackAnimation;
+        }
+
+        @Override
+        public LivingEntity.SwingDescription getCurrentSwing() {
+            return swing;
         }
 
         private Color withAlpha(Color color, int alpha) {

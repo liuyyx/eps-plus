@@ -107,10 +107,10 @@ public class SilentRotationManager extends RotationManager {
             float pitch = clampPitch(rotations.getPitch());
             if (!Float.isNaN(yaw) && !Float.isNaN(pitch)) {
                 useItemRotation = new Rot2f(yaw, pitch);
-                if (packet.getYRot() != yaw || packet.getXRot() != pitch) {
+                if (packet.yRot() != yaw || packet.xRot() != pitch) {
                     event.setPacket(new ServerboundUseItemPacket(
-                            packet.getHand(),
-                            packet.getSequence(),
+                            packet.hand(),
+                            packet.sequence(),
                             yaw,
                             pitch
                     ));

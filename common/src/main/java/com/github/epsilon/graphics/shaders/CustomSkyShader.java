@@ -4,18 +4,19 @@ import com.github.epsilon.assets.resources.ResourceLocationUtils;
 import com.github.epsilon.graphics.LuminBindGroupLayouts;
 import com.github.epsilon.graphics.LuminRenderSystem;
 import com.github.epsilon.modules.impl.render.CustomSky;
-import com.mojang.blaze3d.GpuFormat;
-import com.mojang.blaze3d.buffers.GpuBufferSlice;
+import com.mojang.renderpearl.api.GpuFormat;
+import com.mojang.renderpearl.api.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.buffers.Std140Builder;
 import com.mojang.blaze3d.buffers.Std140SizeCalculator;
-import com.mojang.blaze3d.pipeline.RenderPipeline;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.pipeline.TextureTarget;
-import com.mojang.blaze3d.systems.CommandEncoder;
-import com.mojang.blaze3d.systems.RenderPass;
+import com.mojang.renderpearl.api.commands.CommandEncoder;
+import com.mojang.renderpearl.api.commands.RenderPass;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.FilterMode;
-import net.minecraft.client.renderer.DynamicUniformStorage;
+import com.mojang.renderpearl.api.textures.FilterMode;
+import com.mojang.renderpearl.api.pipeline.ColorTargetState;
+import net.minecraft.client.renderer.DynamicGpuDataStorage;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.Util;
@@ -79,11 +80,11 @@ public class CustomSkyShader {
                 target.getColorTextureView(),
                 Optional.empty()
         )) {
-            renderPass.setPipeline(pipeline);
+            renderPass.setPipeline(RenderSystem.getCompiledPipeline(pipeline));
             RenderSystem.bindDefaultUniforms(renderPass);
             renderPass.setUniform("CustomSky", uniforms);
             if (mode == CustomSky.ShaderMode.Local) {
-                renderPass.bindTexture("InputSampler", input.getColorTextureView(), RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR));
+                renderPass.setUniform("InputSampler", input.getColorTextureView(), RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR));
             }
             renderPass.draw(3, 1, 0, 0);
         }
@@ -93,6 +94,7 @@ public class CustomSkyShader {
         return pipelines.computeIfAbsent(mode, shaderMode -> {
             RenderPipeline.Builder builder = RenderPipeline.builder(RenderPipelines.POST_PROCESSING_SNIPPET)
                     .withLocation(ResourceLocationUtils.getIdentifier("pipeline/custom_sky_" + shaderMode.name().toLowerCase()))
+                    .withColorTargetState(ColorTargetState.DEFAULT)
                     .withVertexShader(VERTEX_SHADER)
                     .withFragmentShader(ResourceLocationUtils.getIdentifier("custom_sky_" + shaderMode.name().toLowerCase()))
                     .withBindGroupLayout(LuminBindGroupLayouts.CUSTOM_SKY)
@@ -106,7 +108,7 @@ public class CustomSkyShader {
 
     private void ensureInput(RenderTarget target) {
         if (input == null) {
-            input = new TextureTarget("Epsilon Custom Sky Input", target.width, target.height, false, GpuFormat.RGBA8_UNORM);
+            input = new TextureTarget("Epsilon Custom Sky Input", target.width, target.height, GpuFormat.RGBA8_UNORM, null);
         } else if (input.width != target.width || input.height != target.height) {
             input.resize(target.width, target.height);
         }
@@ -116,7 +118,7 @@ public class CustomSkyShader {
             float red, float green, float blue, float alpha,
             float backgroundRed, float backgroundGreen, float backgroundBlue, float backgroundAlpha,
             float width, float height, float time
-    ) implements DynamicUniformStorage.DynamicUniform {
+    ) implements DynamicGpuDataStorage.DynamicGpuData {
         private SkyUniforms(Color color, Color backgroundColor, int width, int height, float time) {
             this(
                     color.getRed() / 255.0f, color.getGreen() / 255.0f, color.getBlue() / 255.0f, color.getAlpha() / 255.0f,

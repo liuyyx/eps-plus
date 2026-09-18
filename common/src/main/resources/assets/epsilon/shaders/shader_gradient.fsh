@@ -27,7 +27,7 @@ layout(std140) uniform ShaderColors {
     vec4 SmokeFill2;
 };
 
-in vec2 texCoord;
+layout(location = 0) in vec2 texCoord;
 
 layout(location = 0) out vec4 fragColor;
 

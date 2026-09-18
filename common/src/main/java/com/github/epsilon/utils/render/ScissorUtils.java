@@ -1,7 +1,7 @@
 package com.github.epsilon.utils.render;
 
 import com.github.epsilon.graphics.LuminRenderSystem;
-import com.mojang.blaze3d.systems.RenderPass;
+import com.mojang.renderpearl.api.commands.RenderPass;
 import net.minecraft.client.renderer.state.WindowRenderState;
 
 import static com.github.epsilon.Constants.mc;

@@ -51,7 +51,7 @@ dependencies {
     runtimeOnly("org.bytedeco:ffmpeg:6.1.1-1.5.10:macosx-arm64")
 }
 
-// NeoForge 26.2 resolves Jar-in-Jar dependencies by group and artifact only;
+// NeoForge 26.3 resolves Jar-in-Jar dependencies by group and artifact only;
 // classifiers are ignored. Give every platform jar a distinct identifier so the Java API jar and each
 // platform's JNI bridge stay loadable side by side at runtime.
 tasks.named<JarJar>("jarJar") {

@@ -1,5 +1,6 @@
 package com.github.epsilon.gui.panel.view;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import com.github.epsilon.assets.i18n.EpsilonTranslations;
 import com.github.epsilon.graphics.renderers.TextRenderer;
 import com.github.epsilon.gui.lib.UiRect;
@@ -182,7 +183,7 @@ public class ModuleListPanel implements AutoCloseable {
      * 该方法会优先处理滚动条拖拽，其次处理搜索框聚焦，最后处理模块行选择与启用切换。
      */
     public boolean mouseClicked(MouseButtonEvent event, boolean isDoubleClick) {
-        if (bounds == null || event.button() != 0) {
+        if (bounds == null || event.button() != InputConstants.MOUSE_BUTTON_LEFT) {
             return false;
         }
         scrollVelocity = 0;

@@ -7,7 +7,7 @@ import com.github.epsilon.graphics.text.TextGlitchEffect;
 import com.github.epsilon.graphics.text.ttf.TtfFontLoader;
 import com.github.epsilon.graphics.text.ttf.TtfTextRenderer;
 import com.github.epsilon.managers.RendererManager;
-import com.mojang.blaze3d.systems.RenderPass;
+import com.mojang.renderpearl.api.commands.RenderPass;
 
 import java.awt.*;
 

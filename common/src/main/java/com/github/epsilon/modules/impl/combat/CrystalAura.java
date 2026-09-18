@@ -12,10 +12,11 @@ import com.github.epsilon.utils.client.KeybindUtils;
 import com.github.epsilon.utils.math.MathUtils;
 import com.github.epsilon.utils.player.FindItemResult;
 import com.github.epsilon.utils.player.InvUtils;
+import com.mojang.blaze3d.platform.InputConstants;
+import com.github.epsilon.utils.player.PlayerUtils;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.network.protocol.game.ServerboundSwingPacket;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
@@ -32,7 +33,6 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.Vec3;
-import org.lwjgl.glfw.GLFW;
 
 public class CrystalAura extends Module {
 
@@ -42,7 +42,7 @@ public class CrystalAura extends Module {
         super("Crystal Aura", Category.COMBAT);
     }
 
-    private final KeybindSetting activateKey = keybindSetting("Activate Key", GLFW.GLFW_KEY_UNKNOWN);
+    private final KeybindSetting activateKey = keybindSetting("Activate Key", InputConstants.UNKNOWN.getValue());
     private final DoubleSetting placeDelay = doubleSetting("Place Delay", 0.0, 0.0, 20.0, 1.0);
     private final DoubleSetting breakDelay = doubleSetting("Break Delay", 0.0, 0.0, 20.0, 1.0);
     private final DoubleSetting placeChance = doubleSetting("Place Chance", 100.0, 0.0, 100.0, 1.0);
@@ -94,7 +94,7 @@ public class CrystalAura extends Module {
         if (mc.player.isUsingItem()) return;
         if (damageTick.getValue() && damageTickCheck()) return;
 
-        if (activateKey.getValue() != GLFW.GLFW_KEY_UNKNOWN && !KeybindUtils.isPressed(activateKey.getValue())) {
+        if (activateKey.getValue() != InputConstants.UNKNOWN.getValue() && !KeybindUtils.isPressed(activateKey.getValue())) {
             resetClocks();
             crystalling = false;
             return;
@@ -128,15 +128,13 @@ public class CrystalAura extends Module {
                 InteractionResult result = mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND, placeHit);
                 if (result.consumesAction()) {
                     if (swingHand.getValue()) {
-                        mc.player.swing(InteractionHand.MAIN_HAND);
-                    } else {
-                        mc.getConnection().send(new ServerboundSwingPacket(InteractionHand.MAIN_HAND));
+                        PlayerUtils.swingHand(InteractionHand.MAIN_HAND);
                     }
                 }
 
                 if (fakePunch.getValue() && randomInt <= particleChance.getValue().intValue() && hit.getDirection() == Direction.UP) {
                     // Placeholder for old block break particles behavior.
-                    mc.player.swing(InteractionHand.MAIN_HAND);
+                    PlayerUtils.swingHand(InteractionHand.MAIN_HAND);
                 }
 
                 placeClock = placeDelay.getValue().intValue();
@@ -167,9 +165,7 @@ public class CrystalAura extends Module {
                 mc.gameMode.attack(mc.player, entity);
 
                 if (swingHand.getValue()) {
-                    mc.player.swing(InteractionHand.MAIN_HAND);
-                } else {
-                    mc.getConnection().send(new ServerboundSwingPacket(InteractionHand.MAIN_HAND));
+                    PlayerUtils.swingHand(InteractionHand.MAIN_HAND);
                 }
 
                 breakClock = breakDelay.getValue().intValue();

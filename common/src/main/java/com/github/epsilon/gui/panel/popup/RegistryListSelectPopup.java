@@ -17,6 +17,7 @@ import com.github.epsilon.settings.impl.RegistryListSetting;
 import com.github.epsilon.utils.render.animation.Animation;
 import com.github.epsilon.utils.render.animation.Easing;
 import com.github.epsilon.utils.world.BlockRegistryUtils;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.input.CharacterEvent;
 import net.minecraft.client.input.KeyEvent;
@@ -33,7 +34,6 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.*;
 import java.util.function.Consumer;
@@ -414,7 +414,7 @@ public class RegistryListSelectPopup<T> implements PanelPopupHost.Popup {
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean isDoubleClick) {
-        if (event.button() != 0 || !bounds.contains(event.x(), event.y())) return false;
+        if (event.button() != InputConstants.MOUSE_BUTTON_LEFT || !bounds.contains(event.x(), event.y())) return false;
         // Check category tab clicks
         if (!categories.isEmpty()) {
             UiRect searchBounds = getSearchBounds(bounds.y());
@@ -475,14 +475,14 @@ public class RegistryListSelectPopup<T> implements PanelPopupHost.Popup {
     @Override
     public boolean keyPressed(KeyEvent event) {
         return switch (event.key()) {
-            case GLFW.GLFW_KEY_BACKSPACE -> {
+            case InputConstants.KEY_BACKSPACE -> {
                 if (!query.isEmpty()) {
                     query = query.substring(0, query.length() - 1);
                     resetScroll();
                 }
                 yield true;
             }
-            case GLFW.GLFW_KEY_DELETE -> {
+            case InputConstants.KEY_DELETE -> {
                 query = "";
                 resetScroll();
                 yield true;

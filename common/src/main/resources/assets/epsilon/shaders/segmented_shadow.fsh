@@ -1,6 +1,6 @@
 #version 410 core
 
-in vec2 f_Position;
+layout(location = 0) in vec2 f_Position;
 
 layout(std140) uniform SegmentedShadowUniforms {
     vec4 ShadowColor;

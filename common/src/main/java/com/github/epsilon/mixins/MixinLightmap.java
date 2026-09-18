@@ -4,7 +4,7 @@ import com.github.epsilon.modules.impl.render.Filter;
 import com.github.epsilon.modules.impl.render.Fullbright;
 import com.github.epsilon.modules.impl.render.Xray;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.GpuTexture;
+import com.mojang.renderpearl.api.textures.GpuTexture;
 import net.minecraft.client.renderer.Lightmap;
 import net.minecraft.client.renderer.state.LightmapRenderState;
 import net.minecraft.util.ARGB;

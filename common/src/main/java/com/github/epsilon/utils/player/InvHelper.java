@@ -86,6 +86,24 @@ public class InvHelper {
             Items.DIAMOND_PICKAXE,
             Items.NETHERITE_PICKAXE
     );
+    private static final Set<Item> AXES = Set.of(
+            Items.WOODEN_AXE,
+            Items.STONE_AXE,
+            Items.COPPER_AXE,
+            Items.IRON_AXE,
+            Items.GOLDEN_AXE,
+            Items.DIAMOND_AXE,
+            Items.NETHERITE_AXE
+    );
+    private static final Set<Item> SHOVELS = Set.of(
+            Items.WOODEN_SHOVEL,
+            Items.STONE_SHOVEL,
+            Items.COPPER_SHOVEL,
+            Items.IRON_SHOVEL,
+            Items.GOLDEN_SHOVEL,
+            Items.DIAMOND_SHOVEL,
+            Items.NETHERITE_SHOVEL
+    );
 
     /**
      * 判断当前界面是否应禁用背包辅助功能。
@@ -178,6 +196,31 @@ public class InvHelper {
     }
 
     /**
+     * 判断物品是否为斧。
+     *
+     * <p>26.3 移除了 {@code AxeItem}，工具类型改为由 {@code Item.Properties#axe} 写入数据组件，
+     * 因此这里与剑、镐保持一致，使用固定物品集合判定。
+     *
+     * @param stack 物品堆
+     * @return 判断结果
+     */
+    public static boolean isAxe(ItemStack stack) {
+        return stack != null && !stack.isEmpty() && AXES.contains(stack.getItem());
+    }
+
+    /**
+     * 判断物品是否为锹。
+     *
+     * <p>26.3 与斧一样移除了 {@code ShovelItem}，因此使用固定物品集合判定。
+     *
+     * @param stack 物品堆
+     * @return 判断结果
+     */
+    public static boolean isShovel(ItemStack stack) {
+        return stack != null && !stack.isEmpty() && SHOVELS.contains(stack.getItem());
+    }
+
+    /**
      * 获取指定普通背包槽位中的物品堆。
      *
      * @param slot 背包、容器或装备槽位
@@ -226,7 +269,7 @@ public class InvHelper {
      */
     public static boolean isSharpnessAxe(ItemStack stack) {
         return !stack.isEmpty()
-                && stack.getItem() instanceof AxeItem
+                && isAxe(stack)
                 && EnchantmentUtils.getEnchantmentLevel(stack, Enchantments.SHARPNESS) >= 8
                 && EnchantmentUtils.getEnchantmentLevel(stack, Enchantments.SHARPNESS) < 50;
     }
@@ -613,7 +656,7 @@ public class InvHelper {
      */
     public static float getBestAxeScore() {
         return getAllItems().stream()
-                .filter(item -> !item.isEmpty() && item.getItem() instanceof AxeItem && !isSharpnessAxe(item) && isItemValid(item))
+                .filter(item -> !item.isEmpty() && isAxe(item) && !isSharpnessAxe(item) && isItemValid(item))
                 .map(InvHelper::getToolScore)
                 .max(Float::compareTo)
                 .orElse(0.0F);
@@ -626,7 +669,7 @@ public class InvHelper {
      */
     public static ItemStack getBestAxe() {
         return getAllItems().stream()
-                .filter(item -> !item.isEmpty() && item.getItem() instanceof AxeItem && !isSharpnessAxe(item) && isItemValid(item))
+                .filter(item -> !item.isEmpty() && isAxe(item) && !isSharpnessAxe(item) && isItemValid(item))
                 .max(Comparator.comparingInt(s -> (int) (getToolScore(s) * 100.0F)))
                 .orElse(null);
     }
@@ -638,7 +681,7 @@ public class InvHelper {
      */
     public static ItemStack getBestShapeAxe() {
         return getAllItems().stream()
-                .filter(item -> !item.isEmpty() && item.getItem() instanceof AxeItem && isSharpnessAxe(item) && isItemValid(item) && !isGodAxe(item))
+                .filter(item -> !item.isEmpty() && isAxe(item) && isSharpnessAxe(item) && isItemValid(item) && !isGodAxe(item))
                 .max(Comparator.comparingInt(s -> (int) (getAxeDamage(s) * 100.0F)))
                 .orElse(null);
     }
@@ -650,7 +693,7 @@ public class InvHelper {
      */
     public static float getBestShovelScore() {
         return getAllItems().stream()
-                .filter(item -> !item.isEmpty() && item.getItem() instanceof ShovelItem && isItemValid(item))
+                .filter(item -> !item.isEmpty() && isShovel(item) && isItemValid(item))
                 .map(InvHelper::getToolScore)
                 .max(Float::compareTo)
                 .orElse(0.0F);
@@ -663,7 +706,7 @@ public class InvHelper {
      */
     public static ItemStack getBestShovel() {
         return getAllItems().stream()
-                .filter(item -> !item.isEmpty() && item.getItem() instanceof ShovelItem && isItemValid(item))
+                .filter(item -> !item.isEmpty() && isShovel(item) && isItemValid(item))
                 .max(Comparator.comparingInt(s -> (int) (getToolScore(s) * 100.0F)))
                 .orElse(null);
     }
@@ -838,9 +881,9 @@ public class InvHelper {
         float valence;
         if (isPickaxe(stack)) {
             valence = stack.getDestroySpeed(Blocks.STONE.defaultBlockState());
-        } else if (stack.getItem() instanceof AxeItem) {
+        } else if (isAxe(stack)) {
             valence = stack.getDestroySpeed(Blocks.OAK_LOG.defaultBlockState());
-        } else if (stack.getItem() instanceof ShovelItem) {
+        } else if (isShovel(stack)) {
             valence = stack.getDestroySpeed(Blocks.DIRT.defaultBlockState());
         } else {
             return 0.0F;
@@ -884,7 +927,7 @@ public class InvHelper {
      * @return 获取或计算得到的结果
      */
     public static float getAxeDamage(ItemStack stack) {
-        if (stack == null || stack.isEmpty() || !(stack.getItem() instanceof AxeItem)) {
+        if (stack == null || stack.isEmpty() || !isAxe(stack)) {
             return 0.0F;
         }
 
@@ -965,7 +1008,7 @@ public class InvHelper {
             return false;
         }
 
-        if (stack.getItem() instanceof AxeItem
+        if (isAxe(stack)
                 && stack.getItem() == Items.GOLDEN_AXE
                 && EnchantmentUtils.getEnchantmentLevel(stack, Enchantments.SHARPNESS) > 100) {
             return true;

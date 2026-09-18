@@ -28,12 +28,12 @@ import com.github.epsilon.utils.rotation.RotationUtils;
 import com.github.epsilon.utils.timer.TimerUtils;
 import com.google.common.base.Supplier;
 import com.google.common.base.Suppliers;
+import com.github.epsilon.utils.player.PlayerUtils;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientboundAddEntityPacket;
 import net.minecraft.network.protocol.game.ClientboundSoundPacket;
-import net.minecraft.network.protocol.game.ServerboundSwingPacket;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.util.Mth;
@@ -1531,8 +1531,8 @@ public class ZealotCrystalPlus extends Module {
 
     private void doSwing(InteractionHand hand) {
         switch (swingMode.getValue()) {
-            case Client -> mc.player.swing(hand);
-            case Packet -> mc.getConnection().send(new ServerboundSwingPacket(hand));
+            case Client -> PlayerUtils.swingHand(hand);
+            case Packet -> PlayerUtils.swingHand(hand);
             case None -> {
             }
         }

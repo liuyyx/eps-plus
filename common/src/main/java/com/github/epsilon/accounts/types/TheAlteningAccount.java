@@ -8,7 +8,7 @@ import com.github.epsilon.utils.network.Http;
 import com.google.gson.JsonObject;
 import com.google.gson.annotations.SerializedName;
 import com.mojang.authlib.Environment;
-import com.mojang.authlib.yggdrasil.YggdrasilAuthenticationService;
+import com.mojang.authlib.services.MinecraftServicesDiscoveryService;
 import com.mojang.util.UndashedUuid;
 import net.minecraft.client.User;
 
@@ -19,8 +19,16 @@ import static com.github.epsilon.Constants.mc;
 
 public class TheAlteningAccount extends Account<TheAlteningAccount> implements TokenAccount {
 
-    private static final Environment ENVIRONMENT = new Environment("http://sessionserver.thealtening.com", "http://authserver.thealtening.com", "https://api.mojang.com", "The Altening");
-    private static final YggdrasilAuthenticationService SERVICE = new YggdrasilAuthenticationService(mc.getProxy(), ENVIRONMENT);
+    /** TheAltening 的账号接口地址，认证请求与 discovery 文档都在该主机下。 */
+    private static final String API_HOST = "http://authserver.thealtening.com";
+    /**
+     * authlib 10 的环境只保留 discovery 地址与名称。
+     *
+     * <p>TheAltening 未提供公开的 discovery 文档说明，这里沿用其账号主机下的 {@code /discovery} 路径；
+     * 若第三方服务调整接口，需要同步更新该地址。
+     */
+    private static final Environment ENVIRONMENT = new Environment(API_HOST + "/discovery", "The Altening");
+    private static final MinecraftServicesDiscoveryService SERVICE = MinecraftServicesDiscoveryService.create(mc.getProxy(), true, ENVIRONMENT);
     private String token;
     private String accessToken;
 
@@ -65,7 +73,7 @@ public class TheAlteningAccount extends Account<TheAlteningAccount> implements T
     }
 
     private AuthResponse authenticate() {
-        return Http.post(ENVIRONMENT.servicesHost() + "/authenticate")
+        return Http.post(API_HOST + "/authenticate")
                 .bodyJson(new AuthRequest("MINECRAFT", token, "Meteor on Crack!", UUID.randomUUID().toString(), true))
                 .sendJson(AuthResponse.class);
     }

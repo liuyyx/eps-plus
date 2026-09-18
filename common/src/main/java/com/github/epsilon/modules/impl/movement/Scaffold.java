@@ -23,11 +23,11 @@ import com.github.epsilon.utils.render.animation.Easing;
 import com.github.epsilon.utils.rotation.RaytraceUtils;
 import com.github.epsilon.utils.rotation.Rot2f;
 import com.github.epsilon.utils.rotation.RotationUtils;
+import com.github.epsilon.utils.player.PlayerUtils;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.protocol.game.ClientboundPlayerPositionPacket;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
-import net.minecraft.network.protocol.game.ServerboundSwingPacket;
 import net.minecraft.network.protocol.game.ServerboundUseItemPacket;
 import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
@@ -45,7 +45,6 @@ import net.minecraft.world.phys.Vec3;
 import java.awt.*;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Random;
 
 public class Scaffold extends Module {
 
@@ -93,8 +92,7 @@ public class Scaffold extends Module {
 
     private enum Mode {
         TellyBridge,
-        GodBridge,
-        Legit
+        GodBridge
     }
 
     private enum RotationMode {
@@ -177,20 +175,6 @@ public class Scaffold extends Module {
     private final IntSetting rotationSpeed2 = intSetting("Rotation Speed 2", 36, 10, 180, 10, () -> rotationMode.is(RotationMode.Heypixel));
     private final IntSetting rotationBackSpeed = intSetting("Rotation Back Speed", 180, 10, 180, 10, () -> mode.is(Mode.TellyBridge));
     private final IntSetting tellyTicks = intSetting("Telly Ticks", 1, 0, 6, 1, () -> mode.is(Mode.TellyBridge));
-    private final IntSetting legitSneakDelay = intSetting("Legit Sneak Delay", 4, 1, 5, 1, () -> mode.is(Mode.Legit));
-    private final IntSetting legitSneakRandom = intSetting("Legit Sneak Random", 2, 0, 5, 1, () -> mode.is(Mode.Legit));
-    /**
-     * 放置后的冷却刻数（与 leader 的 Place Delay 同义，默认 1、范围 0~5）。
-     * 缺少节流时只要方块搜索成功就每刻放置，形成完全规律的时序，
-     * Matrix 的 sfd.place.t（scaffold place timing）会稳定判违规。
-     */
-    private final IntSetting placeDelay = intSetting("Place Delay", 1, 0, 5, 1);
-    /**
-     * 放置冷却的随机附加量（0~5）。实际冷却 = {@link #placeDelay} + [0, 本值]，
-     * 每次放置重新掷一次，避免固定间隔本身成为新的可识别特征。
-     */
-    private final IntSetting placeDelayRandom = intSetting("Place Delay Random", 2, 0, 5, 1);
-    private final IntSetting legitModeSpeed = intSetting("Legit Mode Speed", 180, 1, 180, 1, () -> mode.is(Mode.Legit));
 
     private final BoolSetting swingHand = boolSetting("Swing Hand", true);
     private final BoolSetting render = boolSetting("Render", true);
@@ -216,22 +200,6 @@ public class Scaffold extends Module {
     private boolean emergencyPlacementActive;
     private boolean pearlUsePacketSent;
 
-    private static final double LEGIT_EDGE_THRESHOLD = 0.15;
-    private int legitEdgeState = 0;
-    private int legitEdgeTimer = 0;
-    private boolean legitWasOnEdge = false;
-
-    /**
-     * 转向未到位时的放置闸门（与 leader 的 {@code rotationTick} 同义）。
-     * 目标角偏离当前托管角超过 {@code legitModeSpeed} 容差时置 1，逐刻递减；
-     * 非 0 期间不放置，避免转向过程中的放置包朝向与服务器所见不一致而被丢弃。
-     */
-    private int legitRotationTick = 0;
-    private final Random legitRandom = new Random();
-
-    /** 放置冷却剩余刻数；>0 时不放置。见 {@link #placeDelay}。 */
-    private int placeDelayCounter = 0;
-
     private final List<RenderInfo> renderBoxes = new ArrayList<>();
 
     @Override
@@ -245,7 +213,6 @@ public class Scaffold extends Module {
         shouldSwapBack = false;
         emergencyPlacementActive = false;
         pearlUsePacketSent = false;
-        resetLegitEdgeState();
     }
 
     @Override
@@ -253,7 +220,6 @@ public class Scaffold extends Module {
         yLevel = 0;
         emergencyPlacementActive = false;
         pearlUsePacketSent = false;
-        resetLegitEdgeState();
         if (shouldSwapBack) {
             InvUtils.swapBack();
             shouldSwapBack = false;
@@ -264,16 +230,7 @@ public class Scaffold extends Module {
     private void onPlayerTick(PlayerTickEvent.Pre event) {
         if (!event.isCancelled()) emergencyPlacementActive = false;
 
-        if (placeDelayCounter > 0) placeDelayCounter--;
-
         blockResult = findBlockResult();
-
-        if (mode.is(Mode.Legit)) {
-            updateLegitEdgeState();
-        } else {
-            resetLegitEdgeState();
-        }
-
         if (!blockResult.found()) return;
 
         if (mc.player.onGround()) {
@@ -319,9 +276,7 @@ public class Scaffold extends Module {
             );
             if (result.consumesAction()) {
                 if (swingHand.getValue()) {
-                    mc.player.swing(hand);
-                } else {
-                    mc.getConnection().send(new ServerboundSwingPacket(hand));
+                    PlayerUtils.swingHand(hand);
                 }
                 if (render.getValue()) {
                     renderBoxes.add(new RenderInfo(new AABB(blockPos.relative(direction)), lineColor.getValue(), sideColor.getValue(), System.currentTimeMillis(), fade.getValue(), shrink.getValue()));
@@ -337,7 +292,6 @@ public class Scaffold extends Module {
         switch (mode.getValue()) {
             case TellyBridge -> handleTelly();
             case GodBridge -> handleNormal();
-            case Legit -> handleLegit();
         }
     }
 
@@ -350,13 +304,6 @@ public class Scaffold extends Module {
 
         if (mode.is(Mode.TellyBridge) && mc.player.onGround() && !mc.options.keyJump.isDown() && mc.player.isMoving()) {
             event.setJump(true);
-        }
-
-        if (mode.is(Mode.Legit) && mc.gui.screen() == null
-                && mc.player.onGround() && (legitEdgeState == 1 || legitEdgeState == 2)) {
-            event.setSneak(true);
-            event.setSprint(false);
-            mc.player.setSprinting(false);
         }
     }
 
@@ -372,7 +319,7 @@ public class Scaffold extends Module {
     @EventHandler
     private void onPacketSend(PacketEvent.Send event) {
         if (event.getPacket() instanceof ServerboundUseItemPacket packet) {
-            ItemStack usedStack = mc.player.getItemInHand(packet.getHand());
+            ItemStack usedStack = mc.player.getItemInHand(packet.hand());
             if (usedStack.is(Items.ENDER_PEARL) || usedStack.isEmpty() && mc.player.getCooldowns().isOnCooldown(Items.ENDER_PEARL.getDefaultInstance())) {
                 pearlUsePacketSent = true;
             }
@@ -441,119 +388,10 @@ public class Scaffold extends Module {
         place();
     }
 
-    private void handleLegit() {
-        // 每刻递减一次（等价于 leader 在 tick 处理入口的 rotationTick--）。
-        if (legitRotationTick > 0) legitRotationTick--;
-
-        float beforeYaw = RotationManager.INSTANCE.getRotation().getYaw();
-        rotation = getRotation(blockPos, direction);
-        RotationManager.INSTANCE.setRotations(rotation, legitModeSpeed.getValue());
-
-        // 剩余偏角超过容差 => 本刻仍在转向，标记延后放置。
-        // 转向尚未到位时发出的放置包，其朝向与服务器所见不一致，会被服务器丢弃
-        // （单机无此校验，故只在联机时表现为“吞方块”）。
-        if (Math.abs(Mth.wrapDegrees(rotation.getYaw() - beforeYaw)) > legitModeSpeed.getValue()) {
-            legitRotationTick = Math.max(legitRotationTick, 1);
-        }
-        if (legitRotationTick > 0) return;
-
-        if (legitCanPlace()) {
-            place();
-        }
-    }
-
-    /**
-     * Legit（蹲起搭）边缘状态机：
-     * 0 = 未在边缘；1 = 刚踏上边缘，潜行等待 legitSneakDelay 刻（此阶段不放置）；
-     * 2 = 等待结束，潜行继续但允许放置。
-     */
-    private void updateLegitEdgeState() {
-        boolean onGround = mc.player.onGround();
-        boolean atEdge = onGround && isOnEdge();
-        boolean holdingBlock = blockResult != null && blockResult.found() && canUseBlockResult();
-        boolean justReachedEdge = atEdge && !legitWasOnEdge;
-
-        if (!onGround) {
-            legitEdgeState = 0;
-            legitEdgeTimer = 0;
-        } else if (atEdge && holdingBlock) {
-            switch (legitEdgeState) {
-                case 0 -> {
-                    if (justReachedEdge || legitEdgeTimer == 0) {
-                        legitEdgeState = 1;
-                        // 蹲起时长 = 基准 + [0, random]；每次进入状态 1 重新掷一次，
-                        // 避免固定刻数形成可被反作弊识别的周期性节奏。
-                        legitEdgeTimer = legitSneakDelay.getValue()
-                                + (legitSneakRandom.getValue() > 0 ? legitRandom.nextInt(legitSneakRandom.getValue() + 1) : 0);
-                    }
-                }
-                case 1 -> {
-                    legitEdgeTimer--;
-                    if (legitEdgeTimer <= 0) {
-                        legitEdgeState = 2;
-                        legitEdgeTimer = 0;
-                    }
-                }
-                case 2 -> {
-                }
-                default -> {
-                    legitEdgeState = 0;
-                    legitEdgeTimer = 0;
-                }
-            }
-        } else {
-            legitEdgeState = 0;
-            legitEdgeTimer = 0;
-        }
-        legitWasOnEdge = atEdge;
-    }
-
-    private void resetLegitEdgeState() {
-        legitEdgeState = 0;
-        legitEdgeTimer = 0;
-        legitWasOnEdge = false;
-        legitRotationTick = 0;
-    }
-
-    /**
-     * Legit 放置闸门：在地面且处于状态 1（潜行等待期）时禁止放置。
-     */
-    private boolean legitCanPlace() {
-        return !mc.player.onGround() || legitEdgeState == 0 || legitEdgeState == 2;
-    }
-
-    /**
-     * 边缘检测：脚下为可替换方块，或玩家位于方块边缘阈值内且相邻方块下方可替换。
-     */
-    private boolean isOnEdge() {
-        if (!mc.player.onGround()) return true;
-
-        int playerX = Mth.floor(mc.player.getX());
-        int playerY = Mth.floor(mc.player.getY());
-        int playerZ = Mth.floor(mc.player.getZ());
-
-        if (mc.level.getBlockState(new BlockPos(playerX, playerY - 1, playerZ)).canBeReplaced()) return true;
-
-        double xOff = mc.player.getX() - playerX;
-        double zOff = mc.player.getZ() - playerZ;
-        if (xOff < LEGIT_EDGE_THRESHOLD || xOff > 1.0 - LEGIT_EDGE_THRESHOLD
-                || zOff < LEGIT_EDGE_THRESHOLD || zOff > 1.0 - LEGIT_EDGE_THRESHOLD) {
-            int checkX = playerX + (xOff < LEGIT_EDGE_THRESHOLD ? -1 : (xOff > 1.0 - LEGIT_EDGE_THRESHOLD ? 1 : 0));
-            int checkZ = playerZ + (zOff < LEGIT_EDGE_THRESHOLD ? -1 : (zOff > 1.0 - LEGIT_EDGE_THRESHOLD ? 1 : 0));
-            if (checkX != playerX || checkZ != playerZ) {
-                if (mc.level.getBlockState(new BlockPos(checkX, playerY - 1, checkZ)).canBeReplaced()) return true;
-            }
-        }
-        return false;
-    }
-
     private void place() {
         if (!onAir() || blockPos == null || direction == null || !canUseBlockResult()) {
             return;
         }
-
-        // 放置节流：冷却未结束时不再放置，避免逐刻连续放置形成规律时序。
-        if (placeDelayCounter > 0) return;
 
         if (switch (raytrace.getValue()) {
             case Normal -> !RaytraceUtils.overBlock(RotationManager.INSTANCE.getRotation(), blockPos);
@@ -569,13 +407,8 @@ public class Scaffold extends Module {
         InteractionResult result = mc.gameMode.useItemOn(mc.player, hand, new BlockHitResult(getVec3(blockPos, direction), direction, blockPos, false));
 
         if (result.consumesAction()) {
-            // 冷却 = 基准 + 随机量，每次放置重新掷一次
-            placeDelayCounter = placeDelay.getValue()
-                    + (placeDelayRandom.getValue() > 0 ? legitRandom.nextInt(placeDelayRandom.getValue() + 1) : 0);
             if (swingHand.getValue()) {
-                mc.player.swing(hand);
-            } else {
-                mc.getConnection().send(new ServerboundSwingPacket(hand));
+                PlayerUtils.swingHand(hand);
             }
 
             if (render.getValue()) {

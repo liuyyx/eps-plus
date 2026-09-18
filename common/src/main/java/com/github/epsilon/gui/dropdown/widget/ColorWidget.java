@@ -9,8 +9,8 @@ import com.github.epsilon.gui.theme.MD3Theme;
 import com.github.epsilon.settings.impl.ColorSetting;
 import com.github.epsilon.utils.render.animation.Animation;
 import com.github.epsilon.utils.render.animation.Easing;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.util.Mth;
-import org.lwjgl.glfw.GLFW;
 
 import java.awt.*;
 
@@ -194,7 +194,7 @@ public class ColorWidget extends SettingWidget<ColorSetting> {
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         float previewX = absoluteX(width - DropdownTheme.SETTING_PADDING_X - DropdownTheme.COLOR_PREVIEW_SIZE);
         float previewY = absoluteY((DropdownTheme.SETTING_HEIGHT - DropdownTheme.COLOR_PREVIEW_SIZE) * 0.5f);
-        if ((button == 0 || button == 1) && isHovered(mouseX, mouseY, previewX - 2, previewY - 2, DropdownTheme.COLOR_PREVIEW_SIZE + 4, DropdownTheme.COLOR_PREVIEW_SIZE + 4)) {
+        if ((button == InputConstants.MOUSE_BUTTON_LEFT || button == InputConstants.MOUSE_BUTTON_RIGHT) && isHovered(mouseX, mouseY, previewX - 2, previewY - 2, DropdownTheme.COLOR_PREVIEW_SIZE + 4, DropdownTheme.COLOR_PREVIEW_SIZE + 4)) {
             if (hasFocusedInput()) {
                 commitFocusedInput();
                 blurFields();
@@ -206,7 +206,7 @@ public class ColorWidget extends SettingWidget<ColorSetting> {
             return true;
         }
 
-        if (button != 0) return false;
+        if (button != InputConstants.MOUSE_BUTTON_LEFT) return false;
 
         if (!opened || openAnim.getValue() < 0.5f) return false;
 
@@ -260,7 +260,7 @@ public class ColorWidget extends SettingWidget<ColorSetting> {
 
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
-        if (button == 0 && (pickingSB || pickingHue || pickingChannel != null)) {
+        if (button == InputConstants.MOUSE_BUTTON_LEFT && (pickingSB || pickingHue || pickingChannel != null)) {
             commitPendingColor();
             pickingSB = false;
             pickingHue = false;
@@ -275,13 +275,13 @@ public class ColorWidget extends SettingWidget<ColorSetting> {
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
         DropdownTextField focused = getFocusedField();
         if (focused == null) return false;
-        if (keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER) {
+        if (keyCode == InputConstants.KEY_RETURN || keyCode == InputConstants.KEY_NUMPADENTER) {
             commitFocusedInput();
             focused.blur();
             DropdownScreen.INSTANCE.react(ReisaDropdownCompanion.Action.CONFIRM);
             return true;
         }
-        if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
+        if (keyCode == InputConstants.KEY_ESCAPE) {
             clearPendingColor();
             syncFieldsFromColor(true);
             focused.blur();

@@ -21,11 +21,11 @@ import com.github.epsilon.managers.TranslationManager;
 import com.github.epsilon.utils.client.ConfigFolderOpener;
 import com.github.epsilon.utils.render.animation.Animation;
 import com.github.epsilon.utils.render.animation.Easing;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.input.CharacterEvent;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
-import org.lwjgl.glfw.GLFW;
 
 import java.awt.*;
 import java.nio.file.Path;
@@ -172,7 +172,7 @@ public class ConfigClientSettingTab implements ClientSettingTabView {
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean isDoubleClick) {
-        if (bounds == null || event.button() != 0) {
+        if (bounds == null || event.button() != InputConstants.MOUSE_BUTTON_LEFT) {
             return false;
         }
 
@@ -262,7 +262,7 @@ public class ConfigClientSettingTab implements ClientSettingTabView {
 
     @Override
     public boolean keyPressed(KeyEvent event) {
-        if (event.key() == GLFW.GLFW_KEY_ESCAPE && inputField.isFocused()) {
+        if (event.key() == InputConstants.KEY_ESCAPE && inputField.isFocused()) {
             inputField.blur();
             markDirty();
             return true;

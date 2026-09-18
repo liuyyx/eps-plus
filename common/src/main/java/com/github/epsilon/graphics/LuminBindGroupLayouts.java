@@ -1,7 +1,7 @@
 package com.github.epsilon.graphics;
 
-import com.mojang.blaze3d.pipeline.BindGroupLayout;
-import com.mojang.blaze3d.shaders.UniformType;
+import com.mojang.renderpearl.api.pipeline.BindGroupLayout;
+import com.mojang.renderpearl.api.pipeline.UniformType;
 
 public class LuminBindGroupLayouts {
 
@@ -18,8 +18,8 @@ public class LuminBindGroupLayouts {
     public static final BindGroupLayout SHADER_PARAMS = uniform("ShaderParams");
     public static final BindGroupLayout SHADER_COLORS = uniform("ShaderColors");
     public static final BindGroupLayout MOTION_BLUR_DATA = uniform("MotionBlurData");
-    public static final BindGroupLayout INPUT_SAMPLER = BindGroupLayout.builder().withSampler("InputSampler").build();
-    public static final BindGroupLayout MOTION_BLUR_TEXTURES = BindGroupLayout.builder().withSampler("InputSampler").withSampler("DepthSampler").build();
+    public static final BindGroupLayout INPUT_SAMPLER = BindGroupLayout.builder().withUniform("InputSampler", UniformType.COMBINED_IMAGE_SAMPLER).build();
+    public static final BindGroupLayout MOTION_BLUR_TEXTURES = BindGroupLayout.builder().withUniform("InputSampler", UniformType.COMBINED_IMAGE_SAMPLER).withUniform("DepthSampler", UniformType.COMBINED_IMAGE_SAMPLER).build();
 
     private static BindGroupLayout uniform(String name) {
         return BindGroupLayout.builder().withUniform(name, UniformType.UNIFORM_BUFFER).build();

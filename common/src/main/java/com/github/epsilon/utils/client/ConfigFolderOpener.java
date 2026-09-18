@@ -1,7 +1,7 @@
 package com.github.epsilon.utils.client;
 
+import com.mojang.blaze3d.Blaze3D;
 import com.github.epsilon.managers.ConfigManager;
-import net.minecraft.util.Util;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -21,7 +21,7 @@ public class ConfigFolderOpener {
     public static Path openConfigFolder() throws IOException {
         Path configDir = ConfigManager.INSTANCE.getConfigDir();
         Files.createDirectories(configDir);
-        Util.getPlatform().openPath(configDir);
+        Blaze3D.openPath(configDir);
         return configDir;
     }
 

@@ -1,5 +1,6 @@
 package com.github.epsilon.gui.panel.popup;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import com.github.epsilon.assets.i18n.EpsilonTranslations;
 import com.github.epsilon.graphics.text.IconChars;
 import com.github.epsilon.graphics.text.StaticFontLoader;
@@ -146,7 +147,7 @@ public class EnumSelectPopup implements PanelPopupHost.Popup {
     @Override
     @SuppressWarnings({"rawtypes", "unchecked"})
     public boolean mouseClicked(MouseButtonEvent event, boolean isDoubleClick) {
-        if (!bounds.contains(event.x(), event.y()) || event.button() != 0) {
+        if (!bounds.contains(event.x(), event.y()) || event.button() != InputConstants.MOUSE_BUTTON_LEFT) {
             return false;
         }
         Enum[] modes = setting.getModes();

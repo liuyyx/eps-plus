@@ -35,7 +35,6 @@ import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.input.PreeditEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
-import org.lwjgl.glfw.GLFW;
 
 import java.awt.*;
 import java.util.ArrayList;
@@ -302,7 +301,7 @@ public class DropdownScreen extends Screen implements ListSettingPopupScreen {
             return true;
         }
 
-        if (button == 0) {
+        if (button == InputConstants.MOUSE_BUTTON_LEFT) {
             for (DropdownPanel panel : panels) {
                 if (panel.isVisible()) {
                     panel.onGlobalMouseClicked(mx, my, button);
@@ -310,10 +309,10 @@ public class DropdownScreen extends Screen implements ListSettingPopupScreen {
             }
         }
 
-        if (button == 0 && searchField.focusIfContains(mx, my, getSearchX(), getSearchY(), getSearchWidth(), getSearchHeight())) {
+        if (button == InputConstants.MOUSE_BUTTON_LEFT && searchField.focusIfContains(mx, my, getSearchX(), getSearchY(), getSearchWidth(), getSearchHeight())) {
             react(ReisaDropdownCompanion.Action.TYPING);
             return true;
-        } else if (button == 0 && searchField.isFocused()) {
+        } else if (button == InputConstants.MOUSE_BUTTON_LEFT && searchField.isFocused()) {
             searchField.blur();
         }
 
@@ -408,7 +407,7 @@ public class DropdownScreen extends Screen implements ListSettingPopupScreen {
             react(event.isEscape() ? ReisaDropdownCompanion.Action.CANCEL : ReisaDropdownCompanion.Action.CONFIRM);
             return true;
         }
-        if (event.key() == GLFW.GLFW_KEY_F && InputConstants.isKeyDown(minecraft.getWindow(), GLFW.GLFW_KEY_LEFT_CONTROL)) {
+        if (event.key() == InputConstants.KEY_F && InputConstants.isKeyDown(InputConstants.KEY_LCONTROL)) {
             searchField.focus();
             react(ReisaDropdownCompanion.Action.TYPING);
             return true;
@@ -431,7 +430,7 @@ public class DropdownScreen extends Screen implements ListSettingPopupScreen {
         if (hasActiveInput) {
             for (DropdownPanel panel : panels) {
                 if (!panel.isVisible()) continue;
-                if (panel.keyPressed(event.key(), event.scancode(), event.modifiers())) {
+                if (panel.keyPressed(event.key(), event.keycode(), event.modifiers())) {
                     react(event.isEscape() ? ReisaDropdownCompanion.Action.CANCEL : ReisaDropdownCompanion.Action.CONFIRM);
                     return true;
                 }
@@ -445,7 +444,7 @@ public class DropdownScreen extends Screen implements ListSettingPopupScreen {
 
         for (DropdownPanel panel : panels) {
             if (!panel.isVisible()) continue;
-            if (panel.keyPressed(event.key(), event.scancode(), event.modifiers())) {
+            if (panel.keyPressed(event.key(), event.keycode(), event.modifiers())) {
                 react(event.isEscape() ? ReisaDropdownCompanion.Action.CANCEL : ReisaDropdownCompanion.Action.CONFIRM);
                 return true;
             }
@@ -662,7 +661,7 @@ public class DropdownScreen extends Screen implements ListSettingPopupScreen {
     }
 
     private void reactMouseButton(int button) {
-        react(button == GLFW.GLFW_MOUSE_BUTTON_RIGHT
+        react(button == InputConstants.MOUSE_BUTTON_RIGHT
                 ? ReisaDropdownCompanion.Action.SECONDARY_CLICK
                 : ReisaDropdownCompanion.Action.PRIMARY_CLICK);
     }

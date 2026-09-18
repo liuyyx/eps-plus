@@ -1,6 +1,6 @@
 package com.github.epsilon.graphics.text.minecraft;
 
-import com.mojang.blaze3d.textures.GpuSampler;
+import com.mojang.renderpearl.api.textures.GpuSampler;
 
 public interface EpsilonTextRenderable {
 

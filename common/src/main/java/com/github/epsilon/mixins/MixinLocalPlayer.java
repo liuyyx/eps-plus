@@ -4,6 +4,7 @@ import com.github.epsilon.events.bus.EventBus;
 import com.github.epsilon.events.impl.*;
 import com.github.epsilon.modules.impl.movement.Velocity;
 import com.github.epsilon.modules.impl.player.InvManager;
+import com.github.epsilon.modules.impl.render.TotemAnimation;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.mojang.authlib.GameProfile;
@@ -12,6 +13,7 @@ import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.MoverType;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -71,10 +73,11 @@ public class MixinLocalPlayer extends AbstractClientPlayer {
         EventBus.INSTANCE.post(new AfterSendPositionEvent());
     }
 
-    @Inject(method = "swing", at = @At("HEAD"), cancellable = true)
-    private void onSwing(InteractionHand hand, CallbackInfo ci) {
-        SwingHandEvent event = EventBus.INSTANCE.post(new SwingHandEvent());
-        if (event.isCancelled()) {
+    // 26.3 移除了 LocalPlayer#swing 重写，挥手事件改由 LivingEntity#swing 统一处理。
+    @Inject(method = "displayItemActivation(Lnet/minecraft/world/item/ItemStack;)V", at = @At("HEAD"), cancellable = true)
+    private void onDisplayItemActivation(ItemStack itemStack, CallbackInfo ci) {
+        if (TotemAnimation.INSTANCE.isEnabled()) {
+            TotemAnimation.INSTANCE.showFloatingItem(itemStack);
             ci.cancel();
         }
     }

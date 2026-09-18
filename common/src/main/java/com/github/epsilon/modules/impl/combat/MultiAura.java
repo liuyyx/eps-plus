@@ -10,7 +10,7 @@ import com.github.epsilon.settings.impl.BoolSetting;
 import com.github.epsilon.settings.impl.DoubleSetting;
 import com.github.epsilon.settings.impl.IntSetting;
 import com.github.epsilon.utils.math.MathUtils;
-import net.minecraft.network.protocol.game.ServerboundSwingPacket;
+import com.github.epsilon.utils.player.PlayerUtils;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.LivingEntity;
 
@@ -80,9 +80,7 @@ public class MultiAura extends Module {
         }
 
         if (swingHand.getValue()) {
-            mc.player.swing(InteractionHand.MAIN_HAND);
-        } else {
-            mc.getConnection().send(new ServerboundSwingPacket(InteractionHand.MAIN_HAND));
+            PlayerUtils.swingHand(InteractionHand.MAIN_HAND);
         }
     }
 

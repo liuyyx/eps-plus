@@ -32,7 +32,7 @@ Minecraft.<init> TAIL
 
 ## Manager 组织
 
-26.2.x 不再使用 Holders 包和 `Managers` 静态字段容器。所有 Manager 都是带
+26.3.x 不再使用 Holders 包和 `Managers` 静态字段容器。所有 Manager 都是带
 `public static final Xxx INSTANCE` 与私有构造函数的单例，通过 `INSTANCE` 直接访问：
 
 | Manager | 职责 |

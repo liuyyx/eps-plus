@@ -25,6 +25,8 @@
   `common/src/main/resources/META-INF/accesstransformer.cfg`。
 - Fabric 通过 Loom 读取 `common/src/main/resources/epsilon.accesswidener`。
 - Sodium 和 Iris 只以 `compileOnly` 参与编译，不会打入成品；对应 Mixin 使用 `@Pseudo` 软定位。
+- Iris 尚未发布 26.3 的 NeoForge 构建，`iris-neoforge` 目前复用 Fabric 产物编译 `IrisApi`/`IrisProgram`
+  （两者 API 包名一致，且只参与 `compileOnly`）；Iris 发布对应版本后应换回 `-neoforge` 版本。
 - 视频能力通过 Jar-in-Jar 引入 `org.bytedeco:javacpp`、`javacv`、`ffmpeg` 的 Java API 与两个平台
   （`windows-x86_64`、`macosx-arm64`）的 `javacpp` JNI 桥，两个加载器的打包方式不同：Fabric 使用
   Loom `include`，NeoForge 使用 `jarJar` 并修正 metadata 中的 artifact 标识（classifier 会被

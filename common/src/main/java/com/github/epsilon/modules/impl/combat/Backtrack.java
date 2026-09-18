@@ -337,11 +337,11 @@ public class Backtrack extends Module {
     private Vec3 trackSinglePacket(Packet<?> packet) {
         Vec3 position;
         if (packet instanceof ClientboundMoveEntityPacket movement && movement.getEntity(mc.level) == target) {
-            position = decodeRelative(trackedPosition, movement.getXa(), movement.getYa(), movement.getZa());
+            position = decodeMovementDelta(trackedPosition, movement.getPositionDelta());
         } else if (packet instanceof ClientboundTeleportEntityPacket teleport && teleport.id() == target.getId()) {
             position = teleport.change().position();
         } else if (packet instanceof ClientboundEntityPositionSyncPacket sync && sync.id() == target.getId()) {
-            position = sync.values().position();
+            position = sync.position().endPosition();
         } else {
             return null;
         }
@@ -442,6 +442,28 @@ public class Backtrack extends Module {
         double decodedY = y == 0L ? base.y : (Math.round(base.y * 4096.0) + y) / 4096.0;
         double decodedZ = z == 0L ? base.z : (Math.round(base.z * 4096.0) + z) / 4096.0;
         return new Vec3(decodedX, decodedY, decodedZ);
+    }
+
+    /**
+     * 解码移动包携带的相对位移。
+     *
+     * <p>26.3 的移动包改为携带 {@link VecDelta}，线性位移与分段位移需要分别处理。
+     *
+     * @param base 基准位置
+     * @param delta 移动包中的位移数据
+     * @return 解码后的位置
+     */
+    private static Vec3 decodeMovementDelta(Vec3 base, VecDelta delta) {
+        Vec3 position = base;
+        if (delta instanceof VecDelta.Linear(short xa, short ya, short za)) {
+            return decodeRelative(position, xa, ya, za);
+        }
+        if (delta instanceof VecDelta.Stepped stepped) {
+            for (VecDelta.Stepped.DeltaStep step : stepped.steps()) {
+                position = decodeRelative(position, step.xa(), step.ya(), step.za());
+            }
+        }
+        return position;
     }
 
     private record QueuedPacket(Packet<? super ClientPacketListener> packet, long timestamp) {

@@ -27,6 +27,7 @@ import com.github.epsilon.managers.NotificationManager;
 import com.github.epsilon.modules.impl.ClientSetting;
 import com.github.epsilon.settings.impl.RegistryListSetting;
 import com.github.epsilon.settings.impl.StringListSetting;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.IMEPreeditOverlay;
 import net.minecraft.client.gui.screens.Screen;
@@ -36,7 +37,6 @@ import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.input.PreeditEvent;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
-import org.lwjgl.glfw.GLFW;
 
 import java.awt.*;
 import java.util.List;
@@ -379,7 +379,7 @@ public class HudEditorScreen extends Screen implements ListSettingPopupScreen {
         if (popupHost.keyPressed(event)) {
             return true;
         }
-        if (hudPanel != null && hudPanel.hasActiveInput() && hudPanel.keyPressed(event.key(), event.scancode(), event.modifiers())) {
+        if (hudPanel != null && hudPanel.hasActiveInput() && hudPanel.keyPressed(event.key(), event.keycode(), event.modifiers())) {
             return true;
         }
         if (event.isEscape()) {
@@ -389,7 +389,7 @@ public class HudEditorScreen extends Screen implements ListSettingPopupScreen {
         if (handleEditorKey(event)) {
             return true;
         }
-        if (hudPanel != null && hudPanel.keyPressed(event.key(), event.scancode(), event.modifiers())) {
+        if (hudPanel != null && hudPanel.keyPressed(event.key(), event.keycode(), event.modifiers())) {
             return true;
         }
         return super.keyPressed(event);
@@ -423,7 +423,7 @@ public class HudEditorScreen extends Screen implements ListSettingPopupScreen {
             validateSelection();
             return true;
         }
-        if (epsilonEvent.button() == 0) {
+        if (epsilonEvent.button() == InputConstants.MOUSE_BUTTON_LEFT) {
             HudModule element = findElementAt(epsilonEvent.x(), epsilonEvent.y(), false);
             if (element != null) {
                 selectedElement = element;
@@ -446,7 +446,7 @@ public class HudEditorScreen extends Screen implements ListSettingPopupScreen {
         if (popupHost.mouseReleased(epsilonEvent)) {
             return true;
         }
-        if (draggingElement != null && epsilonEvent.button() == 0) {
+        if (draggingElement != null && epsilonEvent.button() == InputConstants.MOUSE_BUTTON_LEFT) {
             draggingElement = null;
             currentSnap = SnapInfo.none();
             return true;
@@ -497,23 +497,23 @@ public class HudEditorScreen extends Screen implements ListSettingPopupScreen {
 
         float step = event.hasShiftDown() ? 10.0f : 1.0f;
         return switch (event.key()) {
-            case GLFW.GLFW_KEY_LEFT -> {
+            case InputConstants.KEY_LEFT -> {
                 moveElementTo(selectedElement, selectedElement.x - step, selectedElement.y, false);
                 yield true;
             }
-            case GLFW.GLFW_KEY_RIGHT -> {
+            case InputConstants.KEY_RIGHT -> {
                 moveElementTo(selectedElement, selectedElement.x + step, selectedElement.y, false);
                 yield true;
             }
-            case GLFW.GLFW_KEY_UP -> {
+            case InputConstants.KEY_UP -> {
                 moveElementTo(selectedElement, selectedElement.x, selectedElement.y - step, false);
                 yield true;
             }
-            case GLFW.GLFW_KEY_DOWN -> {
+            case InputConstants.KEY_DOWN -> {
                 moveElementTo(selectedElement, selectedElement.x, selectedElement.y + step, false);
                 yield true;
             }
-            case GLFW.GLFW_KEY_DELETE, GLFW.GLFW_KEY_BACKSPACE -> {
+            case InputConstants.KEY_DELETE, InputConstants.KEY_BACKSPACE -> {
                 selectedElement.setEnabled(false);
                 selectedElement = null;
                 yield true;

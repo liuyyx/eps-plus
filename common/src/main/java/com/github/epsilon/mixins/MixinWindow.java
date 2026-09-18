@@ -4,7 +4,7 @@ import com.github.epsilon.EpsilonCommon;
 import com.github.epsilon.modules.impl.ClientSetting;
 import com.mojang.blaze3d.platform.IconSet;
 import com.mojang.blaze3d.platform.Window;
-import net.minecraft.server.packs.PackResources;
+import net.minecraft.server.packs.PackMetadataResources;
 import net.minecraft.server.packs.resources.IoSupplier;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -17,8 +17,8 @@ import java.util.List;
 @Mixin(Window.class)
 public class MixinWindow {
 
-    @Redirect(method = "setIcon", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/platform/IconSet;getStandardIcons(Lnet/minecraft/server/packs/PackResources;)Ljava/util/List;"))
-    private List<IoSupplier<InputStream>> onSetIcon(IconSet instance, PackResources resources) throws IOException {
+    @Redirect(method = "setIcon", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/platform/IconSet;getStandardIcons(Lnet/minecraft/server/packs/PackMetadataResources;)Ljava/util/List;"))
+    private List<IoSupplier<InputStream>> onSetIcon(IconSet instance, PackMetadataResources resources) throws IOException {
         final InputStream epsilon_16x16 = EpsilonCommon.class.getResourceAsStream("/assets/epsilon/textures/icons/icon_16x16.png");
         final InputStream epsilon_32x32 = EpsilonCommon.class.getResourceAsStream("/assets/epsilon/textures/icons/icon_32x32.png");
         final InputStream table_16x16 = EpsilonCommon.class.getResourceAsStream("/assets/epsilon/textures/icons/table_16x16.png");

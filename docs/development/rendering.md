@@ -73,6 +73,10 @@ GuiRenderer.render HEAD
 统一 flush；随后对每个元素调用 `renderOverlay(GuiGraphicsExtractor, DeltaTracker)` 补画物品等原版内容。
 同一个 `UiScene` 的 `beginFrame()` 与 `endFrame()` 必须配对，`endFrame()` 之后不得再向该帧提交命令。
 
+26.3 会在 `Minecraft` 构造函数内渲染首帧，此时 `Constants.mc`（`EpsilonCommon.init()` 中赋值）仍为
+`null`。依赖 `mc` 的渲染入口必须自行判空或延后到初始化完成，`MixinGuiRenderer` 就是在这个前提下跳过
+首帧的。
+
 ## 保留的 3D 路径
 
 `Render3DScheduler.INSTANCE` 是 Epsilon 的 3D 命令收集入口，支持填充盒、描边盒、侧面、线条和模糊盒。
@@ -90,6 +94,69 @@ GuiRenderer.render HEAD
 
 调用后处理前必须核验 render target 尺寸、采样器和当前 `RenderPipeline` 状态，避免引用已释放的
 texture/view；GPU 资源只由创建它们的渲染线程释放。
+
+## 26.3 GPU 抽象（renderpearl）
+
+26.3 把原本位于 `com.mojang.blaze3d.*` 的 GPU 抽象拆到 `com.mojang.renderpearl`，迁移时必须按新包名
+引用，不能再沿用旧路径：
+
+| 26.2 路径 | 26.3 路径 |
+|---|---|
+| `blaze3d.textures.*` | `renderpearl.api.textures.*`（`GpuTexture`、`GpuTextureView`、`GpuSampler`、`FilterMode`、`AddressMode`） |
+| `blaze3d.buffers.GpuBuffer/GpuBufferSlice` | `renderpearl.api.buffers.*` |
+| `blaze3d.systems.RenderPass/CommandEncoder` | `renderpearl.api.commands.*` |
+| `blaze3d.pipeline` 的 `RenderPipeline`、`ColorTargetState`、`BlendFunction`、`DepthStencilState`、`BindGroupLayout` | `renderpearl.api.pipeline.*` |
+| `blaze3d.shaders`、`blaze3d.platform.CompareOp/BlendFactor`、`blaze3d.GpuFormat/IndexType/PrimitiveTopology` | `renderpearl.api.pipeline` / `renderpearl.api` |
+| `blaze3d.opengl.*` | `renderpearl.backend.opengl.*` |
+| `blaze3d.vertex.VertexFormat/VertexFormatElement` | `renderpearl.api.vertex.*` |
+
+`com.mojang.blaze3d` 仍保留 `PoseStack`、`VertexConsumer`、`platform`、`resource`、`framegraph`、
+`systems.RenderSystem` 以及 `pipeline.RenderTarget/TextureTarget/MainTarget` 等类型。
+
+RenderPass 的使用方式也随之收紧：
+
+- `RenderPass.setPipeline(...)` 只接受 `CompiledRenderPipeline`，必须传
+  `RenderSystem.getCompiledPipeline(pipeline)`。
+- 纹理与采样器统一通过 `setUniform(name, textureView, sampler)` 绑定，`bindTexture` 已不存在。
+- `TextureTarget` 的构造签名变为 `(label, width, height, colorFormat, depthFormat)`；需要深度的目标
+  传 `GpuFormat.D32_FLOAT`，不需要时传 `null`。
+- `RenderSetup` 不再携带输出目标：自定义描边必须提交到模块自己的 `SubmitNodeStorage`，再用
+  `FeatureRenderDispatcher.PreparedFrame.executeOutline(renderPass)` 渲染到指定目标。
+- 26.2 中未声明颜色目标的 snippet（`POST_PROCESSING_SNIPPET`、`LINES_SNIPPET`、`ENTITY_SNIPPET` 等）
+  在 26.3 会让 `RenderPass.setPipeline` 抛出 “color attachment count must match” 异常；自建 pipeline
+  必须显式声明 `withColorTargetState(...)`。默认用 `ColorTargetState.DEFAULT`，需要混合的线条沿用
+  `new ColorTargetState(BlendFunction.TRANSLUCENT)`（26.2 的 `LINES_SNIPPET` 内置该状态，26.3 已移除）。
+
+描边链路在 26.3 的落点：
+
+- 实体描边由 `LevelRenderer` 内部的 `executeOutline` 渲染进 `entityOutlineTarget`，`Shaders` 启用时
+  `MixinLevelRenderer` 会取消原版后处理链，并在 `LevelRenderer.render` 返回后处理描边目标再混回主目标。
+- 手部描边由 `MixinItemInHandRenderer` 提交，`MixinGameRenderer`/Iris 兼容 Mixin 在
+  `FeatureRenderDispatcher.renderAllFeatures` 之后补一次 `executeOutline`，渲染进 `handTarget`。
+- 胸箱描边由 `MixinChestRenderer` 提交到 `ShaderManager` 自己的 `chestOutlineStorage`，
+  `ShaderManager.processChestOutlineTarget` 在 `render3dHud` 结束后准备帧并渲染。
+
+手部渲染器改名与拆分：`ItemInHandRenderer` 变为无状态的 `FirstPersonHandsAndItemsRenderer`，
+物品切换动画的计时移到 `net.minecraft.client.player.FirstPersonHandsAndItems`。修改 HandView、
+挥手或手持物品渲染时必须同时核验这两处，不能只改渲染器。
+
+`DynamicUniformStorage` 被 `DynamicGpuDataStorage` 取代：自定义 UBO 结构实现
+`DynamicGpuDataStorage.DynamicGpuData`，模块通过 `DynamicGpuDataStorageMapped(label, size,
+GpuBuffer.USAGE_UNIFORM, capacity)` 创建存储，写入方法为 `writeData(...)`。
+
+### 自定义 shader 源
+
+26.3 的管线在编译前会被转换成 SPIR-V（glslang），`assets/epsilon/shaders/` 下的源文件必须满足：
+
+- 导入语法从 `#moj_import <minecraft:xxx.glsl>` 改为 `#include <minecraft:xxx.glsl>`；被导入的
+  include 文件位于对应命名空间的 `shaders/include/` 下。
+- 顶点着色器的 `out`、片元着色器的 `in`/`out` 以及顶点属性都必须显式声明
+  `layout(location = N)`；同一个接缝两侧的 location 必须一致（例如 `ttf_font.vsh` 的 `v_Color=0`、
+  `v_TexCoord=1` 对应 `ttf_font_aa.fsh` 的同一组 location）。
+- 顶点序号使用 `gl_VertexIndex`，`gl_VertexID` 已不可用。
+
+管线编译失败只会记录 `Couldn't compile pipeline (...)` 日志，并在取用时抛出
+`Failed to find or load pipeline ...`，因此新增或修改 shader 后必须启动客户端验证编译结果。
 
 ## 字体
 
@@ -110,7 +177,7 @@ texture/view；GPU 资源只由创建它们的渲染线程释放。
   绝对/相对路径直接查找，相对路径再依次尝试工作目录和用户目录 `.epsilon/fonts/`，最后按文件名在系统
   字体目录中递归查找；路径不可读或字体无效时回退内置字体并记录日志。
 - Vulkan 后端下 atlas 上传必须走 `TtfGlyphAtlas` 内部的 `TransientMemory.allocateStaging` +
-  `copyBufferToTexture`：blaze3d 的 `writeToTexture(ByteBuffer)` 固定按 alignment = 1 申请 staging，
+  `copyBufferToTexture`：renderpearl 的 `writeToTexture(ByteBuffer)` 固定按 alignment = 1 申请 staging，
   R8 字形长度不保证 4 字节对齐，会让共享暂存游标错位，导致后续 RGBA8 纹理上传出现非法的
   `VkBufferImageCopy.bufferOffset`；OpenGL 后端保持原有上传路径。后端由
   `LuminRenderSystem.IS_VULKAN_BACKEND` 判定一次并复用，不得在调用点重复查询 `DeviceInfo`。

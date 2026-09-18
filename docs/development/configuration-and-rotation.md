@@ -21,7 +21,10 @@
 - `client-settings.json` 保存标记为 root 的客户端设置，`accounts.json` 保存账号列表。
 - 配置支持新建、切换、删除、另存、重载、Zip 导入和导出；导出时写入 `config-info.json` 元数据。
 - `saveNow()` 已由 JVM shutdown hook 调用，账号增删也会主动保存。
-- `CONFIG_VERSION` 当前为 3；旧版 `config.json` 布局由 `LegacyConfigMigrator` 迁移到新目录结构。
+- `CONFIG_VERSION` 当前为 4；旧版 `config.json` 布局由 `LegacyConfigMigrator` 迁移到新目录结构。
+- 版本 4 之前的配置保存 GLFW 键码，26.3 起改为 SDL 扫描码（鼠标键为 SDL 编号）。
+  `ConfigManager` 在读取模块配置时会用 `KeybindUtils.migrateLegacyKeyBind` 迁移 `keyBind` 与
+  `KeybindSetting`，无法映射的键位会记录日志并重置为未绑定；不得跳过该迁移直接读取旧值。
 - 配置名会做非法字符与 `..` 校验；Zip 导入通过 `unzipSecurely` 拒绝越界条目，不得绕过该校验。
 
 ## RotationManager

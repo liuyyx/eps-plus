@@ -1,5 +1,6 @@
 package com.github.epsilon.gui.dropdown.component;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import com.github.epsilon.Constants;
 import com.github.epsilon.assets.i18n.EpsilonTranslations;
 import com.github.epsilon.graphics.text.IconChars;
@@ -108,7 +109,7 @@ public class MainDropdownPanel extends AbstractDropdownPanel {
     @Override
     protected boolean mouseClickedContent(double mouseX, double mouseY, int button) {
         float currentY = y + DropdownTheme.PANEL_HEADER_HEIGHT - scroll + CONTENT_PADDING;
-        if (button == 0) {
+        if (button == InputConstants.MOUSE_BUTTON_LEFT) {
             for (int index = 0; index < entries.size(); index++) {
                 Entry entry = entries.get(index);
                 float iconX = getIconX(index);

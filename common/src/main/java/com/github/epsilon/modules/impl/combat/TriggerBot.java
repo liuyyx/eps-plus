@@ -7,6 +7,7 @@ import com.github.epsilon.modules.Module;
 import com.github.epsilon.settings.impl.DoubleSetting;
 import com.github.epsilon.settings.impl.IntSetting;
 import com.github.epsilon.utils.math.MathUtils;
+import com.github.epsilon.utils.player.PlayerUtils;
 import net.minecraft.core.BlockPos;
 import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
@@ -64,7 +65,7 @@ public class TriggerBot extends Module {
         }
 
         mc.gameMode.attack(mc.player, target);
-        mc.player.swing(InteractionHand.MAIN_HAND);
+        PlayerUtils.swingHand(InteractionHand.MAIN_HAND);
 
         delay = MathUtils.getRandom(minDelay.getValue(), maxDelay.getValue());
     }

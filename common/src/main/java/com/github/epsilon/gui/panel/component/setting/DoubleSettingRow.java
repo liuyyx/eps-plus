@@ -1,5 +1,6 @@
 package com.github.epsilon.gui.panel.component.setting;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import com.github.epsilon.graphics.renderers.TextRenderer;
 import com.github.epsilon.gui.lib.UiRect;
 import com.github.epsilon.gui.lib.UiTree;
@@ -105,14 +106,14 @@ public class DoubleSettingRow extends SettingRow<DoubleSetting> {
     @Override
     public boolean mouseClicked(UiRect bounds, MouseButtonEvent event, boolean isDoubleClick) {
         UiRect fieldBounds = getFieldBounds(bounds);
-        if (event.button() == 0 && fieldBounds.contains(event.x(), event.y())) {
+        if (event.button() == InputConstants.MOUSE_BUTTON_LEFT && fieldBounds.contains(event.x(), event.y())) {
             dragging = false;
             focused = true;
             inputBuffer = formatPlainValue();
             cursorIndex = getCursorIndex(event.x(), fieldBounds);
             return true;
         }
-        if (event.button() != 0 || !getInteractiveBounds(bounds).contains(event.x(), event.y())) {
+        if (event.button() != InputConstants.MOUSE_BUTTON_LEFT || !getInteractiveBounds(bounds).contains(event.x(), event.y())) {
             return false;
         }
         focused = false;
@@ -123,7 +124,7 @@ public class DoubleSettingRow extends SettingRow<DoubleSetting> {
 
     @Override
     public boolean mouseReleased(UiRect bounds, MouseButtonEvent event) {
-        if (event.button() == 0 && dragging) {
+        if (event.button() == InputConstants.MOUSE_BUTTON_LEFT && dragging) {
             commitPendingValue();
             dragging = false;
             return true;

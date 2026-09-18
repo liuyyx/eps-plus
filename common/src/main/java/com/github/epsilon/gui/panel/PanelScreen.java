@@ -1,5 +1,6 @@
 package com.github.epsilon.gui.panel;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import com.github.epsilon.graphics.LuminRenderSystem;
 import com.github.epsilon.graphics.renderers.TextRenderer;
 import com.github.epsilon.gui.lib.UiRect;
@@ -229,7 +230,7 @@ public class PanelScreen extends Screen {
         MouseButtonEvent epsilonEvent = LuminRenderSystem.toEpsilonMouseEvent(event);
         double mouseX = epsilonEvent.x();
         double mouseY = epsilonEvent.y();
-        if (event.button() != 0) {
+        if (event.button() != InputConstants.MOUSE_BUTTON_LEFT) {
             if (state.getListeningKeyBindModule() != null && moduleDetailPanel.mouseClicked(epsilonEvent, isDoubleClick)) {
                 dirtyState.markAllDirty();
                 return true;

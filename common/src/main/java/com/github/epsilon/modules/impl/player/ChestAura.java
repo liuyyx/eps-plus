@@ -128,9 +128,7 @@ public class ChestAura extends Module {
         opening = true;
         openingStartedAt = System.currentTimeMillis();
         if (swing.getValue()) {
-            mc.player.swing(InteractionHand.MAIN_HAND);
-        } else {
-            mc.getConnection().send(new ServerboundSwingPacket(InteractionHand.MAIN_HAND));
+            PlayerUtils.swingHand(InteractionHand.MAIN_HAND);
         }
     }
 
@@ -139,7 +137,7 @@ public class ChestAura extends Module {
         if (mc.level == null) return;
 
         if (event.getPacket() instanceof ServerboundUseItemOnPacket packet) {
-            BlockPos pos = packet.getHitResult().getBlockPos();
+            BlockPos pos = packet.hitResult().getBlockPos();
             if (isSelectedContainer(mc.level.getBlockEntity(pos))) {
                 clickedContainers.add(pos.immutable());
                 playerClickedContainers.add(pos.immutable());

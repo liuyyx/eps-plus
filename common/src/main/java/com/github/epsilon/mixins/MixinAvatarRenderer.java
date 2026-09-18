@@ -13,7 +13,7 @@ import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.entity.player.AvatarRenderer;
 import net.minecraft.client.renderer.entity.state.AvatarRenderState;
 import net.minecraft.client.renderer.rendertype.RenderType;
-import net.minecraft.client.renderer.texture.TextureAtlasSprite;
+import net.minecraft.client.renderer.texture.UvMapping;
 import net.minecraft.world.entity.Avatar;
 import net.minecraft.world.entity.HumanoidArm;
 import org.spongepowered.asm.mixin.Mixin;
@@ -45,13 +45,13 @@ public class MixinAvatarRenderer {
         return original;
     }
 
-    @WrapOperation(method = "renderHand", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/SubmitNodeCollector;submitModelPart(Lnet/minecraft/client/model/geom/ModelPart;Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/rendertype/RenderType;IILnet/minecraft/client/renderer/texture/TextureAtlasSprite;)V"))
-    private void applyShadersHandArmOutline(SubmitNodeCollector submitNodeCollector, ModelPart modelPart, PoseStack poseStack, RenderType renderType, int lightCoords, int overlayCoords, TextureAtlasSprite sprite, Operation<Void> original) {
+    @WrapOperation(method = "renderHand", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/SubmitNodeCollector;submitModelPart(Lnet/minecraft/client/model/geom/ModelPart;Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/rendertype/RenderType;IILnet/minecraft/client/renderer/texture/UvMapping;)V"))
+    private void applyShadersHandArmOutline(SubmitNodeCollector submitNodeCollector, ModelPart modelPart, PoseStack poseStack, RenderType renderType, int lightCoords, int overlayCoords, UvMapping uvMapping, Operation<Void> original) {
         Shaders shaders = Shaders.INSTANCE;
         if (shaders.isEnabled() && shaders.hands.getValue()) {
-            submitNodeCollector.submitModelPart(modelPart, poseStack, renderType, lightCoords, overlayCoords, sprite, -1, null, shaders.getOutlineColor(shaders.handsShader));
+            submitNodeCollector.submitModelPart(modelPart, poseStack, renderType, lightCoords, overlayCoords, uvMapping, -1, shaders.getOutlineColor(shaders.handsShader));
         } else {
-            original.call(submitNodeCollector, modelPart, poseStack, renderType, lightCoords, overlayCoords, sprite);
+            original.call(submitNodeCollector, modelPart, poseStack, renderType, lightCoords, overlayCoords, uvMapping);
         }
     }
 

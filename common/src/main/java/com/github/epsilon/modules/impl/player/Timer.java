@@ -11,11 +11,11 @@ import com.github.epsilon.settings.impl.EnumSetting;
 import com.github.epsilon.settings.impl.IntSetting;
 import com.github.epsilon.settings.impl.KeybindSetting;
 import com.github.epsilon.utils.timer.TimerUtils;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.common.ClientboundPingPacket;
 import net.minecraft.network.protocol.game.*;
 import net.minecraft.util.Mth;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -35,7 +35,7 @@ public class Timer extends Module {
     }
 
     private final EnumSetting<Mode> mode = enumSetting("Mode", Mode.Always);
-    private final KeybindSetting activateKey = keybindSetting("Activate Key", GLFW.GLFW_KEY_X, () -> !mode.is(Mode.Always));
+    private final KeybindSetting activateKey = keybindSetting("Activate Key", InputConstants.KEY_X, () -> !mode.is(Mode.Always));
     public final DoubleSetting multiplier = doubleSetting("Multiplier", 1.8, 0.1, 10.0, 0.1);
     private final IntSetting maxBalance = intSetting("Max Balance", 1000, 0, 10000, 1, () -> mode.is(Mode.Balance));
     public final IntSetting ticks = intSetting("Ticks", 13, 1, 20, 1, () -> mode.is(Mode.SlowBalance));
@@ -214,9 +214,9 @@ public class Timer extends Module {
     @EventHandler
     private void onKeyPress(KeyPressEvent event) {
         if (event.getKey() != activateKey.getValue()) return;
-        if (event.getAction() == GLFW.GLFW_PRESS) {
+        if (event.getAction() == InputConstants.PRESS) {
             shouldRelease = true;
-        } else if (event.getAction() == GLFW.GLFW_RELEASE) {
+        } else if (event.getAction() == InputConstants.RELEASE) {
             shouldRelease = false;
         }
     }
@@ -224,9 +224,9 @@ public class Timer extends Module {
     @EventHandler
     private void onMousePress(MousePressEvent event) {
         if (event.getButton() != activateKey.getValue()) return;
-        if (event.getAction() == GLFW.GLFW_PRESS) {
+        if (event.getAction() == InputConstants.PRESS) {
             shouldRelease = true;
-        } else if (event.getAction() == GLFW.GLFW_RELEASE) {
+        } else if (event.getAction() == InputConstants.RELEASE) {
             shouldRelease = false;
         }
     }

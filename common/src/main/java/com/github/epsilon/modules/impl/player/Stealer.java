@@ -60,11 +60,11 @@ public class Stealer extends Module {
             float score = InvHelper.getToolScore(stack);
             float bestScore = InvHelper.getBestPickaxeScore();
             return !(score <= bestScore);
-        } else if (stack.getItem() instanceof AxeItem) {
+        } else if (InvHelper.isAxe(stack)) {
             float score = InvHelper.getToolScore(stack);
             float bestScore = InvHelper.getBestAxeScore();
             return !(score <= bestScore);
-        } else if (stack.getItem() instanceof ShovelItem) {
+        } else if (InvHelper.isShovel(stack)) {
             float score = InvHelper.getToolScore(stack);
             float bestScore = InvHelper.getBestShovelScore();
             return !(score <= bestScore);
@@ -121,12 +121,12 @@ public class Stealer extends Module {
                     if (InvHelper.getToolScore(checkStack) > InvHelper.getToolScore(stack)) {
                         return false;
                     }
-                } else if (stack.getItem() instanceof AxeItem && checkStack.getItem() instanceof AxeItem) {
+                } else if (InvHelper.isAxe(stack) && InvHelper.isAxe(checkStack)) {
                     if (InvHelper.getToolScore(checkStack) > InvHelper.getToolScore(stack)) {
                         return false;
                     }
-                } else if (stack.getItem() instanceof ShovelItem
-                        && checkStack.getItem() instanceof ShovelItem
+                } else if (InvHelper.isShovel(stack)
+                        && InvHelper.isShovel(checkStack)
                         && InvHelper.getToolScore(checkStack) > InvHelper.getToolScore(stack)) {
                     return false;
                 }

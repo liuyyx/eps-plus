@@ -1,5 +1,6 @@
 package com.github.epsilon.gui.panel.view;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import com.github.epsilon.assets.i18n.EpsilonTranslations;
 import com.github.epsilon.graphics.renderers.TextRenderer;
 import com.github.epsilon.gui.lib.UiRect;
@@ -178,7 +179,7 @@ public class ModuleDetailPanel implements AutoCloseable {
             return true;
         }
 
-        if (event.button() != 0) {
+        if (event.button() != InputConstants.MOUSE_BUTTON_LEFT) {
             return false;
         }
 

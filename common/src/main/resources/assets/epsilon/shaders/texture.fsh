@@ -1,10 +1,10 @@
 #version 410 core
 
-in vec2 f_Position;
-in vec4 f_Color;
-in vec2 f_TexCoord;
-in vec4 f_InnerRect;
-in vec4 f_Radius;
+layout(location = 0) in vec2 f_Position;
+layout(location = 1) in vec4 f_Color;
+layout(location = 2) in vec2 f_TexCoord;
+layout(location = 3) in vec4 f_InnerRect;
+layout(location = 4) in vec4 f_Radius;
 
 layout(location = 0) out vec4 fragColor;
 

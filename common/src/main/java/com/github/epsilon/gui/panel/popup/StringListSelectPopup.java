@@ -14,12 +14,12 @@ import com.github.epsilon.gui.theme.MD3Theme;
 import com.github.epsilon.settings.Setting;
 import com.github.epsilon.utils.render.animation.Animation;
 import com.github.epsilon.utils.render.animation.Easing;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.input.CharacterEvent;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.util.Mth;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -127,7 +127,7 @@ public class StringListSelectPopup implements PanelPopupHost.Popup {
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean isDoubleClick) {
-        if (event.button() != 0 || !bounds.contains(event.x(), event.y())) return false;
+        if (event.button() != InputConstants.MOUSE_BUTTON_LEFT || !bounds.contains(event.x(), event.y())) return false;
         UiRect viewport = lastViewport != null ? lastViewport : getViewport();
         if (scrollBarDrag.mouseClicked(event.x(), event.y(), viewport, scroll, maxScroll)) {
             applyDraggedScroll(event.y(), viewport);
@@ -162,18 +162,18 @@ public class StringListSelectPopup implements PanelPopupHost.Popup {
 
     @Override
     public boolean keyPressed(KeyEvent event) {
-        if (event.key() == GLFW.GLFW_KEY_ENTER && !input.isBlank()) {
+        if (event.key() == InputConstants.KEY_RETURN && !input.isBlank()) {
             addFn.accept(input.trim());
             input = "";
             resetScroll();
             return true;
         }
         return switch (event.key()) {
-            case GLFW.GLFW_KEY_BACKSPACE -> {
+            case InputConstants.KEY_BACKSPACE -> {
                 if (!input.isEmpty()) input = input.substring(0, input.length() - 1);
                 yield true;
             }
-            case GLFW.GLFW_KEY_DELETE -> {
+            case InputConstants.KEY_DELETE -> {
                 input = "";
                 yield true;
             }

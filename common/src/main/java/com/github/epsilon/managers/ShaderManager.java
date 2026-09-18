@@ -4,20 +4,24 @@ import com.github.epsilon.assets.resources.ResourceLocationUtils;
 import com.github.epsilon.graphics.LuminBindGroupLayouts;
 import com.github.epsilon.graphics.LuminRenderSystem;
 import com.github.epsilon.modules.impl.render.Shaders;
-import com.mojang.blaze3d.GpuFormat;
-import com.mojang.blaze3d.buffers.GpuBufferSlice;
+import com.mojang.renderpearl.api.GpuFormat;
+import com.mojang.renderpearl.api.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.buffers.Std140Builder;
 import com.mojang.blaze3d.buffers.Std140SizeCalculator;
 import com.mojang.blaze3d.pipeline.*;
-import com.mojang.blaze3d.platform.BlendFactor;
-import com.mojang.blaze3d.systems.CommandEncoder;
-import com.mojang.blaze3d.systems.RenderPass;
+import com.mojang.renderpearl.api.pipeline.*;
+import com.mojang.renderpearl.api.pipeline.BlendFactor;
+import com.mojang.renderpearl.api.commands.CommandEncoder;
+import com.mojang.renderpearl.api.commands.RenderPass;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.FilterMode;
-import com.mojang.blaze3d.textures.GpuSampler;
-import net.minecraft.client.renderer.DynamicUniformStorage;
+import com.mojang.renderpearl.api.textures.FilterMode;
+import com.mojang.renderpearl.api.textures.GpuSampler;
+import com.mojang.renderpearl.api.pipeline.ColorTargetState;
+import net.minecraft.client.renderer.DynamicGpuDataStorage;
 import net.minecraft.client.renderer.RenderPipelines;
-import net.minecraft.client.renderer.rendertype.OutputTarget;
+import net.minecraft.client.renderer.SubmitNodeCollector;
+import net.minecraft.client.renderer.SubmitNodeStorage;
+import net.minecraft.client.renderer.feature.FeatureRenderDispatcher;
 import net.minecraft.client.renderer.rendertype.RenderSetup;
 import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.resources.Identifier;
@@ -27,6 +31,7 @@ import org.joml.Vector4f;
 import java.awt.*;
 import java.nio.ByteBuffer;
 import java.util.Optional;
+import java.util.OptionalDouble;
 import java.util.function.Function;
 
 import static com.github.epsilon.Constants.mc;
@@ -82,12 +87,17 @@ public class ShaderManager {
     private RenderTarget glowSwap;
     private RenderTarget handTarget;
     private RenderTarget chestTarget;
-    private final OutputTarget chestOutlineOutputTarget = new OutputTarget("epsilon_chest_outline", () -> chestTarget);
+    /**
+     * 模块自己的胸箱描边提交缓存。
+     *
+     * <p>26.3 的 {@code RenderSetup} 不再携带输出目标，描边提交必须自己准备 frame 并指定 RenderPass，
+     * 因此单独收集后再渲染进 {@code chestTarget}。
+     */
+    private final SubmitNodeStorage chestOutlineStorage = new SubmitNodeStorage();
     private final Function<Identifier, RenderType> chestOutlineRenderTypes = Util.memoize(texture -> RenderType.create(
             "epsilon_chest_outline",
             RenderSetup.builder(RenderPipelines.OUTLINE_NO_CULL)
                     .withTexture("Sampler0", texture)
-                    .setOutputTarget(chestOutlineOutputTarget)
                     .setOutline(RenderSetup.OutlineProperty.IS_OUTLINE)
                     .createRenderSetup()
     ));
@@ -116,6 +126,23 @@ public class ShaderManager {
         ShaderUniforms shaderUniforms = writeShaderUniforms(target.width, target.height, settings, true, settings == Shaders.INSTANCE.entityShader);
         renderPass("epsilon_shader_effect", target, shaderSwap, pipeline(shader), shaderUniforms, true);
         renderPass("epsilon_shader_copy", shaderSwap, target, copyPipeline, null, false);
+    }
+
+    /**
+     * 处理实体描边目标并混回主目标。
+     *
+     * <p>26.3 的实体描边在 {@code LevelRenderer} 内部提交，Shaders 启用时会取消原版后处理链，
+     * 因此需要在 LevelRenderer 渲染结束后自行处理描边目标并混回主目标。
+     *
+     * @param outlineTarget 实体描边目标
+     * @param mainTarget 主渲染目标
+     */
+    public void processEntityOutlineTarget(RenderTarget outlineTarget, RenderTarget mainTarget) {
+        if (!Shaders.INSTANCE.isEnabled() || outlineTarget == null || mainTarget == null || mainTarget.getColorTextureView() == null) {
+            return;
+        }
+        processOutlineTarget(outlineTarget, Shaders.INSTANCE.entityShader);
+        outlineTarget.blitAndBlendToTexture(mainTarget.getColorTextureView(), mainTarget.getDepthTextureView());
     }
 
     public void beginHandOutlineCapture(int width, int height) {
@@ -154,6 +181,27 @@ public class ShaderManager {
         return chestOutlineRenderTypes.apply(texture);
     }
 
+    /**
+     * 获取胸箱描边的提交目标。
+     *
+     * @return 模块持有的提交缓存
+     */
+    public SubmitNodeCollector chestOutlineCollector() {
+        return chestOutlineStorage;
+    }
+
+    /**
+     * 把已提交的手部描边渲染进 {@code handTarget}。
+     *
+     * @param frame 当前正在执行的手部渲染帧
+     */
+    public void renderHandOutline(FeatureRenderDispatcher.PreparedFrame frame) {
+        if (!capturedHands || handTarget == null || handTarget.getColorTextureView() == null) {
+            return;
+        }
+        renderOutlinePass("epsilon_hand_outline", handTarget, frame);
+    }
+
     public void processHandOutlineTarget(RenderTarget mainTarget) {
         if (capturedHands) {
             capturedHands = false;
@@ -178,17 +226,37 @@ public class ShaderManager {
     }
 
     public void processChestOutlineTarget(RenderTarget mainTarget) {
-        if (capturedChests) {
-            capturedChests = false;
-
-            if (chestTarget == null || mainTarget == null || mainTarget.getColorTextureView() == null) {
-                return;
-            }
-
-            processOutlineTarget(chestTarget, Shaders.INSTANCE.chestShader);
-            chestTarget.blitAndBlendToTexture(mainTarget.getColorTextureView(), mainTarget.getDepthTextureView());
+        if (!capturedChests) {
+            preparedChests = false;
+            return;
         }
+
+        capturedChests = false;
         preparedChests = false;
+
+        if (chestTarget == null || mainTarget == null || mainTarget.getColorTextureView() == null) {
+            return;
+        }
+
+        try (FeatureRenderDispatcher.PreparedFrame frame = mc.gameRenderer.featureRenderDispatcher().prepareFrame(chestOutlineStorage)) {
+            renderOutlinePass("epsilon_chest_outline", chestTarget, frame);
+        }
+
+        processOutlineTarget(chestTarget, Shaders.INSTANCE.chestShader);
+        chestTarget.blitAndBlendToTexture(mainTarget.getColorTextureView(), mainTarget.getDepthTextureView());
+    }
+
+    private void renderOutlinePass(String name, RenderTarget target, FeatureRenderDispatcher.PreparedFrame frame) {
+        try (RenderPass renderPass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(
+                () -> name,
+                target.getColorTextureView(),
+                Optional.empty(),
+                target.getDepthTextureView(),
+                OptionalDouble.empty()
+        )) {
+            RenderSystem.bindDefaultUniforms(renderPass);
+            frame.executeOutline(renderPass);
+        }
     }
 
     private void renderPass(String name, RenderTarget input, RenderTarget output, RenderPipeline pipeline, ShaderUniforms shaderUniforms, boolean bindColors) {
@@ -204,7 +272,7 @@ public class ShaderManager {
                 output.getColorTextureView(),
                 Optional.empty()
         )) {
-            renderPass.setPipeline(pipeline);
+            renderPass.setPipeline(RenderSystem.getCompiledPipeline(pipeline));
             RenderSystem.bindDefaultUniforms(renderPass);
             if (shaderUniforms != null) {
                 renderPass.setUniform("ShaderParams", shaderUniforms.params());
@@ -212,7 +280,7 @@ public class ShaderManager {
                     renderPass.setUniform("ShaderColors", shaderUniforms.colors());
                 }
             }
-            renderPass.bindTexture("InputSampler", input.getColorTextureView(), sampler);
+            renderPass.setUniform("InputSampler", input.getColorTextureView(), sampler);
             renderPass.draw(3, 1, 0, 0);
         }
     }
@@ -262,10 +330,10 @@ public class ShaderManager {
                 output.getColorTextureView(),
                 Optional.empty()
         )) {
-            renderPass.setPipeline(glowPipeline);
+            renderPass.setPipeline(RenderSystem.getCompiledPipeline(glowPipeline));
             RenderSystem.bindDefaultUniforms(renderPass);
             renderPass.setUniform("GlowConfig", glowUniforms);
-            renderPass.bindTexture("InputSampler", input.getColorTextureView(), sampler);
+            renderPass.setUniform("InputSampler", input.getColorTextureView(), sampler);
             renderPass.draw(3, 1, 0, 0);
         }
     }
@@ -280,9 +348,9 @@ public class ShaderManager {
                 output.getColorTextureView(),
                 Optional.empty()
         )) {
-            renderPass.setPipeline(glowMaskPipeline);
+            renderPass.setPipeline(RenderSystem.getCompiledPipeline(glowMaskPipeline));
             RenderSystem.bindDefaultUniforms(renderPass);
-            renderPass.bindTexture("InputSampler", input.getColorTextureView(),
+            renderPass.setUniform("InputSampler", input.getColorTextureView(),
                     RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST));
             renderPass.draw(3, 1, 0, 0);
         }
@@ -370,6 +438,7 @@ public class ShaderManager {
             fadePipeline = pipeline("fade", true);
             glowPipeline = RenderPipeline.builder(RenderPipelines.POST_PROCESSING_SNIPPET)
                     .withLocation(ResourceLocationUtils.getIdentifier("pipelines/shader_glow"))
+                    .withColorTargetState(ColorTargetState.DEFAULT)
                     .withVertexShader(Identifier.withDefaultNamespace("core/screenquad"))
                     .withFragmentShader(ResourceLocationUtils.getIdentifier("shader_glow"))
                     .withBindGroupLayout(LuminBindGroupLayouts.GLOW_CONFIG)
@@ -388,6 +457,7 @@ public class ShaderManager {
                     .build();
             copyPipeline = RenderPipeline.builder(RenderPipelines.POST_PROCESSING_SNIPPET)
                     .withLocation(ResourceLocationUtils.getIdentifier("pipelines/shader_copy"))
+                    .withColorTargetState(ColorTargetState.DEFAULT)
                     .withVertexShader(("core/screenquad"))
                     .withFragmentShader(ResourceLocationUtils.getIdentifier("shader_copy"))
                     .withBindGroupLayout(LuminBindGroupLayouts.INPUT_SAMPLER)
@@ -398,7 +468,7 @@ public class ShaderManager {
 
     private void ensureSwap(int width, int height) {
         if (shaderSwap == null) {
-            shaderSwap = new TextureTarget("Epsilon Shader Swap", width, height, false, GpuFormat.RGBA8_UNORM);
+            shaderSwap = new TextureTarget("Epsilon Shader Swap", width, height, GpuFormat.RGBA8_UNORM, null);
         }
 
         if (shaderSwap.width != width || shaderSwap.height != height) {
@@ -408,7 +478,7 @@ public class ShaderManager {
 
     private void ensureGlowSwap(int width, int height) {
         if (glowSwap == null) {
-            glowSwap = new TextureTarget("Epsilon Shader Glow Swap", width, height, false, GpuFormat.RGBA8_UNORM);
+            glowSwap = new TextureTarget("Epsilon Shader Glow Swap", width, height, GpuFormat.RGBA8_UNORM, null);
         }
 
         if (glowSwap.width != width || glowSwap.height != height) {
@@ -418,7 +488,7 @@ public class ShaderManager {
 
     private void ensureHandTarget(int width, int height) {
         if (handTarget == null) {
-            handTarget = new TextureTarget("Epsilon Shader Hands", width, height, true, GpuFormat.RGBA8_UNORM);
+            handTarget = new TextureTarget("Epsilon Shader Hands", width, height, GpuFormat.RGBA8_UNORM, GpuFormat.D32_FLOAT);
         }
 
         if (handTarget.width != width || handTarget.height != height) {
@@ -428,7 +498,7 @@ public class ShaderManager {
 
     private void ensureChestTarget(int width, int height) {
         if (chestTarget == null) {
-            chestTarget = new TextureTarget("Epsilon Shader Chests", width, height, true, GpuFormat.RGBA8_UNORM);
+            chestTarget = new TextureTarget("Epsilon Shader Chests", width, height, GpuFormat.RGBA8_UNORM, GpuFormat.D32_FLOAT);
         }
 
         if (chestTarget.width != width || chestTarget.height != height) {
@@ -439,6 +509,7 @@ public class ShaderManager {
     private RenderPipeline pipeline(String shader, boolean useColors) {
         RenderPipeline.Builder builder = RenderPipeline.builder(RenderPipelines.POST_PROCESSING_SNIPPET)
                 .withLocation(ResourceLocationUtils.getIdentifier("pipelines/shader_" + shader))
+                .withColorTargetState(ColorTargetState.DEFAULT)
                 .withVertexShader(Identifier.withDefaultNamespace("core/screenquad"))
                 .withFragmentShader(ResourceLocationUtils.getIdentifier("shader_" + shader))
                 .withCull(false);
@@ -507,7 +578,7 @@ public class ShaderManager {
             float resolutionWidth,
             float resolutionHeight,
             float useTargetColors
-    ) implements DynamicUniformStorage.DynamicUniform {
+    ) implements DynamicGpuDataStorage.DynamicGpuData {
         @Override
         public void write(ByteBuffer buffer) {
             Std140Builder.intoBuffer(buffer)
@@ -534,7 +605,7 @@ public class ShaderManager {
             Color fill,
             Color smokeFill1,
             Color smokeFill2
-    ) implements DynamicUniformStorage.DynamicUniform {
+    ) implements DynamicGpuDataStorage.DynamicGpuData {
         @Override
         public void write(ByteBuffer buffer) {
             Std140Builder.intoBuffer(buffer)
@@ -563,7 +634,7 @@ public class ShaderManager {
             float directionX,
             float directionY,
             float useTargetColors
-    ) implements DynamicUniformStorage.DynamicUniform {
+    ) implements DynamicGpuDataStorage.DynamicGpuData {
         @Override
         public void write(ByteBuffer buffer) {
             Std140Builder.intoBuffer(buffer)

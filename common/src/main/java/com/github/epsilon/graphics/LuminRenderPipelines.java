@@ -1,13 +1,13 @@
 package com.github.epsilon.graphics;
 
 import com.github.epsilon.assets.resources.ResourceLocationUtils;
-import com.mojang.blaze3d.PrimitiveTopology;
-import com.mojang.blaze3d.pipeline.BindGroupLayout;
-import com.mojang.blaze3d.pipeline.BlendFunction;
-import com.mojang.blaze3d.pipeline.ColorTargetState;
-import com.mojang.blaze3d.pipeline.RenderPipeline;
+import com.mojang.renderpearl.api.pipeline.PrimitiveTopology;
+import com.mojang.renderpearl.api.pipeline.BindGroupLayout;
+import com.mojang.renderpearl.api.pipeline.BlendFunction;
+import com.mojang.renderpearl.api.pipeline.ColorTargetState;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
-import com.mojang.blaze3d.vertex.VertexFormat;
+import com.mojang.renderpearl.api.vertex.VertexFormat;
 import net.minecraft.client.renderer.BindGroupLayouts;
 
 import java.util.Optional;
@@ -16,16 +16,18 @@ public class LuminRenderPipelines {
 
     private static final RenderPipeline.Snippet NO_BLEND_DEPTH_SNIPPET = RenderPipeline.builder()
             .withBindGroupLayout(BindGroupLayouts.GLOBALS)
-            .withBindGroupLayout(BindGroupLayouts.MATRICES_PROJECTION)
+            .withBindGroupLayout(BindGroupLayouts.PROJECTION)
+            .withBindGroupLayout(BindGroupLayouts.DYNAMIC_TRANSFORMS)
             .withColorTargetState(new ColorTargetState(BlendFunction.TRANSLUCENT))
             .buildSnippet();
 
-    // 26.2 的 GUI 字体提交会直接使用 TextRenderable.guiPipeline()。
+    // 26.3 的 GUI 字体提交会直接使用 TextRenderable.guiPipeline()。
     // 自定义 TTF shader 也读取 dynamictransforms/projection，因此这里必须和原版 GUI_TEXT 一样声明
-    // GLOBALS、MATRICES_PROJECTION、SAMPLER0 和 GUI 深度状态；否则 Vulkan 后端会按不完整的 bind group 渲染。
+    // GLOBALS、PROJECTION、DYNAMIC_TRANSFORMS、SAMPLER0 和 GUI 深度状态；否则 Vulkan 后端会按不完整的 bind group 渲染。
     private static final RenderPipeline.Snippet GUI_TTF_FONT_SNIPPET = RenderPipeline.builder()
             .withBindGroupLayout(BindGroupLayouts.GLOBALS)
-            .withBindGroupLayout(BindGroupLayouts.MATRICES_PROJECTION)
+            .withBindGroupLayout(BindGroupLayouts.PROJECTION)
+            .withBindGroupLayout(BindGroupLayouts.DYNAMIC_TRANSFORMS)
             .withBindGroupLayout(BindGroupLayouts.SAMPLER0)
             .withColorTargetState(new ColorTargetState(BlendFunction.TRANSLUCENT))
             .withDepthStencilState(Optional.empty())

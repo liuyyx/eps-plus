@@ -30,7 +30,7 @@ public class MixinEntityRenderer<T extends Entity, S extends EntityRenderState> 
     }
 
     @Inject(method = "shouldRender", at = @At("HEAD"), cancellable = true)
-    private void hookShouldRender(T entity, Frustum culler, double camX, double camY, double camZ, CallbackInfoReturnable<Boolean> cir) {
+    private void hookShouldRender(T entity, Frustum culler, double camX, double camY, double camZ, float partialTicks, CallbackInfoReturnable<Boolean> cir) {
         if (CrystalChams.INSTANCE.isEnabled() && entity instanceof EndCrystal) {
             cir.setReturnValue(false);
             return;

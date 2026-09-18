@@ -12,7 +12,7 @@ layout(std140) uniform GlowConfig {
     vec4 TimeDirection;
 };
 
-in vec2 texCoord;
+layout(location = 0) in vec2 texCoord;
 
 layout(location = 0) out vec4 fragColor;
 

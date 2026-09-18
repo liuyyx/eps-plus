@@ -1,5 +1,6 @@
 package com.github.epsilon.gui.panel.popup;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import com.github.epsilon.graphics.renderers.TextRenderer;
 import com.github.epsilon.gui.lib.UiRect;
 import com.github.epsilon.gui.lib.UiTree;
@@ -134,7 +135,7 @@ public class ColorPickerPopup implements PanelPopupHost.Popup {
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean isDoubleClick) {
-        if (event.button() != 0 || !bounds.contains(event.x(), event.y())) {
+        if (event.button() != InputConstants.MOUSE_BUTTON_LEFT || !bounds.contains(event.x(), event.y())) {
             return false;
         }
         Channel[] channels = getChannels();
@@ -165,7 +166,7 @@ public class ColorPickerPopup implements PanelPopupHost.Popup {
 
     @Override
     public boolean mouseReleased(MouseButtonEvent event) {
-        if (event.button() == 0 && draggingChannel != null) {
+        if (event.button() == InputConstants.MOUSE_BUTTON_LEFT && draggingChannel != null) {
             commitPendingColor();
         }
         draggingChannel = null;
@@ -174,7 +175,7 @@ public class ColorPickerPopup implements PanelPopupHost.Popup {
 
     @Override
     public boolean mouseDragged(MouseButtonEvent event, double mouseX, double mouseY) {
-        if (draggingChannel == null || event.button() != 0) {
+        if (draggingChannel == null || event.button() != InputConstants.MOUSE_BUTTON_LEFT) {
             return false;
         }
         int index = getChannelIndex(draggingChannel);

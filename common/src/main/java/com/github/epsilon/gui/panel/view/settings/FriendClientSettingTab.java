@@ -17,11 +17,11 @@ import com.github.epsilon.managers.FriendManager;
 import com.github.epsilon.managers.TranslationManager;
 import com.github.epsilon.utils.render.animation.Animation;
 import com.github.epsilon.utils.render.animation.Easing;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.input.CharacterEvent;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.*;
 
@@ -146,7 +146,7 @@ public class FriendClientSettingTab implements ClientSettingTabView {
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean isDoubleClick) {
-        if (bounds == null || event.button() != 0) {
+        if (bounds == null || event.button() != InputConstants.MOUSE_BUTTON_LEFT) {
             return false;
         }
 
@@ -225,11 +225,11 @@ public class FriendClientSettingTab implements ClientSettingTabView {
         }
 
         return switch (event.key()) {
-            case GLFW.GLFW_KEY_ENTER, GLFW.GLFW_KEY_KP_ENTER -> {
+            case InputConstants.KEY_RETURN, InputConstants.KEY_NUMPADENTER -> {
                 addFriendFromInput();
                 yield true;
             }
-            case GLFW.GLFW_KEY_ESCAPE -> {
+            case InputConstants.KEY_ESCAPE -> {
                 inputField.blur();
                 markDirty();
                 yield true;

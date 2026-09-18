@@ -8,6 +8,7 @@ import com.github.epsilon.modules.Module;
 import com.github.epsilon.modules.impl.ClientSetting;
 import com.github.epsilon.settings.Setting;
 import com.github.epsilon.settings.impl.*;
+import com.github.epsilon.utils.client.KeybindUtils;
 import com.google.gson.*;
 
 import java.awt.*;
@@ -27,7 +28,9 @@ import java.util.zip.ZipOutputStream;
 
 public class ConfigManager {
 
-    private static final int CONFIG_VERSION = 3;
+    /** 26.3 起键位保存 SDL 扫描码，版本 4 之前的配置需要迁移键位。 */
+    private static final int CONFIG_VERSION = 4;
+    private static final int KEYBIND_MIGRATION_VERSION = 4;
     private static final String DEFAULT_CONFIG_NAME = "default";
     private static final String CONFIGS_FOLDER = "configs";
     private static final String IMPORTS_FOLDER = "imports";
@@ -294,9 +297,11 @@ public class ConfigManager {
     }
 
     private void applyModuleObject(Module module, JsonObject moduleObj) {
+        boolean migrateKeyBinds = readConfigVersion(moduleObj) < KEYBIND_MIGRATION_VERSION;
         if (moduleObj.has("keyBind") && moduleObj.get("keyBind").isJsonPrimitive()) {
             try {
-                module.setKeyBind(moduleObj.get("keyBind").getAsInt());
+                int keyBind = moduleObj.get("keyBind").getAsInt();
+                module.setKeyBind(migrateKeyBinds ? KeybindUtils.migrateLegacyKeyBind(keyBind) : keyBind);
             } catch (Exception ignored) {
             }
         }
@@ -338,7 +343,7 @@ public class ConfigManager {
                 if (setting != null && setting.isRootSetting()) {
                     continue;
                 }
-                applySetting(setting, settingsObj.get(setting.getName()));
+                applySetting(setting, settingsObj.get(setting.getName()), migrateKeyBinds);
             }
         }
 
@@ -505,7 +510,7 @@ public class ConfigManager {
         return null;
     }
 
-    private static void applySetting(Setting<?> setting, JsonElement value) {
+    private static void applySetting(Setting<?> setting, JsonElement value, boolean migrateKeyBinds) {
         if (value == null) return;
         try {
             if (value.isJsonArray()) {
@@ -525,7 +530,10 @@ public class ConfigManager {
             }
             if (!value.isJsonPrimitive()) return;
             if (setting instanceof BoolSetting s) s.setValue(value.getAsBoolean());
-            else if (setting instanceof KeybindSetting s) s.setValue(value.getAsInt());
+            else if (setting instanceof KeybindSetting s) {
+                int keyBind = value.getAsInt();
+                s.setValue(migrateKeyBinds ? KeybindUtils.migrateLegacyKeyBind(keyBind) : keyBind);
+            }
             else if (setting instanceof IntSetting s) s.setUnboundedValue(value.getAsInt());
             else if (setting instanceof DoubleSetting s) s.setUnboundedValue(value.getAsDouble());
             else if (setting instanceof StringSetting s) s.setValue(value.getAsString());
@@ -545,6 +553,22 @@ public class ConfigManager {
     private static JsonObject getObject(JsonObject parent, String key) {
         JsonElement el = parent.get(key);
         return (el != null && el.isJsonObject()) ? el.getAsJsonObject() : null;
+    }
+
+    /**
+     * 读取配置文件中记录的结构版本。
+     *
+     * @param object 配置对象
+     * @return 版本号，缺失或非法时按 0 处理以便触发迁移
+     */
+    private static int readConfigVersion(JsonObject object) {
+        JsonElement value = object.get("version");
+        if (value == null || !value.isJsonPrimitive()) return 0;
+        try {
+            return value.getAsInt();
+        } catch (Exception ignored) {
+            return 0;
+        }
     }
 
     private static Float readFloat(JsonObject object, String key) {

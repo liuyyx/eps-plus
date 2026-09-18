@@ -1,5 +1,6 @@
 package com.github.epsilon.gui.panel.adapter;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import com.github.epsilon.graphics.renderers.TextRenderer;
 import com.github.epsilon.gui.lib.UiRect;
 import com.github.epsilon.gui.lib.UiTree;
@@ -194,7 +195,7 @@ public class SettingListController implements AutoCloseable {
     }
 
     public boolean mouseClicked(MouseButtonEvent event, boolean isDoubleClick, UiRect popupBounds, RowClickInterceptor interceptor) {
-        if (event.button() != 0) {
+        if (event.button() != InputConstants.MOUSE_BUTTON_LEFT) {
             return false;
         }
 
@@ -268,7 +269,7 @@ public class SettingListController implements AutoCloseable {
     }
 
     public boolean mouseDragged(MouseButtonEvent event, double mouseX, double mouseY) {
-        if (draggingSliderEntry == null || event.button() != 0) {
+        if (draggingSliderEntry == null || event.button() != InputConstants.MOUSE_BUTTON_LEFT) {
             return false;
         }
         if (draggingSliderEntry.row instanceof IntSettingRow intRow) {

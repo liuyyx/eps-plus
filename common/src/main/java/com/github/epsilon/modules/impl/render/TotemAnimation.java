@@ -88,35 +88,35 @@ public class TotemAnimation extends Module {
             }
             case Otkisuli -> {
                 poseStack.translate(0.0f, 0.0f, -10.0f);
-                poseStack.mulPose(Axis.XP.rotationDegrees(adjustedProgress * 2.0f));
-                poseStack.mulPose(Axis.ZP.rotationDegrees(adjustedProgress * 2.0f));
+                poseStack.rotateDegrees(Axis.XP, adjustedProgress * 2.0f);
+                poseStack.rotateDegrees(Axis.ZP, adjustedProgress * 2.0f);
                 float size = 200.0f - adjustedProgress * 1.5f;
                 poseStack.scale(size * 0.016f, size * 0.016f, size * 0.016f);
             }
             case Insert -> {
                 poseStack.translate(0.0f, 0.0f, -10.0f);
-                poseStack.mulPose(Axis.XP.rotationDegrees(adjustedProgress * 3.0f));
+                poseStack.rotateDegrees(Axis.XP, adjustedProgress * 3.0f);
                 float size = 200.0f - adjustedProgress * 1.5f;
                 poseStack.scale(size * 0.016f, size * 0.016f, size * 0.016f);
             }
             case Fall -> {
                 float downFactor = (float) Math.pow(adjustedProgress, 3) * 0.2f;
                 poseStack.translate(0.0f, downFactor * 0.008f, -10.0f);
-                poseStack.mulPose(Axis.ZP.rotationDegrees(adjustedProgress * 5.0f));
+                poseStack.rotateDegrees(Axis.ZP, adjustedProgress * 5.0f);
                 float size = 200.0f - adjustedProgress * 1.5f;
                 poseStack.scale(size * 0.016f, size * 0.016f, size * 0.016f);
             }
             case Rocket -> {
                 float downFactor = (float) Math.pow(adjustedProgress, 3) * 0.2f - 20.0f;
                 poseStack.translate(0.0f, -downFactor * 0.008f, -10.0f);
-                poseStack.mulPose(Axis.YP.rotationDegrees(adjustedProgress * floatingItemTimeLeft * 2.0f));
+                poseStack.rotateDegrees(Axis.YP, adjustedProgress * floatingItemTimeLeft * 2.0f);
                 float size = 200.0f - adjustedProgress * 1.5f;
                 poseStack.scale(size * 0.016f, size * 0.016f, size * 0.016f);
             }
             case Roll -> {
                 float rightFactor = (float) Math.pow(adjustedProgress, 2) * 4.5f;
                 poseStack.translate(rightFactor * 0.008f, 0.0f, -10.0f);
-                poseStack.mulPose(Axis.ZP.rotationDegrees(adjustedProgress * 40.0f));
+                poseStack.rotateDegrees(Axis.ZP, adjustedProgress * 40.0f);
                 float size = 200.0f - adjustedProgress * 1.5f;
                 poseStack.scale(size * 0.016f, size * 0.016f, size * 0.016f);
             }

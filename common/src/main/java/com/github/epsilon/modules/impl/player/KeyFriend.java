@@ -14,7 +14,6 @@ import com.github.epsilon.utils.client.KeybindUtils;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.EntityHitResult;
-import org.lwjgl.glfw.GLFW;
 
 public class KeyFriend extends Module {
 
@@ -24,7 +23,7 @@ public class KeyFriend extends Module {
         super("Key Friend", Category.PLAYER);
     }
 
-    private final KeybindSetting activateKey = keybindSetting("Activate Key", KeybindUtils.encodeMouseButton(GLFW.GLFW_MOUSE_BUTTON_MIDDLE));
+    private final KeybindSetting activateKey = keybindSetting("Activate Key", KeybindUtils.encodeMouseButton(InputConstants.MOUSE_BUTTON_MIDDLE));
 
     @EventHandler(priority = EventPriority.HIGHEST)
     private void onKeyPress(KeyPressEvent event) {

@@ -379,8 +379,9 @@ public class VictoryBanner extends HudModule {
     }
 
     private static String visiblePlayerChat(ClientboundPlayerChatPacket packet) {
-        if (packet.unsignedContent() != null) return packet.unsignedContent().getString();
-        return packet.filterMask().apply(packet.body().content());
+        return packet.unsignedContent()
+                .map(net.minecraft.network.chat.Component::getString)
+                .orElseGet(() -> packet.filterMask().apply(packet.body().content()));
     }
 
     private static String displayTitle(String value) {

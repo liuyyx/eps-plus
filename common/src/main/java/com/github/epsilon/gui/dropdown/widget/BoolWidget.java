@@ -1,5 +1,6 @@
 package com.github.epsilon.gui.dropdown.widget;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import com.github.epsilon.assets.i18n.EpsilonTranslations;
 import com.github.epsilon.gui.dropdown.DropdownScreen;
 import com.github.epsilon.gui.dropdown.DropdownTheme;
@@ -99,7 +100,7 @@ public class BoolWidget extends SettingWidget<BoolSetting> {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (button == 0) {
+        if (button == InputConstants.MOUSE_BUTTON_LEFT) {
             float sw = SWITCH_WIDTH;
             float sh = SWITCH_HEIGHT;
             float sx = absoluteX(width - DropdownTheme.SETTING_PADDING_X - sw);

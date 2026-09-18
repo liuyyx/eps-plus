@@ -14,8 +14,9 @@ import com.github.epsilon.utils.client.KeybindUtils;
 import com.github.epsilon.utils.math.MathUtils;
 import com.github.epsilon.utils.player.FindItemResult;
 import com.github.epsilon.utils.player.InvUtils;
+import com.mojang.blaze3d.platform.InputConstants;
+import com.github.epsilon.utils.player.PlayerUtils;
 import net.minecraft.core.BlockPos;
-import net.minecraft.network.protocol.game.ServerboundSwingPacket;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
@@ -27,7 +28,6 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
-import org.lwjgl.glfw.GLFW;
 
 import java.awt.*;
 import java.util.ArrayList;
@@ -66,7 +66,7 @@ public class AutoHitCrystal extends Module {
         ));
     }
 
-    private final KeybindSetting activateKey = keybindSetting("Activate Key", GLFW.GLFW_KEY_UNKNOWN);
+    private final KeybindSetting activateKey = keybindSetting("Activate Key", InputConstants.UNKNOWN.getValue());
     private final BoolSetting checkPlace = boolSetting("Check Place", false);
     private final DoubleSetting switchDelay = doubleSetting("Switch Delay", 0.0, 0.0, 20.0, 1.0);
     private final DoubleSetting switchChance = doubleSetting("Switch Chance", 100.0, 0.0, 100.0, 1.0);
@@ -227,9 +227,7 @@ public class AutoHitCrystal extends Module {
         InteractionResult result = mc.gameMode.useItemOn(mc.player, hand, hit);
         if (result.consumesAction()) {
             if (swingHand.getValue()) {
-                mc.player.swing(hand);
-            } else {
-                mc.getConnection().send(new ServerboundSwingPacket(hand));
+                PlayerUtils.swingHand(hand);
             }
             renderBoxes.add(new RenderBox(new AABB(renderPos), lineColor.getValue(), sideColor.getValue(), System.currentTimeMillis()));
         }

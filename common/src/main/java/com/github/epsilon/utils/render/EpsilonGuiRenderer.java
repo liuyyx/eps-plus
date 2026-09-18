@@ -2,12 +2,12 @@ package com.github.epsilon.utils.render;
 
 import com.github.epsilon.graphics.LuminRenderSystem;
 import com.mojang.blaze3d.ProjectionType;
-import com.mojang.blaze3d.buffers.GpuBufferSlice;
-import com.mojang.blaze3d.pipeline.RenderPipeline;
+import com.mojang.renderpearl.api.buffers.GpuBufferSlice;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
 import com.mojang.blaze3d.pipeline.RenderTarget;
-import com.mojang.blaze3d.systems.RenderPass;
+import com.mojang.renderpearl.api.commands.RenderPass;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.FilterMode;
+import com.mojang.renderpearl.api.textures.FilterMode;
 import com.mojang.logging.LogUtils;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
 import net.minecraft.SharedConstants;
@@ -175,7 +175,7 @@ public class EpsilonGuiRenderer implements AutoCloseable {
                         label,
                         mainRenderTarget.getColorTextureView(),
                         Optional.empty(),
-                        mainRenderTarget.useDepth ? mainRenderTarget.getDepthTextureView() : null,
+                        mainRenderTarget.hasDepth() ? mainRenderTarget.getDepthTextureView() : null,
                         OptionalDouble.empty()
                 )) {
             RenderSystem.bindDefaultUniforms(renderPass);
@@ -324,7 +324,7 @@ public class EpsilonGuiRenderer implements AutoCloseable {
         StagedVertexBuffer.ExecuteInfo executeInfo = this.vertexBuffer.getExecuteInfo(draw.draw);
         if (executeInfo != null) {
             RenderPipeline pipeline = draw.pipeline();
-            renderPass.setPipeline(pipeline);
+            renderPass.setPipeline(RenderSystem.getCompiledPipeline(pipeline));
             renderPass.setVertexBuffer(0, executeInfo.vertexBuffer().slice());
             ScreenRectangle scissorArea = draw.scissorArea();
             if (scissorArea != null) {
@@ -336,15 +336,15 @@ public class EpsilonGuiRenderer implements AutoCloseable {
             }
 
             if (draw.textureSetup.texure0() != null) {
-                renderPass.bindTexture("Sampler0", draw.textureSetup.texure0(), draw.textureSetup.sampler0());
+                renderPass.setUniform("Sampler0", draw.textureSetup.texure0(), draw.textureSetup.sampler0());
             }
 
             if (draw.textureSetup.texure1() != null) {
-                renderPass.bindTexture("Sampler1", draw.textureSetup.texure1(), draw.textureSetup.sampler1());
+                renderPass.setUniform("Sampler1", draw.textureSetup.texure1(), draw.textureSetup.sampler1());
             }
 
             if (draw.textureSetup.texure2() != null) {
-                renderPass.bindTexture("Sampler2", draw.textureSetup.texure2(), draw.textureSetup.sampler2());
+                renderPass.setUniform("Sampler2", draw.textureSetup.texure2(), draw.textureSetup.sampler2());
             }
 
             renderPass.setIndexBuffer(executeInfo.indexBuffer(), executeInfo.indexType());

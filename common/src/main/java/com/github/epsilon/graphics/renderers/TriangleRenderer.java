@@ -5,11 +5,11 @@ import com.github.epsilon.graphics.LuminRenderSystem;
 import com.github.epsilon.graphics.buffer.LuminRingBuffer;
 import com.github.epsilon.managers.RendererManager;
 import com.github.epsilon.utils.render.ScissorUtils;
-import com.mojang.blaze3d.buffers.GpuBuffer;
-import com.mojang.blaze3d.buffers.GpuBufferSlice;
-import com.mojang.blaze3d.systems.RenderPass;
+import com.mojang.renderpearl.api.buffers.GpuBuffer;
+import com.mojang.renderpearl.api.buffers.GpuBufferSlice;
+import com.mojang.renderpearl.api.commands.RenderPass;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.GpuTextureView;
+import com.mojang.renderpearl.api.textures.GpuTextureView;
 import net.minecraft.client.renderer.rendertype.TextureTransform;
 import net.minecraft.util.ARGB;
 import org.joml.Vector3f;
@@ -138,7 +138,7 @@ public class TriangleRenderer implements IRenderer {
                 colorView, Optional.empty(),
                 depthView, OptionalDouble.empty())
         ) {
-            pass.setPipeline(LuminRenderPipelines.TRIANGLE);
+            pass.setPipeline(RenderSystem.getCompiledPipeline(LuminRenderPipelines.TRIANGLE));
             if (scissorEnabled) {
                 ScissorUtils.enableScissor(pass, scissorX, scissorY, scissorW, scissorH);
             }

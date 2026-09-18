@@ -126,8 +126,8 @@ public class HandView extends Module {
             }
             case Pushdown -> {
                 poseStack.translate(-side * 0.1F, 0.1F, 0.0F);
-                poseStack.mulPose(Axis.ZP.rotationDegrees(side * progress * 10.0F));
-                poseStack.mulPose(Axis.XP.rotationDegrees(progress * -35.0F));
+                poseStack.rotateDegrees(Axis.ZP, side * progress * 10.0F);
+                poseStack.rotateDegrees(Axis.XP, progress * -35.0F);
                 applyBlockPose(poseStack, side, 0.0F, 0.0F, 0.0F, -102.25F, 13.365F, 78.05F);
             }
             case Scale -> {
@@ -146,17 +146,17 @@ public class HandView extends Module {
             }
             case NewExhibition -> {
                 applySourceBaseTransform(poseStack, side, -0.01F, attack);
-                poseStack.mulPose(Axis.of(new Vector3f(-0.3F, 1.0F, 1.3F)).rotationDegrees(side * progress * -40.0F));
-                poseStack.mulPose(Axis.of(new Vector3f(progress / 2.0F, 0.0F, 4.0F)).rotationDegrees(side * progress * 50.0F));
-                poseStack.mulPose(Axis.of(new Vector3f(1.0F, progress / 2.0F, 0.0F)).rotationDegrees(side * progress * 40.0F));
-                poseStack.mulPose(Axis.of(new Vector3f(0.3F, 0.1F, 0.4F)).rotationDegrees(side * progress * -20.7F));
+                poseStack.rotateDegrees(Axis.of(new Vector3f(-0.3F, 1.0F, 1.3F)), side * progress * -40.0F);
+                poseStack.rotateDegrees(Axis.of(new Vector3f(progress / 2.0F, 0.0F, 4.0F)), side * progress * 50.0F);
+                poseStack.rotateDegrees(Axis.of(new Vector3f(1.0F, progress / 2.0F, 0.0F)), side * progress * 40.0F);
+                poseStack.rotateDegrees(Axis.of(new Vector3f(0.3F, 0.1F, 0.4F)), side * progress * -20.7F);
                 poseStack.scale(0.9F, 0.9F, 0.9F);
                 applySourceBlockTransform(poseStack);
             }
             case OldExhibition -> {
                 applySourceBaseTransform(poseStack, side, inverseArmHeight * 0.6F - 0.07F, 1.0F);
-                poseStack.mulPose(Axis.of(new Vector3f(progress / 2.0F, 0.0F, 4.0F)).rotationDegrees(-progress * 50.0F / 2.0F));
-                poseStack.mulPose(Axis.of(new Vector3f(1.0F, progress / 2.0F, 0.0F)).rotationDegrees(-progress * 30.0F));
+                poseStack.rotateDegrees(Axis.of(new Vector3f(progress / 2.0F, 0.0F, 4.0F)), -progress * 50.0F / 2.0F);
+                poseStack.rotateDegrees(Axis.of(new Vector3f(1.0F, progress / 2.0F, 0.0F)), -progress * 30.0F);
                 applySourceBlockTransform(poseStack);
             }
         }
@@ -164,39 +164,39 @@ public class HandView extends Module {
 
     private void applySourceBaseTransform(PoseStack poseStack, int side, float y, float swingProgress) {
         poseStack.translate(side * 0.29F, y, -0.18F);
-        poseStack.mulPose(Axis.YP.rotationDegrees(45.0F));
+        poseStack.rotateDegrees(Axis.YP, 45.0F);
         applySourceSwingTransform(poseStack, side, swingProgress);
     }
 
     private void applySourceSwingTransform(PoseStack poseStack, float side, float swingProgress) {
         float ySwing = Mth.sin(swingProgress * swingProgress * (float) Math.PI);
         float xzSwing = Mth.sin(Mth.sqrt(swingProgress) * (float) Math.PI);
-        poseStack.mulPose(Axis.YP.rotationDegrees(side * ySwing * -20.0F));
-        poseStack.mulPose(Axis.ZP.rotationDegrees(side * xzSwing * -20.0F));
-        poseStack.mulPose(Axis.XP.rotationDegrees(side * xzSwing * -80.0F));
+        poseStack.rotateDegrees(Axis.YP, side * ySwing * -20.0F);
+        poseStack.rotateDegrees(Axis.ZP, side * xzSwing * -20.0F);
+        poseStack.rotateDegrees(Axis.XP, side * xzSwing * -80.0F);
     }
 
     private void applySourceBlockTransform(PoseStack poseStack) {
         poseStack.translate(-0.5F, 0.2F, 0.0F);
-        poseStack.mulPose(Axis.YP.rotationDegrees(30.0F));
-        poseStack.mulPose(Axis.XP.rotationDegrees(-80.0F));
-        poseStack.mulPose(Axis.YP.rotationDegrees(60.0F));
+        poseStack.rotateDegrees(Axis.YP, 30.0F);
+        poseStack.rotateDegrees(Axis.XP, -80.0F);
+        poseStack.rotateDegrees(Axis.YP, 60.0F);
     }
 
     private void applyAttackTransform(PoseStack poseStack, int side, float attack, float scale) {
         float ySwingRotation = Mth.sin(attack * attack * (float) Math.PI);
-        poseStack.mulPose(Axis.YP.rotationDegrees(side * (45.0F + ySwingRotation * -20.0F * scale)));
+        poseStack.rotateDegrees(Axis.YP, side * (45.0F + ySwingRotation * -20.0F * scale));
         float xzSwingRotation = Mth.sin(Mth.sqrt(attack) * (float) Math.PI);
-        poseStack.mulPose(Axis.ZP.rotationDegrees(side * xzSwingRotation * -20.0F * scale));
-        poseStack.mulPose(Axis.XP.rotationDegrees(xzSwingRotation * -80.0F * scale));
-        poseStack.mulPose(Axis.YP.rotationDegrees(side * -45.0F));
+        poseStack.rotateDegrees(Axis.ZP, side * xzSwingRotation * -20.0F * scale);
+        poseStack.rotateDegrees(Axis.XP, xzSwingRotation * -80.0F * scale);
+        poseStack.rotateDegrees(Axis.YP, side * -45.0F);
     }
 
     private void applyBlockPose(PoseStack poseStack, int side, float translateX, float translateY, float translateZ, float rotateX, float rotateY, float rotateZ) {
         poseStack.translate(side * translateX, translateY, translateZ);
-        poseStack.mulPose(Axis.XP.rotationDegrees(rotateX));
-        poseStack.mulPose(Axis.YP.rotationDegrees(side * rotateY));
-        poseStack.mulPose(Axis.ZP.rotationDegrees(side * rotateZ));
+        poseStack.rotateDegrees(Axis.XP, rotateX);
+        poseStack.rotateDegrees(Axis.YP, side * rotateY);
+        poseStack.rotateDegrees(Axis.ZP, side * rotateZ);
     }
 
     private class TransformSettings {
@@ -224,9 +224,9 @@ public class HandView extends Module {
         }
 
         private void apply(PoseStack poseStack) {
-            poseStack.mulPose(Axis.XP.rotationDegrees(rotationX.getValue().floatValue()));
-            poseStack.mulPose(Axis.YP.rotationDegrees(rotationY.getValue().floatValue()));
-            poseStack.mulPose(Axis.ZP.rotationDegrees(rotationZ.getValue().floatValue()));
+            poseStack.rotateDegrees(Axis.XP, rotationX.getValue().floatValue());
+            poseStack.rotateDegrees(Axis.YP, rotationY.getValue().floatValue());
+            poseStack.rotateDegrees(Axis.ZP, rotationZ.getValue().floatValue());
             poseStack.scale(scaleX.getValue().floatValue(), scaleY.getValue().floatValue(), scaleZ.getValue().floatValue());
             poseStack.translate(positionX.getValue(), positionY.getValue(), positionZ.getValue());
         }

@@ -1,6 +1,6 @@
 package com.github.epsilon.graphics.renderers;
 
-import com.mojang.blaze3d.systems.RenderPass;
+import com.mojang.renderpearl.api.commands.RenderPass;
 
 public interface IRenderer {
 

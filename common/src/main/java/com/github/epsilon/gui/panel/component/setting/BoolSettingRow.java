@@ -1,5 +1,6 @@
 package com.github.epsilon.gui.panel.component.setting;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import com.github.epsilon.graphics.renderers.TextRenderer;
 import com.github.epsilon.gui.lib.UiRect;
 import com.github.epsilon.gui.lib.UiTree;
@@ -50,7 +51,7 @@ public class BoolSettingRow extends SettingRow<BoolSetting> {
 
     @Override
     public boolean mouseClicked(UiRect bounds, MouseButtonEvent event, boolean isDoubleClick) {
-        if (!bounds.contains(event.x(), event.y()) || event.button() != 0) {
+        if (!bounds.contains(event.x(), event.y()) || event.button() != InputConstants.MOUSE_BUTTON_LEFT) {
             return false;
         }
         if (!setting.isPlatformSupported()) {

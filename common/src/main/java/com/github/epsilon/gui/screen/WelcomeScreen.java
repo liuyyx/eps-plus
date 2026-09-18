@@ -1,5 +1,6 @@
 package com.github.epsilon.gui.screen;
 
+import com.mojang.blaze3d.Blaze3D;
 import com.github.epsilon.assets.i18n.EpsilonLanguage;
 import com.github.epsilon.managers.ConfigManager;
 import com.github.epsilon.modules.impl.ClientSetting;
@@ -84,7 +85,7 @@ public class WelcomeScreen extends Screen {
         this.addRenderableWidget(Button.builder(Component.literal(CONTINUE), button -> continueToNextScreen())
                 .bounds(buttonX, buttonY + (BUTTON_HEIGHT + BUTTON_GAP) * 2, buttonWidth, BUTTON_HEIGHT)
                 .build());
-        this.addRenderableWidget(Button.builder(Component.literal(OPEN_WEBSITE), button -> Util.getPlatform().openUri(URI.create(WEBSITE_URL)))
+        this.addRenderableWidget(Button.builder(Component.literal(OPEN_WEBSITE), button -> Blaze3D.openUri(URI.create(WEBSITE_URL)))
                 .bounds(buttonX, buttonY + (BUTTON_HEIGHT + BUTTON_GAP) * 3, buttonWidth, BUTTON_HEIGHT)
                 .build());
     }

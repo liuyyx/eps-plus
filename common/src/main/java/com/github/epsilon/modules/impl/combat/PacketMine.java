@@ -12,6 +12,7 @@ import com.github.epsilon.utils.player.InvUtils;
 import com.github.epsilon.utils.rotation.RotationUtils;
 import com.github.epsilon.utils.timer.TimerUtils;
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.github.epsilon.utils.player.PlayerUtils;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
@@ -351,7 +352,7 @@ public class PacketMine extends Module {
                 }
             }, delay);
         }
-        mc.player.swing(InteractionHand.MAIN_HAND);
+        PlayerUtils.swingHand(InteractionHand.MAIN_HAND);
         if (pos.equals(targetPos)) {
             started = true;
             progress = 0;
@@ -383,7 +384,7 @@ public class PacketMine extends Module {
             mc.getConnection().send(new ServerboundMovePlayerPacket.PosRot(mc.player.getX(), mc.player.getY() + 1.0e-9, mc.player.getZ(), mc.player.getYRot(), mc.player.getXRot(), true, mc.player.horizontalCollision));
             mc.player.resetFallDistance();
         }
-        if (swing.getValue()) mc.player.swing(InteractionHand.MAIN_HAND);
+        if (swing.getValue()) PlayerUtils.swingHand(InteractionHand.MAIN_HAND);
         mc.getConnection().send(new ServerboundPlayerActionPacket(ServerboundPlayerActionPacket.Action.STOP_DESTROY_BLOCK, targetPos, RotationUtils.getDirection(targetPos), mc.level.getBlockStatePredictionHandler().startPredicting().currentSequence()));
         if (clientRemove.getValue() && targetPos != null && !isAir(targetPos)) {
             mc.gameMode.destroyBlock(targetPos);
@@ -396,7 +397,7 @@ public class PacketMine extends Module {
             mc.player.resetFallDistance();
         }
         if (swing.getValue()) {
-            mc.player.swing(InteractionHand.MAIN_HAND);
+            PlayerUtils.swingHand(InteractionHand.MAIN_HAND);
         }
         if (clientRemove.getValue() && secondPos != null && !isAir(secondPos)) {
             mc.gameMode.destroyBlock(secondPos);

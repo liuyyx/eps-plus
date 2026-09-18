@@ -5,8 +5,8 @@ import com.github.epsilon.graphics.LuminRenderSystem;
 import com.github.epsilon.graphics.buffer.LuminRingBuffer;
 import com.github.epsilon.managers.RendererManager;
 import com.github.epsilon.utils.render.ScissorUtils;
-import com.mojang.blaze3d.buffers.GpuBuffer;
-import com.mojang.blaze3d.systems.RenderPass;
+import com.mojang.renderpearl.api.buffers.GpuBuffer;
+import com.mojang.renderpearl.api.commands.RenderPass;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.util.ARGB;
 import org.lwjgl.system.MemoryUtil;
@@ -149,7 +149,7 @@ public class ArcRenderer implements IRenderer {
                 () -> "Arc Draw", info.colorView(), Optional.empty(),
                 info.depthView(), OptionalDouble.empty())
         ) {
-            pass.setPipeline(LuminRenderPipelines.ARC);
+            pass.setPipeline(RenderSystem.getCompiledPipeline(LuminRenderPipelines.ARC));
             if (scissorEnabled) ScissorUtils.enableScissor(pass, scissorX, scissorY, scissorW, scissorH);
             RenderSystem.bindDefaultUniforms(pass);
             pass.setUniform("DynamicTransforms", info.dynamicUniforms());

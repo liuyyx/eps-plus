@@ -3,18 +3,20 @@ package com.github.epsilon.graphics.shaders;
 import com.github.epsilon.assets.resources.ResourceLocationUtils;
 import com.github.epsilon.graphics.LuminBindGroupLayouts;
 import com.github.epsilon.graphics.LuminRenderSystem;
-import com.mojang.blaze3d.GpuFormat;
-import com.mojang.blaze3d.buffers.GpuBufferSlice;
+import com.mojang.renderpearl.api.GpuFormat;
+import com.mojang.renderpearl.api.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.buffers.Std140Builder;
 import com.mojang.blaze3d.buffers.Std140SizeCalculator;
-import com.mojang.blaze3d.pipeline.RenderPipeline;
+import com.mojang.blaze3d.platform.VideoMode;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.pipeline.TextureTarget;
-import com.mojang.blaze3d.systems.CommandEncoder;
-import com.mojang.blaze3d.systems.RenderPass;
+import com.mojang.renderpearl.api.commands.CommandEncoder;
+import com.mojang.renderpearl.api.commands.RenderPass;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.FilterMode;
-import net.minecraft.client.renderer.DynamicUniformStorage;
+import com.mojang.renderpearl.api.textures.FilterMode;
+import com.mojang.renderpearl.api.pipeline.ColorTargetState;
+import net.minecraft.client.renderer.DynamicGpuDataStorage;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.Mth;
@@ -101,8 +103,10 @@ public class MotionBlurShader {
 
         float frameScale = 1.0f;
         if (settings.refreshRateScaling()) {
-            int refreshRate = mc.getWindow().getRefreshRate();
-            if (refreshRate > 0) {
+            // 26.3 的 Window 不再直接暴露刷新率，需要从当前显示模式读取。
+            VideoMode activeMode = mc.getWindow().getActiveVideoMode();
+            float refreshRate = activeMode == null ? 0.0F : activeMode.getRefreshRate();
+            if (refreshRate > 0.0F) {
                 frameScale = Math.max(1.0f, (float) (1.0 / frameTime) / refreshRate);
             }
         }
@@ -144,11 +148,11 @@ public class MotionBlurShader {
                 target.getColorTextureView(),
                 Optional.empty()
         )) {
-            pass.setPipeline(pipeline);
+            pass.setPipeline(RenderSystem.getCompiledPipeline(pipeline));
             RenderSystem.bindDefaultUniforms(pass);
             pass.setUniform("MotionBlurData", uniforms);
-            pass.bindTexture("InputSampler", input.getColorTextureView(), RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR));
-            pass.bindTexture("DepthSampler", target.getDepthTextureView(), RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST));
+            pass.setUniform("InputSampler", input.getColorTextureView(), RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR));
+            pass.setUniform("DepthSampler", target.getDepthTextureView(), RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST));
             pass.draw(3, 1, 0, 0);
         }
     }
@@ -158,6 +162,7 @@ public class MotionBlurShader {
 
         pipeline = RenderPipeline.builder(RenderPipelines.POST_PROCESSING_SNIPPET)
                 .withLocation(ResourceLocationUtils.getIdentifier("pipeline/motion_blur"))
+                .withColorTargetState(ColorTargetState.DEFAULT)
                 .withVertexShader(VERTEX_SHADER)
                 .withFragmentShader(FRAGMENT_SHADER)
                 .withBindGroupLayout(LuminBindGroupLayouts.MOTION_BLUR_DATA)
@@ -168,7 +173,7 @@ public class MotionBlurShader {
 
     private void ensureInput(int width, int height) {
         if (input == null) {
-            input = new TextureTarget("Epsilon Motion Blur Input", width, height, false, GpuFormat.RGBA8_UNORM);
+            input = new TextureTarget("Epsilon Motion Blur Input", width, height, GpuFormat.RGBA8_UNORM, null);
         } else if (input.width != width || input.height != height) {
             input.resize(width, height);
         }
@@ -210,7 +215,7 @@ public class MotionBlurShader {
             int samples,
             int algorithm,
             boolean depthBlur
-    ) implements DynamicUniformStorage.DynamicUniform {
+    ) implements DynamicGpuDataStorage.DynamicGpuData {
         @Override
         public void write(ByteBuffer buffer) {
             Std140Builder.intoBuffer(buffer)

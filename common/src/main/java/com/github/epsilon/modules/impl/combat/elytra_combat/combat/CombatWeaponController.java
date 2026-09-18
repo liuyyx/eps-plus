@@ -1,7 +1,9 @@
 package com.github.epsilon.modules.impl.combat.elytra_combat.combat;
 
 import com.github.epsilon.utils.player.FindItemResult;
+import com.github.epsilon.utils.player.InvHelper;
 import com.github.epsilon.utils.player.InvUtils;
+import com.github.epsilon.utils.player.PlayerUtils;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.world.InteractionHand;
@@ -23,7 +25,7 @@ import java.util.function.Predicate;
 public final class CombatWeaponController {
 
     private static final Minecraft mc = Minecraft.getInstance();
-    /** 26.2 全部长矛材质；识别 kinetic 组件时不依赖具体物品名硬编码延迟。 */
+    /** 26.3 全部长矛材质；识别 kinetic 组件时不依赖具体物品名硬编码延迟。 */
     private static final Set<Item> SPEARS = Set.of(
             Items.WOODEN_SPEAR,
             Items.STONE_SPEAR,
@@ -69,7 +71,7 @@ public final class CombatWeaponController {
         // 对方举盾时优先切斧破盾，否则切重锤；Selection 负责 finally 中恢复原槽位。
         Selection selection = selectMainHand(
                 shieldSwap
-                        ? stack -> stack.getItem() instanceof net.minecraft.world.item.AxeItem
+                        ? InvHelper::isAxe
                         : stack -> stack.is(Items.MACE)
         );
         if (selection == null) {
@@ -79,7 +81,7 @@ public final class CombatWeaponController {
             // 只调用原生 attack，攻击距离使用本地实体交互 reach。
             mc.gameMode.attack(player, target);
             if (swingHand) {
-                player.swing(InteractionHand.MAIN_HAND);
+                PlayerUtils.swingHand(InteractionHand.MAIN_HAND);
             }
             return true;
         } finally {
@@ -165,7 +167,7 @@ public final class CombatWeaponController {
         if (target == null || !target.isUsingItem() || !target.isBlocking()) {
             return false;
         }
-        return InvUtils.findInHotbar(stack -> stack.getItem() instanceof net.minecraft.world.item.AxeItem).found();
+        return InvUtils.findInHotbar(InvHelper::isAxe).found();
     }
 
     private static Selection selectMainHand(Predicate<ItemStack> predicate) {

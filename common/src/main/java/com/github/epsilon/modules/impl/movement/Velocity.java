@@ -131,7 +131,8 @@ public class Velocity extends Module {
                     Optional.empty(),
                     packet.explosionParticle(),
                     packet.explosionSound(),
-                    packet.blockParticles()
+                    packet.blockParticles(),
+                    packet.playSound()
             ));
         }
     }
@@ -238,9 +239,7 @@ public class Velocity extends Module {
             if (RotationManager.INSTANCE.getHitResult() instanceof EntityHitResult entityHitResult && entityHitResult.getEntity() instanceof Player pl && pl.isAlive() && !AntiBot.INSTANCE.isBot(pl)) {
                 mc.gameMode.attack(mc.player, pl);
                 if (swingHand.getValue()) {
-                    mc.player.swing(InteractionHand.MAIN_HAND);
-                } else {
-                    mc.getConnection().send(new ServerboundSwingPacket(InteractionHand.MAIN_HAND));
+                    PlayerUtils.swingHand(InteractionHand.MAIN_HAND);
                 }
             }
             attackQueue--;

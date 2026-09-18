@@ -7,13 +7,15 @@ import com.github.epsilon.graphics.immediate.LuminImmediateRenderer;
 import com.github.epsilon.modules.Category;
 import com.github.epsilon.modules.Module;
 import com.github.epsilon.settings.impl.*;
-import com.mojang.blaze3d.PrimitiveTopology;
-import com.mojang.blaze3d.pipeline.DepthStencilState;
-import com.mojang.blaze3d.pipeline.RenderPipeline;
-import com.mojang.blaze3d.platform.CompareOp;
+import com.mojang.renderpearl.api.pipeline.PrimitiveTopology;
+import com.mojang.renderpearl.api.pipeline.DepthStencilState;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
+import com.mojang.renderpearl.api.pipeline.CompareOp;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
+import com.mojang.renderpearl.api.pipeline.BlendFunction;
+import com.mojang.renderpearl.api.pipeline.ColorTargetState;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.player.Player;
@@ -58,6 +60,7 @@ public class Hat extends Module {
 
     private static final RenderPipeline HAT_OUTLINE_PIPELINE = RenderPipeline.builder(RenderPipelines.LINES_SNIPPET)
             .withLocation(ResourceLocationUtils.getIdentifier("pipeline/hat_outline"))
+            .withColorTargetState(new ColorTargetState(BlendFunction.TRANSLUCENT))
             .withDepthStencilState(new DepthStencilState(CompareOp.GREATER_THAN_OR_EQUAL, false))
             .withCull(false)
             .build();
@@ -113,10 +116,10 @@ public class Hat extends Module {
         }
 
         float yaw = Mth.lerp(tickDelta, player.yHeadRotO, player.yHeadRot);
-        stack.mulPose(Axis.YN.rotationDegrees(yaw));
+        stack.rotateDegrees(Axis.YN, yaw);
 
         float pitch = Mth.lerp(tickDelta, player.xRotO, player.getXRot());
-        stack.mulPose(Axis.XP.rotationDegrees(pitch / 3.0f));
+        stack.rotateDegrees(Axis.XP, pitch / 3.0f);
         stack.translate(0, 0, pitch / 270.0);
 
         Matrix4f matrix = stack.last().pose();

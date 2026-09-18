@@ -7,10 +7,10 @@ import com.github.epsilon.graphics.renderers.*;
 import com.github.epsilon.graphics.text.TextGlitchEffect;
 import com.github.epsilon.graphics.text.ttf.TtfFontLoader;
 import com.github.epsilon.modules.impl.ClientSetting;
-import com.mojang.blaze3d.pipeline.RenderPipeline;
-import com.mojang.blaze3d.systems.RenderPass;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
+import com.mojang.renderpearl.api.commands.RenderPass;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.GpuTextureView;
+import com.mojang.renderpearl.api.textures.GpuTextureView;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
@@ -188,7 +188,7 @@ public class Render2DScheduler implements AutoCloseable {
                 colorView, Optional.empty(),
                 depthView, OptionalDouble.empty())
         ) {
-            pass.setPipeline(pipeline);
+            pass.setPipeline(RenderSystem.getCompiledPipeline(pipeline));
             RenderSystem.bindDefaultUniforms(pass);
             for (int i = start; i < end; i++) {
                 batches.get(i).renderers().draw(pass);

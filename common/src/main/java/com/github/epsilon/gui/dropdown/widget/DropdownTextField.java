@@ -8,7 +8,6 @@ import com.github.epsilon.gui.theme.MD3Theme;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.input.CharacterEvent;
 import net.minecraft.client.input.KeyEvent;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.function.Predicate;
 
@@ -117,32 +116,32 @@ public class DropdownTextField {
             return handleControlShortcut(keyCode);
         }
         return switch (keyCode) {
-            case GLFW.GLFW_KEY_BACKSPACE -> {
+            case InputConstants.KEY_BACKSPACE -> {
                 if (cursor > 0 && !text.isEmpty()) {
                     text = text.substring(0, cursor - 1) + text.substring(cursor);
                     cursor--;
                 }
                 yield true;
             }
-            case GLFW.GLFW_KEY_DELETE -> {
+            case InputConstants.KEY_DELETE -> {
                 if (cursor < text.length()) {
                     text = text.substring(0, cursor) + text.substring(cursor + 1);
                 }
                 yield true;
             }
-            case GLFW.GLFW_KEY_LEFT -> {
+            case InputConstants.KEY_LEFT -> {
                 cursor = Math.max(0, cursor - 1);
                 yield true;
             }
-            case GLFW.GLFW_KEY_RIGHT -> {
+            case InputConstants.KEY_RIGHT -> {
                 cursor = Math.min(text.length(), cursor + 1);
                 yield true;
             }
-            case GLFW.GLFW_KEY_HOME -> {
+            case InputConstants.KEY_HOME -> {
                 cursor = 0;
                 yield true;
             }
-            case GLFW.GLFW_KEY_END -> {
+            case InputConstants.KEY_END -> {
                 cursor = text.length();
                 yield true;
             }
@@ -201,18 +200,18 @@ public class DropdownTextField {
 
     private boolean handleControlShortcut(int keyCode) {
         return switch (keyCode) {
-            case GLFW.GLFW_KEY_A -> {
+            case InputConstants.KEY_A -> {
                 cursor = text.length();
                 yield true;
             }
-            case GLFW.GLFW_KEY_V -> insertText(mc.keyboardHandler.getClipboard());
+            case InputConstants.KEY_V -> insertText(mc.keyboardHandler.getClipboard());
             default -> false;
         };
     }
 
     private boolean isControlDown() {
         var window = mc.getWindow();
-        return InputConstants.isKeyDown(window, GLFW.GLFW_KEY_LEFT_CONTROL) || InputConstants.isKeyDown(window, GLFW.GLFW_KEY_RIGHT_CONTROL);
+        return InputConstants.isKeyDown(InputConstants.KEY_LCONTROL) || InputConstants.isKeyDown(InputConstants.KEY_RCONTROL);
     }
 
     private String clamp(String value) {

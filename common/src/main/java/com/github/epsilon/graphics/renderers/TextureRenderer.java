@@ -6,13 +6,13 @@ import com.github.epsilon.graphics.LuminTexture;
 import com.github.epsilon.graphics.buffer.LuminRingBuffer;
 import com.github.epsilon.managers.RendererManager;
 import com.github.epsilon.utils.render.ScissorUtils;
-import com.mojang.blaze3d.buffers.GpuBuffer;
-import com.mojang.blaze3d.buffers.GpuBufferSlice;
-import com.mojang.blaze3d.systems.RenderPass;
+import com.mojang.renderpearl.api.buffers.GpuBuffer;
+import com.mojang.renderpearl.api.buffers.GpuBufferSlice;
+import com.mojang.renderpearl.api.commands.RenderPass;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.FilterMode;
-import com.mojang.blaze3d.textures.GpuSampler;
-import com.mojang.blaze3d.textures.GpuTextureView;
+import com.mojang.renderpearl.api.textures.FilterMode;
+import com.mojang.renderpearl.api.textures.GpuSampler;
+import com.mojang.renderpearl.api.textures.GpuTextureView;
 import net.minecraft.client.renderer.texture.AbstractTexture;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.ARGB;
@@ -236,7 +236,7 @@ public class TextureRenderer implements IRenderer {
                 colorView, Optional.empty(),
                 null, OptionalDouble.empty())
         ) {
-            pass.setPipeline(LuminRenderPipelines.TEXTURE);
+            pass.setPipeline(RenderSystem.getCompiledPipeline(LuminRenderPipelines.TEXTURE));
             if (scissorEnabled) {
                 ScissorUtils.enableScissor(pass, scissorX, scissorY, scissorW, scissorH);
             }
@@ -322,7 +322,7 @@ public class TextureRenderer implements IRenderer {
             PreparedTexture texture = batch.preparedTexture;
 
             pass.setVertexBuffer(0, batch.buffer.getGpuBuffer().slice());
-            pass.bindTexture("Sampler0", texture.view(), texture.sampler());
+            pass.setUniform("Sampler0", texture.view(), texture.sampler());
             pass.drawIndexed(indexCount, 1, 0, 0, 0);
         }
     }

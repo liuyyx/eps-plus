@@ -7,16 +7,17 @@ import com.github.epsilon.managers.RenderTargetManager;
 import com.github.epsilon.managers.RendererManager;
 import com.github.epsilon.modules.impl.ClientSetting;
 import com.github.epsilon.utils.render.ScissorUtils;
-import com.mojang.blaze3d.GpuFormat;
-import com.mojang.blaze3d.IndexType;
-import com.mojang.blaze3d.PrimitiveTopology;
+import com.mojang.renderpearl.api.GpuFormat;
+import com.mojang.renderpearl.api.pipeline.IndexType;
+import com.mojang.renderpearl.api.pipeline.PrimitiveTopology;
 import com.mojang.blaze3d.ProjectionType;
-import com.mojang.blaze3d.buffers.GpuBuffer;
-import com.mojang.blaze3d.buffers.GpuBufferSlice;
+import com.mojang.renderpearl.api.buffers.GpuBuffer;
+import com.mojang.renderpearl.api.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.*;
+import com.mojang.renderpearl.api.textures.*;
 import net.minecraft.client.input.MouseButtonEvent;
-import net.minecraft.client.renderer.DynamicUniformStorage;
+import net.minecraft.client.renderer.DynamicGpuDataStorage;
+import net.minecraft.client.renderer.DynamicGpuDataStorageMapped;
 import net.minecraft.client.renderer.Projection;
 import net.minecraft.client.renderer.ProjectionMatrixBuffer;
 import net.minecraft.client.renderer.rendertype.TextureTransform;
@@ -56,7 +57,7 @@ public class LuminRenderSystem {
         StaticFontLoader.destroyDefault();
     }
 
-    public static <T extends DynamicUniformStorage.DynamicUniform> GpuBufferSlice writeDynamicUniform(
+    public static <T extends DynamicGpuDataStorage.DynamicGpuData> GpuBufferSlice writeDynamicUniform(
             String key,
             String label,
             int uniformSize,
@@ -238,30 +239,30 @@ public class LuminRenderSystem {
     }
 
     private static final class ShaderUniforms {
-        private static final Map<String, DynamicUniformStorage<DynamicUniformStorage.DynamicUniform>> UNIFORMS = new HashMap<>();
+        private static final Map<String, DynamicGpuDataStorage<DynamicGpuDataStorage.DynamicGpuData>> UNIFORMS = new HashMap<>();
 
         private ShaderUniforms() {
         }
 
         @SuppressWarnings("unchecked")
-        private static <T extends DynamicUniformStorage.DynamicUniform> GpuBufferSlice write(
+        private static <T extends DynamicGpuDataStorage.DynamicGpuData> GpuBufferSlice write(
                 String key,
                 String label,
                 int uniformSize,
                 int initialCapacity,
                 T uniform
         ) {
-            DynamicUniformStorage<T> storage = (DynamicUniformStorage<T>) UNIFORMS.computeIfAbsent(key, ignored ->
-                    new DynamicUniformStorage<>(label, uniformSize, initialCapacity));
-            return storage.writeUniform(uniform);
+            DynamicGpuDataStorage<T> storage = (DynamicGpuDataStorage<T>) UNIFORMS.computeIfAbsent(key, ignored ->
+                    new DynamicGpuDataStorageMapped<>(label, uniformSize, GpuBuffer.USAGE_UNIFORM, initialCapacity));
+            return storage.writeData(uniform);
         }
 
         private static void endFrame() {
-            UNIFORMS.values().forEach(DynamicUniformStorage::endFrame);
+            UNIFORMS.values().forEach(DynamicGpuDataStorage::endFrame);
         }
 
         private static void closeAll() {
-            UNIFORMS.values().forEach(DynamicUniformStorage::close);
+            UNIFORMS.values().forEach(DynamicGpuDataStorage::close);
             UNIFORMS.clear();
         }
     }

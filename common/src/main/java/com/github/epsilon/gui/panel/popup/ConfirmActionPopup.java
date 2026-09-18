@@ -1,5 +1,6 @@
 package com.github.epsilon.gui.panel.popup;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import com.github.epsilon.gui.lib.UiRect;
 import com.github.epsilon.gui.lib.UiTree;
 import com.github.epsilon.gui.lib.render.UiRenderBatch;
@@ -96,7 +97,7 @@ public class ConfirmActionPopup implements PanelPopupHost.Popup {
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean isDoubleClick) {
-        if (event.button() != 0 || !bounds.contains(event.x(), event.y())) {
+        if (event.button() != InputConstants.MOUSE_BUTTON_LEFT || !bounds.contains(event.x(), event.y())) {
             return false;
         }
         closeAfterClick = false;

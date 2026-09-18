@@ -13,7 +13,7 @@ layout(std140) uniform MotionBlurData {
     ivec4 BlurSettings;
 };
 
-in vec2 texCoord;
+layout(location = 0) in vec2 texCoord;
 
 layout(location = 0) out vec4 fragColor;
 

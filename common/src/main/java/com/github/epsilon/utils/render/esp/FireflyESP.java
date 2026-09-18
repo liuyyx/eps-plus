@@ -3,11 +3,11 @@ package com.github.epsilon.utils.render.esp;
 import com.github.epsilon.assets.resources.ResourceLocationUtils;
 import com.github.epsilon.graphics.immediate.LuminImmediateRenderer;
 import com.github.epsilon.utils.render.ColorUtils;
-import com.mojang.blaze3d.pipeline.BlendFunction;
-import com.mojang.blaze3d.pipeline.ColorTargetState;
-import com.mojang.blaze3d.pipeline.DepthStencilState;
-import com.mojang.blaze3d.pipeline.RenderPipeline;
-import com.mojang.blaze3d.platform.CompareOp;
+import com.mojang.renderpearl.api.pipeline.BlendFunction;
+import com.mojang.renderpearl.api.pipeline.ColorTargetState;
+import com.mojang.renderpearl.api.pipeline.DepthStencilState;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
+import com.mojang.renderpearl.api.pipeline.CompareOp;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
 import net.minecraft.client.Camera;
@@ -86,8 +86,8 @@ public class FireflyESP {
 
                 stack.pushPose();
                 stack.translate(tPosX + Math.cos(radians) * target.getBbWidth(), tPosY + target.getBbHeight() * 0.5 + sinQuad, tPosZ + Math.sin(radians) * target.getBbWidth());
-                stack.mulPose(Axis.YP.rotationDegrees(-camera.yRot()));
-                stack.mulPose(Axis.XP.rotationDegrees(camera.xRot()));
+                stack.rotateDegrees(Axis.YP, -camera.yRot());
+                stack.rotateDegrees(Axis.XP, camera.xRot());
 
                 Matrix4f matrix = stack.last().pose();
 

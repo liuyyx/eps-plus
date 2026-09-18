@@ -216,7 +216,7 @@ public class MusicInstance extends LandInstance {
     }
 
     /**
-     * SMTC 封面可能是 JPEG；Minecraft 26.2 的 NativeImage.read 会先强制校验 PNG。
+     * SMTC 封面可能是 JPEG；Minecraft 26.3 的 NativeImage.read 会先强制校验 PNG。
      * 这里先通过 ImageIO 解码并裁成方形，再显式写入 NativeImage。
      */
     private static NativeImage decodeThumbnail(byte[] thumbnail) throws IOException {

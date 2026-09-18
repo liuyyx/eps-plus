@@ -1,5 +1,6 @@
 package com.github.epsilon.gui.dropdown.component;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import com.github.epsilon.assets.i18n.EpsilonTranslations;
 import com.github.epsilon.graphics.text.IconChars;
 import com.github.epsilon.graphics.text.StaticFontLoader;
@@ -226,25 +227,25 @@ public class ModuleButton extends Component {
                 return true;
             }
             if (isKeybindButtonHovered(mouseX, mouseY)) {
-                if (button == 0) {
+                if (button == InputConstants.MOUSE_BUTTON_LEFT) {
                     listeningKeybind = true;
                     DropdownScreen.INSTANCE.react(ReisaDropdownCompanion.Action.KEY_BIND);
                     return true;
                 }
-                if (button == 2) {
+                if (button == InputConstants.MOUSE_BUTTON_MIDDLE) {
                     module.setBindMode(module.getBindMode() == Module.BindMode.Toggle ? Module.BindMode.Hold : Module.BindMode.Toggle);
                     DropdownScreen.INSTANCE.react(ReisaDropdownCompanion.Action.KEY_BIND);
                     return true;
                 }
             }
-            if (button == 0) {
+            if (button == InputConstants.MOUSE_BUTTON_LEFT) {
                 module.toggle();
                 DropdownScreen.INSTANCE.react(module.isEnabled()
                         ? ReisaDropdownCompanion.Action.TOGGLE_ON
                         : ReisaDropdownCompanion.Action.TOGGLE_OFF);
                 return true;
             }
-            if (button == 1) {
+            if (button == InputConstants.MOUSE_BUTTON_RIGHT) {
                 if (sectionRenderer.isEmpty()) {
                     return true;
                 }

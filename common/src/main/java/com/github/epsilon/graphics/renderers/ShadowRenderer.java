@@ -5,14 +5,14 @@ import com.github.epsilon.graphics.LuminRenderSystem;
 import com.github.epsilon.graphics.buffer.LuminRingBuffer;
 import com.github.epsilon.managers.RendererManager;
 import com.github.epsilon.utils.render.ScissorUtils;
-import com.mojang.blaze3d.buffers.GpuBuffer;
-import com.mojang.blaze3d.buffers.GpuBufferSlice;
+import com.mojang.renderpearl.api.buffers.GpuBuffer;
+import com.mojang.renderpearl.api.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.buffers.Std140Builder;
 import com.mojang.blaze3d.buffers.Std140SizeCalculator;
-import com.mojang.blaze3d.opengl.GlStateManager;
-import com.mojang.blaze3d.systems.RenderPass;
+import com.mojang.renderpearl.backend.opengl.GlStateManager;
+import com.mojang.renderpearl.api.commands.RenderPass;
 import com.mojang.blaze3d.systems.RenderSystem;
-import net.minecraft.client.renderer.DynamicUniformStorage;
+import net.minecraft.client.renderer.DynamicGpuDataStorage;
 import net.minecraft.util.ARGB;
 import org.lwjgl.system.MemoryUtil;
 
@@ -258,12 +258,12 @@ public class ShadowRenderer implements IRenderer {
         for (ShadowDraw draw : draws) {
             if (draw.segmented()) {
                 PreparedSegmentedShadow shadow = preparedSegmentedShadows.get(draw.segmentedShadowIndex());
-                pass.setPipeline(LuminRenderPipelines.SEGMENTED_SHADOW);
+                pass.setPipeline(RenderSystem.getCompiledPipeline(LuminRenderPipelines.SEGMENTED_SHADOW));
                 pass.setVertexBuffer(0, segmentedBuffer.getGpuBuffer().slice());
                 pass.setUniform("SegmentedShadowUniforms", shadow.uniforms());
                 pass.drawIndexed(draw.indexCount(), 1, draw.firstIndex(), 0, 0);
             } else {
-                pass.setPipeline(LuminRenderPipelines.SHADOW);
+                pass.setPipeline(RenderSystem.getCompiledPipeline(LuminRenderPipelines.SHADOW));
                 pass.setVertexBuffer(0, buffer.getGpuBuffer().slice());
                 pass.drawIndexed(draw.indexCount(), 1, draw.firstIndex(), 0, 0);
             }
@@ -336,7 +336,7 @@ public class ShadowRenderer implements IRenderer {
     private record ShadowDraw(boolean segmented, int firstIndex, int indexCount, int segmentedShadowIndex) {
     }
 
-    private record SegmentedShadowUniforms(SegmentedShadow shadow) implements DynamicUniformStorage.DynamicUniform {
+    private record SegmentedShadowUniforms(SegmentedShadow shadow) implements DynamicGpuDataStorage.DynamicGpuData {
         @Override
         public void write(ByteBuffer buffer) {
             Color color = shadow.color();

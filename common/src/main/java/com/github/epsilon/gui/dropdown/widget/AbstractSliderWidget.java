@@ -6,8 +6,8 @@ import com.github.epsilon.gui.dropdown.ReisaDropdownCompanion;
 import com.github.epsilon.gui.lib.UiTextMetrics;
 import com.github.epsilon.gui.lib.UiTree;
 import com.github.epsilon.settings.Setting;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.util.Mth;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.function.Predicate;
 
@@ -120,7 +120,7 @@ public abstract class AbstractSliderWidget<S extends Setting<T>, T extends Numbe
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         syncSessionState();
-        if (button == 1) {
+        if (button == InputConstants.MOUSE_BUTTON_RIGHT) {
             if (isEditorHitboxHovered(mouseX, mouseY)) {
                 inputField.setText(formatPlainValue());
                 inputField.focusIfContains(mouseX, mouseY, getEditorX(), getEditorY(), getEditorWidth(), getEditorHeight());
@@ -129,7 +129,7 @@ public abstract class AbstractSliderWidget<S extends Setting<T>, T extends Numbe
                 return true;
             }
         }
-        if (button == 0) {
+        if (button == InputConstants.MOUSE_BUTTON_LEFT) {
             if (inputField.isFocused()) {
                 if (isEditorBoundsHovered(mouseX, mouseY)) {
                     inputField.focusIfContains(mouseX, mouseY, getEditorX(), getEditorY(), getEditorWidth(), getEditorHeight());
@@ -151,7 +151,7 @@ public abstract class AbstractSliderWidget<S extends Setting<T>, T extends Numbe
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
         syncSessionState();
-        if (button == 0 && dragging) {
+        if (button == InputConstants.MOUSE_BUTTON_LEFT && dragging) {
             commitPendingValue();
             dragging = false;
             DropdownScreen.INSTANCE.react(ReisaDropdownCompanion.Action.CONFIRM);
@@ -173,13 +173,13 @@ public abstract class AbstractSliderWidget<S extends Setting<T>, T extends Numbe
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
         syncSessionState();
         if (!inputField.isFocused()) return false;
-        if (keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER) {
+        if (keyCode == InputConstants.KEY_RETURN || keyCode == InputConstants.KEY_NUMPADENTER) {
             commitInput();
             inputField.blur();
             DropdownScreen.INSTANCE.react(ReisaDropdownCompanion.Action.CONFIRM);
             return true;
         }
-        if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
+        if (keyCode == InputConstants.KEY_ESCAPE) {
             clearPendingValue();
             inputField.setText(formatPlainValue());
             inputField.blur();

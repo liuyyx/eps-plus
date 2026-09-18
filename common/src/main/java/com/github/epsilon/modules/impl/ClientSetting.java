@@ -1,5 +1,6 @@
 package com.github.epsilon.modules.impl;
 
+import com.mojang.blaze3d.Blaze3D;
 import com.github.epsilon.assets.ffmpeg.FFmpegNativePlatform;
 import com.github.epsilon.assets.i18n.EpsilonLanguage;
 import com.github.epsilon.assets.i18n.EpsilonLanguageManager;
@@ -20,10 +21,9 @@ import com.github.epsilon.settings.SettingGroup;
 import com.github.epsilon.settings.impl.*;
 import com.github.epsilon.utils.client.PlatformRequirement;
 import com.mojang.blaze3d.platform.IconSet;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.SharedConstants;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.util.Util;
-import org.lwjgl.glfw.GLFW;
 
 import java.awt.*;
 import java.io.IOException;
@@ -114,7 +114,7 @@ public class ClientSetting extends Module {
     private final ButtonSetting openHUDEditor = buttonSetting("Open HUD Editor", () -> mc.gui.setScreen(HudEditorScreen.INSTANCE));
 
     // General
-    public final KeybindSetting guiKeybind = keybindSetting("Gui Keybind", GLFW.GLFW_KEY_RIGHT_SHIFT).group(sgGeneral);
+    public final KeybindSetting guiKeybind = keybindSetting("Gui Keybind", InputConstants.KEY_RSHIFT).group(sgGeneral);
 
     public final EnumSetting<GuiMode> guiMode = enumSetting("Gui Mode", GuiMode.Dropdown, _ -> mc.gui.setScreen(switch (ClientSetting.INSTANCE.guiMode.getValue()) {
         case Panel -> PanelScreen.INSTANCE;
@@ -166,7 +166,7 @@ public class ClientSetting extends Module {
 
     public final EnumSetting<IconMode> customIcon = enumSetting("Custom Icon", IconMode.Epsilon, _ -> {
         try {
-            mc.getWindow().setIcon(mc.getVanillaPackResources(), SharedConstants.getCurrentVersion().stable() ? IconSet.RELEASE : IconSet.SNAPSHOT);
+            mc.getWindow().setIcon(mc.getVanillaPackResources().fullResources(), SharedConstants.getCurrentVersion().stable() ? IconSet.RELEASE : IconSet.SNAPSHOT);
         } catch (IOException ignored) {
         }
     }).group(sgAppearance);
@@ -229,7 +229,7 @@ public class ClientSetting extends Module {
         try {
             Path directory = AssetManager.INSTANCE.rootDirectory();
             Files.createDirectories(directory);
-            Util.getPlatform().openPath(directory);
+            Blaze3D.openPath(directory);
         } catch (IOException e) {
             NotificationManager.INSTANCE.error(
                     EpsilonTranslations.Resources.OPEN_FOLDER_FAILED.getTranslatedName(),

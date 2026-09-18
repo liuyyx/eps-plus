@@ -29,6 +29,7 @@ import net.minecraft.network.protocol.game.ClientboundPlayerInfoRemovePacket;
 import net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket;
 import net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket.Action;
 import net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket.Entry;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Vector3f;
@@ -179,6 +180,7 @@ public class LogoutSpots extends Module {
         private final float walkPosition;
         private final float walkSpeed;
         private final float attackAnimation;
+        private final LivingEntity.SwingDescription swing;
 
         private LogoutPlayer(Player player) {
             super(mc.level, new GameProfile(player.getGameProfile().id(), player.getGameProfile().name()));
@@ -186,7 +188,7 @@ public class LogoutSpots extends Module {
             float tickDelta = mc.level.tickRateManager().isFrozen() ? 1.0f : mc.getDeltaTracker().getGameTimeDeltaPartialTick(true);
             walkPosition = player.walkAnimation.position(tickDelta);
             walkSpeed = player.walkAnimation.speed(tickDelta);
-            attackAnimation = player.getAttackAnim(tickDelta);
+            attackAnimation = player.getSwingAnimation(tickDelta);
 
             copyPosition(player);
             setOldPosAndRot();
@@ -198,13 +200,11 @@ public class LogoutSpots extends Module {
             setPose(player.getPose());
             setHealth(player.getHealth());
             setAbsorptionAmount(player.getAbsorptionAmount());
-            swingingArm = player.swingingArm;
+            swing = player.getCurrentSwing();
         }
 
         private void render(PoseStack poseStack) {
             float tickDelta = mc.level.tickRateManager().isFrozen() ? 1.0f : mc.getDeltaTracker().getGameTimeDeltaPartialTick(true);
-            oAttackAnim = attackAnimation;
-            attackAnim = attackAnimation;
             ((WalkAnimationStateAccessor) walkAnimation).epsilon$freeze(walkPosition, walkSpeed, tickDelta);
 
             WireframeEntityRenderer.render(poseStack, this, 1.0, sideColor.getValue(), lineColor.getValue(), 2.0f);
@@ -213,6 +213,16 @@ public class LogoutSpots extends Module {
         @Override
         public boolean shouldShowName() {
             return false;
+        }
+
+        @Override
+        public float getSwingAnimation(float partialTicks) {
+            return attackAnimation;
+        }
+
+        @Override
+        public LivingEntity.SwingDescription getCurrentSwing() {
+            return swing;
         }
 
         @Override

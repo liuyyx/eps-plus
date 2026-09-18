@@ -24,11 +24,11 @@ accessible field net/minecraft/client/player/LocalPlayer lastSentInput Lnet/mine
 accessible field net/minecraft/client/player/LocalPlayer positionReminder I
 accessible field net/minecraft/client/player/LocalPlayer wasSprinting Z
 accessible field net/minecraft/client/renderer/LevelRenderer entityOutlineTarget Lcom/mojang/blaze3d/pipeline/RenderTarget;
-accessible field net/minecraft/client/renderer/RenderPipelines DEBUG_FILLED_SNIPPET Lcom/mojang/blaze3d/pipeline/RenderPipeline$Snippet;
-accessible field net/minecraft/client/renderer/RenderPipelines ENTITY_SNIPPET Lcom/mojang/blaze3d/pipeline/RenderPipeline$Snippet;
-accessible field net/minecraft/client/renderer/RenderPipelines GUI_TEXTURED_SNIPPET Lcom/mojang/blaze3d/pipeline/RenderPipeline$Snippet;
-accessible field net/minecraft/client/renderer/RenderPipelines ITEM_SNIPPET Lcom/mojang/blaze3d/pipeline/RenderPipeline$Snippet;
-accessible field net/minecraft/client/renderer/RenderPipelines LINES_SNIPPET Lcom/mojang/blaze3d/pipeline/RenderPipeline$Snippet;
+accessible field net/minecraft/client/renderer/RenderPipelines DEBUG_FILLED_SNIPPET Lcom/mojang/renderpearl/api/pipeline/RenderPipeline$Snippet;
+accessible field net/minecraft/client/renderer/RenderPipelines ENTITY_SNIPPET Lcom/mojang/renderpearl/api/pipeline/RenderPipeline$Snippet;
+accessible field net/minecraft/client/renderer/RenderPipelines GUI_TEXTURED_SNIPPET Lcom/mojang/renderpearl/api/pipeline/RenderPipeline$Snippet;
+accessible field net/minecraft/client/renderer/RenderPipelines ITEM_SNIPPET Lcom/mojang/renderpearl/api/pipeline/RenderPipeline$Snippet;
+accessible field net/minecraft/client/renderer/RenderPipelines LINES_SNIPPET Lcom/mojang/renderpearl/api/pipeline/RenderPipeline$Snippet;
 accessible field net/minecraft/client/resources/SkinManager skinTextures Lnet/minecraft/client/resources/SkinManager$TextureCache;
 accessible field net/minecraft/client/resources/SkinManager$TextureCache root Ljava/nio/file/Path;
 accessible field net/minecraft/network/protocol/game/ServerboundMovePlayerPacket onGround Z
@@ -68,11 +68,6 @@ accessible field net/minecraft/client/gui/screens/options/controls/KeyBindsList$
 accessible field net/minecraft/client/Minecraft fontManager Lnet/minecraft/client/gui/font/FontManager;
 accessible field net/minecraft/client/gui/font/FontManager fontSets Ljava/util/Map;
 accessible field net/minecraft/client/gui/font/FontSet glyphCache Lnet/minecraft/client/gui/font/CodepointMap;
-accessible field net/minecraft/world/entity/InterpolationHandler interpolationData Lnet/minecraft/world/entity/InterpolationHandler$InterpolationData;
-accessible class net/minecraft/world/entity/InterpolationHandler$InterpolationData
-accessible field net/minecraft/world/entity/InterpolationHandler$InterpolationData position Lnet/minecraft/world/phys/Vec3;
-accessible field net/minecraft/world/entity/InterpolationHandler$InterpolationData yRot F
-accessible field net/minecraft/world/entity/InterpolationHandler$InterpolationData xRot F
 accessible field net/minecraft/world/entity/player/Inventory equipment Lnet/minecraft/world/entity/EntityEquipment;
 accessible field net/minecraft/client/player/ClientInput moveVector Lnet/minecraft/world/phys/Vec2;
 accessible field net/minecraft/core/Direction YXZ_AXIS_ORDER Lcom/google/common/collect/ImmutableList;
@@ -103,7 +98,6 @@ extendable method net/minecraft/world/entity/Entity moveOrInterpolateTo (Lnet/mi
 
 accessible method net/minecraft/world/level/block/StairBlock getStairsShape (Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/block/state/properties/StairsShape;
 accessible method net/minecraft/world/level/block/FireBlock canBurn (Lnet/minecraft/world/level/block/state/BlockState;)Z
-accessible method net/minecraft/world/level/block/RedStoneWireBlock getConnectingSide (Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/core/BlockPos;Lnet/minecraft/core/Direction;)Lnet/minecraft/world/level/block/state/properties/RedstoneSide;
 
 accessible class net/minecraft/client/gui/font/FontSet$SelectedGlyphs
 accessible class net/minecraft/world/entity/Entity$Movement

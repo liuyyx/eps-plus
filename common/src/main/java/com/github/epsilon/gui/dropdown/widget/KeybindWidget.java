@@ -1,5 +1,6 @@
 package com.github.epsilon.gui.dropdown.widget;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import com.github.epsilon.gui.dropdown.DropdownScreen;
 import com.github.epsilon.gui.dropdown.DropdownTheme;
 import com.github.epsilon.gui.dropdown.ReisaDropdownCompanion;
@@ -60,7 +61,7 @@ public class KeybindWidget extends SettingWidget<KeybindSetting> {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (button == 0 && isHovered(mouseX, mouseY, buttonX, buttonY, buttonW, buttonH)) {
+        if (button == InputConstants.MOUSE_BUTTON_LEFT && isHovered(mouseX, mouseY, buttonX, buttonY, buttonW, buttonH)) {
             listening = !listening;
             DropdownScreen.INSTANCE.react(listening
                     ? ReisaDropdownCompanion.Action.KEY_BIND
@@ -68,7 +69,7 @@ public class KeybindWidget extends SettingWidget<KeybindSetting> {
             return true;
         }
 
-        if (listening && button != 0) {
+        if (listening && button != InputConstants.MOUSE_BUTTON_LEFT) {
             setting.setValue(KeybindUtils.encodeMouseButton(button));
             listening = false;
             DropdownScreen.INSTANCE.react(ReisaDropdownCompanion.Action.CONFIRM);

@@ -188,10 +188,10 @@ UiTree tree = UiTree.build(scope ->
 - Screen 移除或关闭时必须清空并释放 scene，不得跨帧复用未 flush 的命令。
 - renderer 初始化和绘制仍必须发生在 Minecraft 渲染线程。
 
-## Minecraft 26.2 集成
+## Minecraft 26.3 集成
 
 库本身不继承 Minecraft `Screen`，Screen 适配保留在应用层。当前实现已直接核对
-`common/build/moddev/artifacts/vanilla-26.2-*-sources.jar`：
+`common/build/moddev/artifacts/vanilla-26.3-*-sources.jar`：
 
 - `Screen.extractRenderState(GuiGraphicsExtractor, int, int, float)`；
 - `Screen.mouseClicked(MouseButtonEvent, boolean)`、`mouseReleased(MouseButtonEvent)`、

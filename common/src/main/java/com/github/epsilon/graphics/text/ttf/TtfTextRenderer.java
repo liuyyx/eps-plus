@@ -10,14 +10,14 @@ import com.github.epsilon.graphics.text.ITextRenderer;
 import com.github.epsilon.graphics.text.TextGlitchEffect;
 import com.github.epsilon.modules.impl.ClientSetting;
 import com.github.epsilon.utils.render.ScissorUtils;
-import com.mojang.blaze3d.buffers.GpuBuffer;
-import com.mojang.blaze3d.buffers.GpuBufferSlice;
+import com.mojang.renderpearl.api.buffers.GpuBuffer;
+import com.mojang.renderpearl.api.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.buffers.Std140Builder;
-import com.mojang.blaze3d.pipeline.RenderPipeline;
-import com.mojang.blaze3d.systems.RenderPass;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
+import com.mojang.renderpearl.api.commands.RenderPass;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.GpuTextureView;
-import net.minecraft.client.renderer.DynamicUniformStorage;
+import com.mojang.renderpearl.api.textures.GpuTextureView;
+import net.minecraft.client.renderer.DynamicGpuDataStorage;
 import net.minecraft.util.ARGB;
 import org.lwjgl.system.MemoryUtil;
 
@@ -443,7 +443,7 @@ public class TtfTextRenderer implements ITextRenderer {
                 colorView, Optional.empty(),
                 depthView, OptionalDouble.empty())
         ) {
-            pass.setPipeline(pipeline());
+            pass.setPipeline(RenderSystem.getCompiledPipeline(pipeline()));
             if (scissorEnabled) {
                 ScissorUtils.enableScissor(pass, scissorX, scissorY, scissorW, scissorH);
             }
@@ -533,7 +533,7 @@ public class TtfTextRenderer implements ITextRenderer {
 
             pass.setVertexBuffer(0, batch.buffer.getGpuBuffer().slice());
             LuminTexture fontTexture = mode == Mode.STANDARD ? atlas.getTexture() : atlas.getAlphaTexture();
-            pass.bindTexture("Sampler0", fontTexture.getTextureView(), fontTexture.getSampler());
+            pass.setUniform("Sampler0", fontTexture.getTextureView(), fontTexture.getSampler());
             if (mode == Mode.FONT_BLUR) {
                 pass.setUniform("FontBlurUniforms", batch.blurUniforms);
             } else if (mode == Mode.GLITCH) {
@@ -636,14 +636,14 @@ public class TtfTextRenderer implements ITextRenderer {
     private record BatchKey(TtfGlyphAtlas atlas, float blurRadius, TextGlitchEffect glitchEffect) {
     }
 
-    private record FontBlurUniforms(float blurRadius) implements DynamicUniformStorage.DynamicUniform {
+    private record FontBlurUniforms(float blurRadius) implements DynamicGpuDataStorage.DynamicGpuData {
         @Override
         public void write(ByteBuffer buffer) {
             Std140Builder.intoBuffer(buffer).putVec4(blurRadius, 0.0f, 0.0f, 0.0f);
         }
     }
 
-    private record GlitchUniforms(TextGlitchEffect effect, float time) implements DynamicUniformStorage.DynamicUniform {
+    private record GlitchUniforms(TextGlitchEffect effect, float time) implements DynamicGpuDataStorage.DynamicGpuData {
         @Override
         public void write(ByteBuffer buffer) {
             Color color = effect.neonColor();

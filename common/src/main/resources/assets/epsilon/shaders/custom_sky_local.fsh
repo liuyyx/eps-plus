@@ -16,7 +16,7 @@ layout(std140) uniform CustomSky {
 #define u_Time CustomSkyInfo.z
 #define mixFactor SkyColor.a
 
-in vec2 texCoord;
+layout(location = 0) in vec2 texCoord;
 
 layout(location = 0) out vec4 fragColor;
 

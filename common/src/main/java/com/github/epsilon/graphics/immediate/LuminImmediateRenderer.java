@@ -2,17 +2,17 @@ package com.github.epsilon.graphics.immediate;
 
 import com.github.epsilon.graphics.LuminRenderSystem;
 import com.github.epsilon.graphics.buffer.LuminRingBuffer;
-import com.mojang.blaze3d.PrimitiveTopology;
-import com.mojang.blaze3d.buffers.GpuBuffer;
-import com.mojang.blaze3d.buffers.GpuBufferSlice;
-import com.mojang.blaze3d.pipeline.RenderPipeline;
-import com.mojang.blaze3d.systems.RenderPass;
+import com.mojang.renderpearl.api.pipeline.PrimitiveTopology;
+import com.mojang.renderpearl.api.buffers.GpuBuffer;
+import com.mojang.renderpearl.api.buffers.GpuBufferSlice;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
+import com.mojang.renderpearl.api.commands.RenderPass;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.GpuTextureView;
+import com.mojang.renderpearl.api.textures.GpuTextureView;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.PoseStack;
-import com.mojang.blaze3d.vertex.VertexFormat;
-import com.mojang.blaze3d.vertex.VertexFormatElement;
+import com.mojang.renderpearl.api.vertex.VertexFormat;
+import com.mojang.renderpearl.api.vertex.VertexFormatElement;
 import net.minecraft.client.renderer.rendertype.TextureTransform;
 import net.minecraft.client.renderer.texture.AbstractTexture;
 import net.minecraft.resources.Identifier;
@@ -357,14 +357,14 @@ public class LuminImmediateRenderer {
                         colorView, Optional.empty(),
                         depthView, OptionalDouble.empty())
                 ) {
-                    pass.setPipeline(this.pipeline);
+                    pass.setPipeline(RenderSystem.getCompiledPipeline(this.pipeline));
                     RenderSystem.bindDefaultUniforms(pass);
                     pass.setUniform("DynamicTransforms", dynamicUniforms);
                     pass.setVertexBuffer(0, this.ringBuffer.getGpuBuffer().slice());
 
                     if (this.texture != null) {
                         AbstractTexture textureObject = mc.getTextureManager().getTexture(this.texture);
-                        pass.bindTexture("Sampler0", textureObject.getTextureView(), textureObject.getSampler());
+                        pass.setUniform("Sampler0", textureObject.getTextureView(), textureObject.getSampler());
                     }
 
                     if (this.passConfigurer != null) {

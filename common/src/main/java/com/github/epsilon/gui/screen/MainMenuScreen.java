@@ -1,5 +1,6 @@
 package com.github.epsilon.gui.screen;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import com.github.epsilon.Constants;
 import com.github.epsilon.assets.i18n.EpsilonTranslations;
 import com.github.epsilon.graphics.LuminRenderSystem;
@@ -131,7 +132,7 @@ public class MainMenuScreen extends Screen {
             case Panel -> PanelScreen.INSTANCE;
             case Dropdown -> DropdownScreen.INSTANCE;
         })));
-        entries.add(new MenuEntry("Options", () -> minecraft.gui.setScreen(new OptionsScreen(this, minecraft.options, false))));
+        entries.add(new MenuEntry("Options", () -> minecraft.gui.setScreen(new OptionsScreen(this, minecraft.options))));
         entries.add(new MenuEntry("Quit", () -> {
             if (!requestShutdown()) minecraft.stop();
         }));
@@ -996,7 +997,7 @@ public class MainMenuScreen extends Screen {
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
         if (reisaShutdownStartMs >= 0L) return true;
-        if (event.button() == 0) {
+        if (event.button() == InputConstants.MOUSE_BUTTON_LEFT) {
             MouseButtonEvent epsilonEvent = LuminRenderSystem.toEpsilonMouseEvent(event);
             int width = LuminRenderSystem.getScaledWidthInt();
             int height = LuminRenderSystem.getScaledHeightInt();

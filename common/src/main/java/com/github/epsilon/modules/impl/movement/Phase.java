@@ -16,12 +16,12 @@ import com.github.epsilon.utils.player.InvUtils;
 import com.github.epsilon.utils.player.MoveUtils;
 import com.github.epsilon.utils.rotation.Rot2f;
 import com.github.epsilon.utils.rotation.RotationUtils;
+import com.github.epsilon.utils.player.PlayerUtils;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 import net.minecraft.network.protocol.game.ServerboundPlayerActionPacket;
 import net.minecraft.network.protocol.game.ServerboundPlayerCommandPacket;
-import net.minecraft.network.protocol.game.ServerboundSwingPacket;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.ClipContext;
@@ -171,7 +171,7 @@ public class Phase extends Module {
 
             InvUtils.swap(bestTool, true);
             mc.gameMode.continueDestroyBlock(blockToBreak, mc.player.getDirection());
-            mc.player.swing(InteractionHand.MAIN_HAND);
+            PlayerUtils.swingHand(InteractionHand.MAIN_HAND);
             if (silent.getValue()) {
                 InvUtils.swapBack();
             }
@@ -232,9 +232,7 @@ public class Phase extends Module {
         mc.gameMode.useItem(mc.player, InteractionHand.MAIN_HAND);
 
         if (swingHand.getValue()) {
-            mc.player.swing(InteractionHand.MAIN_HAND);
-        } else {
-            mc.getConnection().send(new ServerboundSwingPacket(InteractionHand.MAIN_HAND));
+            PlayerUtils.swingHand(InteractionHand.MAIN_HAND);
         }
 
 

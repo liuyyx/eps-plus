@@ -279,7 +279,7 @@ public class ElytraGrimAccelerate extends Module {
     /**
      * 上游在玩家被烟花推进时不介入：烟花产生的位移是合法的，交给其他模块控制。
      * <p>
-     * 26.2 的 {@code FireworkRocketEntity#isAttachedToEntity} 不可见，这里用贴身检测代替。
+     * 26.3 的 {@code FireworkRocketEntity#isAttachedToEntity} 仍不可见，这里用贴身检测代替。
      */
     private boolean isFireworkBoosted() {
         AABB box = mc.player.getBoundingBox().inflate(1.0D);

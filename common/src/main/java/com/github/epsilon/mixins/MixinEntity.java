@@ -32,13 +32,14 @@ public class MixinEntity {
         }
     }
 
+    // 26.3 起 calculateViewVector 是静态方法，包装方法不能再接收实体接收者，改为读取 mixin 自身的实例。
     @WrapOperation(method = "getViewVector", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/Entity;calculateViewVector(FF)Lnet/minecraft/world/phys/Vec3;"))
-    private Vec3 redirectGetViewYRot(Entity instance, float xRot, float yRot, Operation<Vec3> original) {
-        if (instance == mc.player) {
+    private Vec3 redirectGetViewYRot(float xRot, float yRot, Operation<Vec3> original) {
+        if ((Object) this == mc.player) {
             RaytraceEvent event = EventBus.INSTANCE.post(new RaytraceEvent(yRot, xRot));
-            return original.call(instance, event.getPitch(), event.getYaw());
+            return original.call(event.getPitch(), event.getYaw());
         }
-        return original.call(instance, xRot, yRot);
+        return original.call(xRot, yRot);
     }
 
     @WrapOperation(method = "moveRelative", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/Entity;getYRot()F"))

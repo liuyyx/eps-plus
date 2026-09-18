@@ -97,7 +97,7 @@ public class Health extends Module {
             return;
         }
 
-        if (currentHealth != lastHealth && player.invulnerableTime > 0) {
+        if (currentHealth != lastHealth && player.getInvulnerableTime() > 0) {
             blinkUntilTick = player.tickCount + (currentHealth < lastHealth ? 20 : 10);
         }
 

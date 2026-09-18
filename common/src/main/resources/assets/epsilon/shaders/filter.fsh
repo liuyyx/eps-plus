@@ -6,7 +6,7 @@ layout(std140) uniform FilterColor {
     vec4 TintColor;
 };
 
-in vec2 texCoord;
+layout(location = 0) in vec2 texCoord;
 
 layout(location = 0) out vec4 fragColor;
 

@@ -20,11 +20,9 @@ import com.github.epsilon.utils.player.PlayerUtils;
 import com.github.epsilon.utils.rotation.Priority;
 import com.github.epsilon.utils.rotation.Rot2f;
 import com.mojang.blaze3d.platform.InputConstants;
-import net.minecraft.network.protocol.game.ServerboundSwingPacket;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.item.Items;
-import org.lwjgl.glfw.GLFW;
 
 public class KeyPearl extends Module {
 
@@ -34,7 +32,7 @@ public class KeyPearl extends Module {
         super("Key Pearl", Category.COMBAT);
     }
 
-    private final KeybindSetting activateKey = keybindSetting("Activate Key", GLFW.GLFW_KEY_UNKNOWN);
+    private final KeybindSetting activateKey = keybindSetting("Activate Key", InputConstants.UNKNOWN.getValue());
     private final BoolSetting pauseOnEat = boolSetting("Pause On Eat", true);
     private final IntSetting delay = intSetting("Delay", 0, 0, 20, 1);
     private final BoolSetting switchBack = boolSetting("Switch Back", true);
@@ -129,9 +127,7 @@ public class KeyPearl extends Module {
                 InteractionResult result = mc.gameMode.useItem(mc.player, InteractionHand.MAIN_HAND);
                 if (result.consumesAction()) {
                     if (swingHand.getValue()) {
-                        mc.player.swing(InteractionHand.MAIN_HAND);
-                    } else {
-                        mc.getConnection().send(new ServerboundSwingPacket(InteractionHand.MAIN_HAND));
+                        PlayerUtils.swingHand(InteractionHand.MAIN_HAND);
                     }
                 }
                 hasActivated = true;

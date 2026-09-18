@@ -4,6 +4,7 @@ import com.github.epsilon.events.bus.EventBus;
 import com.github.epsilon.events.impl.AfterRender3DEvent;
 import com.github.epsilon.events.impl.Render3DEvent;
 import com.github.epsilon.graphics.shaders.CustomSkyShader;
+import com.github.epsilon.managers.ShaderManager;
 import com.github.epsilon.modules.impl.render.CustomSky;
 import com.github.epsilon.modules.impl.render.MotionBlur;
 import com.github.epsilon.modules.impl.render.NoRender;
@@ -11,14 +12,13 @@ import com.github.epsilon.modules.impl.render.Shaders;
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
-import com.mojang.blaze3d.buffers.GpuBufferSlice;
+import com.mojang.renderpearl.api.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.framegraph.FrameGraphBuilder;
 import com.mojang.blaze3d.framegraph.FramePass;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.resource.GraphicsResourceAllocator;
 import com.mojang.blaze3d.resource.ResourceHandle;
 import com.mojang.blaze3d.vertex.PoseStack;
-import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.LevelTargetBundle;
 import net.minecraft.client.renderer.PostChain;
@@ -33,6 +33,8 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+import static com.github.epsilon.Constants.mc;
+
 @Mixin(LevelRenderer.class)
 public class MixinLevelRenderer {
 
@@ -40,16 +42,29 @@ public class MixinLevelRenderer {
     @Final
     private LevelTargetBundle targets;
 
+    @Shadow
+    private boolean currentFrameRendersEntityOutline;
+
     @Inject(method = "render", at = @At("RETURN"))
-    private void onPostRenderLevel(GraphicsResourceAllocator resourceAllocator, DeltaTracker deltaTracker, boolean renderOutline, CameraRenderState cameraState, Matrix4fc modelViewMatrix, GpuBufferSlice terrainFog, Vector4f fogColor, boolean shouldRenderSky, CallbackInfo ci) {
+    private void onPostRenderLevel(GraphicsResourceAllocator resourceAllocator, boolean renderOutline, CameraRenderState cameraState, GpuBufferSlice terrainFog, Vector4f fogColor, boolean shouldRenderSky, boolean consistentDepthRequired, CallbackInfo ci) {
+        // 26.3 的 render 不再接收 modelViewMatrix，关卡渲染直接用 cameraState.viewRotationMatrix。
+        Matrix4fc modelViewMatrix = cameraState.viewRotationMatrix;
         MotionBlur.INSTANCE.captureFrame(cameraState, modelViewMatrix);
         PoseStack poseStack = new PoseStack();
         poseStack.mulPose(modelViewMatrix);
         EventBus.INSTANCE.post(new Render3DEvent(poseStack));
         EventBus.INSTANCE.post(new AfterRender3DEvent());
+        // 26.3 的实体描边合并在 LevelRenderer 内部完成：Shaders 启用时会取消原版后处理链，
+        // 因此这里在处理完描边目标后自行混回主目标。
+        if (this.currentFrameRendersEntityOutline) {
+            ShaderManager.INSTANCE.processEntityOutlineTarget(
+                    ((LevelRenderer) (Object) this).entityOutlineTarget,
+                    mc.gameRenderer.mainRenderTarget()
+            );
+        }
     }
 
-    @Inject(method = "addSkyPass(Lcom/mojang/blaze3d/framegraph/FrameGraphBuilder;Lnet/minecraft/client/renderer/state/level/CameraRenderState;Lcom/mojang/blaze3d/buffers/GpuBufferSlice;)V", at = @At("RETURN"), require = 0)
+    @Inject(method = "addSkyPass(Lcom/mojang/blaze3d/framegraph/FrameGraphBuilder;Lnet/minecraft/client/renderer/state/level/CameraRenderState;Lcom/mojang/renderpearl/api/buffers/GpuBufferSlice;)V", at = @At("RETURN"), require = 0)
     private void addCustomSkyPass(FrameGraphBuilder frame, CameraRenderState cameraState, GpuBufferSlice skyFog, CallbackInfo ci) {
         if (CustomSky.INSTANCE.isEnabled()) {
             FramePass pass = frame.addPass("epsilon_custom_sky");
@@ -59,7 +74,7 @@ public class MixinLevelRenderer {
         }
     }
 
-    @Inject(method = "addSkyPass(Lcom/mojang/blaze3d/framegraph/FrameGraphBuilder;Lnet/minecraft/client/renderer/state/level/CameraRenderState;Lcom/mojang/blaze3d/buffers/GpuBufferSlice;Lorg/joml/Matrix4fc;)V", at = @At("RETURN"), require = 0)
+    @Inject(method = "addSkyPass(Lcom/mojang/blaze3d/framegraph/FrameGraphBuilder;Lnet/minecraft/client/renderer/state/level/CameraRenderState;Lcom/mojang/renderpearl/api/buffers/GpuBufferSlice;Lorg/joml/Matrix4fc;)V", at = @At("RETURN"), require = 0)
     private void addCustomSkyPassNeoForge(FrameGraphBuilder frame, CameraRenderState cameraState, GpuBufferSlice skyFog, Matrix4fc modelViewMatrix, CallbackInfo ci) {
         if (CustomSky.INSTANCE.isEnabled()) {
             FramePass pass = frame.addPass("epsilon_custom_sky");
@@ -71,8 +86,8 @@ public class MixinLevelRenderer {
 
     @ModifyExpressionValue(
             method = {
-                    "addSkyPass(Lcom/mojang/blaze3d/framegraph/FrameGraphBuilder;Lnet/minecraft/client/renderer/state/level/CameraRenderState;Lcom/mojang/blaze3d/buffers/GpuBufferSlice;)V",
-                    "addSkyPass(Lcom/mojang/blaze3d/framegraph/FrameGraphBuilder;Lnet/minecraft/client/renderer/state/level/CameraRenderState;Lcom/mojang/blaze3d/buffers/GpuBufferSlice;Lorg/joml/Matrix4fc;)V" // For NeoForge
+                    "addSkyPass(Lcom/mojang/blaze3d/framegraph/FrameGraphBuilder;Lnet/minecraft/client/renderer/state/level/CameraRenderState;Lcom/mojang/renderpearl/api/buffers/GpuBufferSlice;)V",
+                    "addSkyPass(Lcom/mojang/blaze3d/framegraph/FrameGraphBuilder;Lnet/minecraft/client/renderer/state/level/CameraRenderState;Lcom/mojang/renderpearl/api/buffers/GpuBufferSlice;Lorg/joml/Matrix4fc;)V" // For NeoForge
             },
             at = @At(value = "FIELD", target = "Lnet/minecraft/client/renderer/state/level/CameraEntityRenderState;doesMobEffectBlockSky:Z", opcode = Opcodes.GETFIELD),
             require = 0

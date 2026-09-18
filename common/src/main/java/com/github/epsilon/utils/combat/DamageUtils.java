@@ -1,6 +1,7 @@
 package com.github.epsilon.utils.combat;
 
 import com.github.epsilon.utils.player.EnchantmentUtils;
+import com.github.epsilon.utils.player.PlayerUtils;
 import net.minecraft.core.BlockPos;
 import net.minecraft.util.Mth;
 import net.minecraft.world.Difficulty;
@@ -367,7 +368,7 @@ public class DamageUtils {
 
         if (target != null) {
             mc.gameMode.attack(mc.player, target);
-            mc.player.swing(net.minecraft.world.InteractionHand.MAIN_HAND);
+            PlayerUtils.swingHand(net.minecraft.world.InteractionHand.MAIN_HAND);
             return true;
         }
         return false;

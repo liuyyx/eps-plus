@@ -3,14 +3,15 @@ package com.github.epsilon.graphics.shaders;
 import com.github.epsilon.assets.resources.ResourceLocationUtils;
 import com.github.epsilon.graphics.LuminBindGroupLayouts;
 import com.github.epsilon.graphics.LuminRenderSystem;
-import com.mojang.blaze3d.buffers.GpuBufferSlice;
+import com.mojang.renderpearl.api.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.buffers.Std140Builder;
 import com.mojang.blaze3d.buffers.Std140SizeCalculator;
-import com.mojang.blaze3d.pipeline.RenderPipeline;
-import com.mojang.blaze3d.systems.RenderPass;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
+import com.mojang.renderpearl.api.commands.RenderPass;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.GpuTextureView;
-import net.minecraft.client.renderer.DynamicUniformStorage;
+import com.mojang.renderpearl.api.textures.GpuTextureView;
+import com.mojang.renderpearl.api.pipeline.ColorTargetState;
+import net.minecraft.client.renderer.DynamicGpuDataStorage;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.Util;
@@ -47,6 +48,7 @@ public class GlslSandBox implements AutoCloseable {
     private RenderPipeline getOrCreatePipeline(Identifier fragmentShader) {
         return pipelines.computeIfAbsent(fragmentShader, shader -> RenderPipeline.builder(RenderPipelines.POST_PROCESSING_SNIPPET)
                 .withLocation(Identifier.fromNamespaceAndPath(shader.getNamespace(), "pipelines/glsl_sandbox/" + shader.getPath().replace('/', '_')))
+                .withColorTargetState(ColorTargetState.DEFAULT)
                 .withVertexShader(Identifier.withDefaultNamespace("core/screenquad"))
                 .withFragmentShader(shader)
                 .withBindGroupLayout(LuminBindGroupLayouts.GLSL_SANDBOX_INFO)
@@ -95,7 +97,7 @@ public class GlslSandBox implements AutoCloseable {
                 colorView, Optional.empty(),
                 LuminRenderSystem.resolveDepthView(), OptionalDouble.empty())
         ) {
-            pass.setPipeline(getOrCreatePipeline(fragmentShader));
+            pass.setPipeline(RenderSystem.getCompiledPipeline(getOrCreatePipeline(fragmentShader)));
             RenderSystem.bindDefaultUniforms(pass);
             pass.setUniform("GlslSandboxInfo", sandboxInfo);
             pass.draw(3, 1, 0, 0);
@@ -115,7 +117,7 @@ public class GlslSandBox implements AutoCloseable {
             float mouseUvY,
             float mousePxX,
             float mousePxY
-    ) implements DynamicUniformStorage.DynamicUniform {
+    ) implements DynamicGpuDataStorage.DynamicGpuData {
         @Override
         public void write(ByteBuffer buffer) {
             Std140Builder.intoBuffer(buffer)

@@ -1,5 +1,6 @@
 package com.github.epsilon.gui.dropdown.component;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import com.github.epsilon.assets.i18n.EpsilonTranslations;
 import com.github.epsilon.gui.dropdown.DropdownTheme;
 import com.github.epsilon.gui.dropdown.widget.DropdownTextField;
@@ -103,7 +104,7 @@ public class ConfigDropdownPanel extends AbstractDropdownPanel {
 
     @Override
     protected boolean mouseClickedContent(double mouseX, double mouseY, int button) {
-        if (button != 0) return false;
+        if (button != InputConstants.MOUSE_BUTTON_LEFT) return false;
         float currentY = y + DropdownTheme.PANEL_HEADER_HEIGHT + PADDING - scroll;
         float contentX = x + PADDING;
         float contentW = width - PADDING * 2.0f;
@@ -157,7 +158,7 @@ public class ConfigDropdownPanel extends AbstractDropdownPanel {
 
     @Override
     public void onGlobalMouseClicked(double mouseX, double mouseY, int button) {
-        if (button != 0) return;
+        if (button != InputConstants.MOUSE_BUTTON_LEFT) return;
         float fieldX = x + PADDING;
         float fieldY = y + DropdownTheme.PANEL_HEADER_HEIGHT + PADDING - scroll;
         float fieldW = width - PADDING * 2.0f;

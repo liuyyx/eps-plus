@@ -10,12 +10,13 @@ import com.github.epsilon.settings.impl.KeybindSetting;
 import com.github.epsilon.utils.client.KeybindUtils;
 import com.github.epsilon.utils.player.ClickSlotUtils;
 import com.github.epsilon.utils.player.InvUtils;
+import com.mojang.blaze3d.platform.InputConstants;
+import com.github.epsilon.utils.player.PlayerUtils;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.function.Predicate;
 
@@ -27,7 +28,7 @@ public class ElytraSwap extends Module {
         super("Elytra Swap", Category.PLAYER);
     }
 
-    private final KeybindSetting activateKey = keybindSetting("Activate Key", GLFW.GLFW_KEY_G);
+    private final KeybindSetting activateKey = keybindSetting("Activate Key", InputConstants.KEY_G);
     private final IntSetting swapDelay = intSetting("Delay", 0, 0, 20, 1);
     private final BoolSetting switchBack = boolSetting("Switch Back", true);
     private final IntSetting switchDelay = intSetting("Switch Delay", 0, 0, 20, 1);
@@ -114,7 +115,7 @@ public class ElytraSwap extends Module {
             if (!this.isSwinging) {
 
                 mc.gameMode.useItem(mc.player, InteractionHand.MAIN_HAND);
-                mc.player.swing(InteractionHand.MAIN_HAND);
+                PlayerUtils.swingHand(InteractionHand.MAIN_HAND);
                 this.isSwinging = true;
             }
 

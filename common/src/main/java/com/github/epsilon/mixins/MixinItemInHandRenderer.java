@@ -10,10 +10,11 @@ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.player.AbstractClientPlayer;
-import net.minecraft.client.player.LocalPlayer;
-import net.minecraft.client.renderer.ItemInHandRenderer;
+import net.minecraft.client.renderer.FirstPersonHandsAndItemsRenderer;
 import net.minecraft.client.renderer.SubmitNodeCollector;
+import net.minecraft.client.renderer.entity.state.AvatarRenderState;
+import net.minecraft.client.renderer.state.level.FirstPersonHandsAndItemsRenderState;
+import net.minecraft.client.renderer.state.level.PlayerRenderState;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.HumanoidArm;
@@ -30,7 +31,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import static com.github.epsilon.Constants.mc;
 
-@Mixin(ItemInHandRenderer.class)
+@Mixin(FirstPersonHandsAndItemsRenderer.class)
 public abstract class MixinItemInHandRenderer {
 
     @Unique
@@ -43,20 +44,8 @@ public abstract class MixinItemInHandRenderer {
     @Shadow
     private Minecraft minecraft;
 
-    @Shadow
-    private float mainHandHeight;
-
-    @Shadow
-    private float offHandHeight;
-
-    @Shadow
-    private ItemStack mainHandItem;
-
-    @Shadow
-    private ItemStack offHandItem;
-
     @Inject(method = "submitHandsWithItems", at = @At("HEAD"))
-    private void beginShadersHandCapture(float frameInterp, PoseStack poseStack, SubmitNodeCollector submitNodeCollector, LocalPlayer player, int lightCoords, CallbackInfo ci) {
+    private void beginShadersHandCapture(float partialTicks, PoseStack poseStack, SubmitNodeCollector submitNodeCollector, PlayerRenderState playerState, FirstPersonHandsAndItemsRenderState state, CallbackInfo ci) {
         Shaders shaders = Shaders.INSTANCE;
         if (shaders.isEnabled() && shaders.hands.getValue()) {
             ShaderManager.INSTANCE.beginHandOutlineCapture(mc.gameRenderer.mainRenderTarget().width, mc.gameRenderer.mainRenderTarget().height);
@@ -64,7 +53,7 @@ public abstract class MixinItemInHandRenderer {
     }
 
     @Inject(method = "submitArmWithItem", at = @At("HEAD"))
-    private void cacheBlockingState(AbstractClientPlayer player, float frameInterp, float xRot, InteractionHand hand, float attack, ItemStack itemStack, float inverseArmHeight, PoseStack poseStack, SubmitNodeCollector submitNodeCollector, int lightCoords, CallbackInfo ci) {
+    private void cacheBlockingState(PlayerRenderState playerState, FirstPersonHandsAndItemsRenderState state, float partialTicks, float xRot, InteractionHand hand, float attack, ItemStack itemStack, float inverseArmHeight, PoseStack poseStack, SubmitNodeCollector submitNodeCollector, int lightCoords, CallbackInfo ci) {
         epsilon$blocked = HandView.INSTANCE.shouldApplyBlockingAnimation(hand, itemStack);
     }
 
@@ -85,52 +74,39 @@ public abstract class MixinItemInHandRenderer {
     }
 
     @Inject(method = "submitArmWithItem", at = @At("RETURN"))
-    private void clearBlockingState(AbstractClientPlayer player, float frameInterp, float xRot, InteractionHand hand, float attack, ItemStack itemStack, float inverseArmHeight, PoseStack poseStack, SubmitNodeCollector submitNodeCollector, int lightCoords, CallbackInfo ci) {
+    private void clearBlockingState(PlayerRenderState playerState, FirstPersonHandsAndItemsRenderState state, float partialTicks, float xRot, InteractionHand hand, float attack, ItemStack itemStack, float inverseArmHeight, PoseStack poseStack, SubmitNodeCollector submitNodeCollector, int lightCoords, CallbackInfo ci) {
         epsilon$blocked = false;
     }
 
-    @Inject(method = "tick", at = @At("RETURN"))
-    private void hideHotbarSwitchAnimation(CallbackInfo ci) {
-        HandView handView = HandView.INSTANCE;
-
-        boolean shouldMainHide = handView.isEnabled() && handView.disableSwapMain.getValue();
-        if (shouldMainHide) {
-            mainHandHeight = 1.0f;
-            mainHandItem = minecraft.player.getMainHandItem();
-        }
-
-        boolean shouldOffHide = handView.isEnabled() && handView.disableSwapOff.getValue();
-        if (shouldOffHide) {
-            offHandHeight = 1.0f;
-            offHandItem = minecraft.player.getOffhandItem();
-        }
-    }
-
-    @Inject(method = "submitArmWithItem", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/ItemInHandRenderer;applyItemArmTransform(Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/world/entity/HumanoidArm;F)V", ordinal = 2, shift = At.Shift.AFTER))
-    private void addSwingToEating(AbstractClientPlayer player, float frameInterp, float xRot, InteractionHand hand, float attack, ItemStack itemStack, float inverseArmHeight, PoseStack poseStack, SubmitNodeCollector submitNodeCollector, int lightCoords, CallbackInfo ci) {
+    @Inject(method = "submitArmWithItem", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/FirstPersonHandsAndItemsRenderer;applyItemArmTransform(Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/world/entity/HumanoidArm;F)V", ordinal = 2, shift = At.Shift.AFTER))
+    private void addSwingToEating(PlayerRenderState playerState, FirstPersonHandsAndItemsRenderState state, float partialTicks, float xRot, InteractionHand hand, float attack, ItemStack itemStack, float inverseArmHeight, PoseStack poseStack, SubmitNodeCollector submitNodeCollector, int lightCoords, CallbackInfo ci) {
         HandView handView = HandView.INSTANCE;
         if (handView.isEnabled() && handView.swingWhileUsing.getValue() && attack > 0.0F) {
-            HumanoidArm arm = hand == InteractionHand.MAIN_HAND ? player.getMainArm() : player.getMainArm().getOpposite();
-            applyItemArmAttackTransform(poseStack, arm, attack);
+            HumanoidArm arm = resolveArm(playerState, hand);
+            if (arm != null) {
+                applyItemArmAttackTransform(poseStack, arm, attack);
+            }
         }
     }
 
     @Inject(method = "swingArm", at = @At("HEAD"), cancellable = true)
-    private void cancelSwingForBlocking(float attack, PoseStack poseStack, int invert, HumanoidArm arm, CallbackInfo ci) {
+    private void cancelSwingForBlocking(float animation, PoseStack poseStack, int invert, HumanoidArm arm, CallbackInfo ci) {
         if (epsilon$blocked) ci.cancel();
     }
 
-    @Inject(method = "submitArmWithItem", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/ItemInHandRenderer;renderItem(Lnet/minecraft/world/entity/LivingEntity;Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/world/item/ItemDisplayContext;Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/SubmitNodeCollector;I)V", shift = At.Shift.BEFORE))
-    private void beforeRenderHeldItem(AbstractClientPlayer player, float frameInterp, float xRot, InteractionHand hand, float attack, ItemStack itemStack, float inverseArmHeight, PoseStack poseStack, SubmitNodeCollector submitNodeCollector, int lightCoords, CallbackInfo ci) {
+    @Inject(method = "submitArmWithItem", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/item/ItemStackRenderState;submit(Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/SubmitNodeCollector;III)V", shift = At.Shift.BEFORE))
+    private void beforeRenderHeldItem(PlayerRenderState playerState, FirstPersonHandsAndItemsRenderState state, float partialTicks, float xRot, InteractionHand hand, float attack, ItemStack itemStack, float inverseArmHeight, PoseStack poseStack, SubmitNodeCollector submitNodeCollector, int lightCoords, CallbackInfo ci) {
         EventBus.INSTANCE.post(new HeldItemRenderEvent(hand, poseStack));
         if (epsilon$blocked) {
-            HumanoidArm arm = hand == InteractionHand.MAIN_HAND ? player.getMainArm() : player.getMainArm().getOpposite();
-            HandView.INSTANCE.applyBlockingTransform(poseStack, arm, attack, inverseArmHeight);
+            HumanoidArm arm = resolveArm(playerState, hand);
+            if (arm != null) {
+                HandView.INSTANCE.applyBlockingTransform(poseStack, arm, attack, inverseArmHeight);
+            }
         }
     }
 
-    @Inject(method = "submitArmWithItem", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/ItemInHandRenderer;renderPlayerArm(Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/SubmitNodeCollector;IFFLnet/minecraft/world/entity/HumanoidArm;)V"))
-    private void beforeRenderArm(AbstractClientPlayer player, float frameInterp, float xRot, InteractionHand hand, float attack, ItemStack itemStack, float inverseArmHeight, PoseStack poseStack, SubmitNodeCollector submitNodeCollector, int lightCoords, CallbackInfo ci) {
+    @Inject(method = "submitArmWithItem", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/FirstPersonHandsAndItemsRenderer;renderPlayerArm(Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/SubmitNodeCollector;IFFLnet/minecraft/world/entity/HumanoidArm;Lnet/minecraft/client/renderer/state/level/PlayerRenderState;)V"))
+    private void beforeRenderArm(PlayerRenderState playerState, FirstPersonHandsAndItemsRenderState state, float partialTicks, float xRot, InteractionHand hand, float attack, ItemStack itemStack, float inverseArmHeight, PoseStack poseStack, SubmitNodeCollector submitNodeCollector, int lightCoords, CallbackInfo ci) {
         EventBus.INSTANCE.post(new ArmRenderEvent(hand, poseStack));
     }
 
@@ -151,10 +127,28 @@ public abstract class MixinItemInHandRenderer {
         }
     }
 
-    @ModifyArg(method = "renderItem", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/item/ItemStackRenderState;submit(Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/SubmitNodeCollector;III)V"), index = 4)
+    @ModifyArg(method = "submitArmWithItem", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/item/ItemStackRenderState;submit(Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/SubmitNodeCollector;III)V"), index = 4)
     private int applyShadersHandOutline(int outlineColor) {
         Shaders shaders = Shaders.INSTANCE;
         return shaders.isEnabled() && shaders.hands.getValue() ? shaders.getOutlineColor(shaders.handsShader) : outlineColor;
+    }
+
+    /**
+     * 解析当前手对应的手臂。
+     *
+     * <p>26.3 的手部渲染改由渲染状态驱动，主手信息需要从 {@code AvatarRenderState} 读取。
+     *
+     * @param playerState 玩家渲染状态
+     * @param hand 当前渲染的手
+     * @return 对应手臂，状态缺失时返回 null
+     */
+    @Unique
+    private HumanoidArm resolveArm(PlayerRenderState playerState, InteractionHand hand) {
+        AvatarRenderState avatarRenderState = playerState.avatarRenderState;
+        if (avatarRenderState == null) {
+            return null;
+        }
+        return hand == InteractionHand.MAIN_HAND ? avatarRenderState.mainArm : avatarRenderState.mainArm.getOpposite();
     }
 
 }

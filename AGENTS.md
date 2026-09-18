@@ -36,14 +36,14 @@ Windows PowerShell 使用对应的 Wrapper：
 查阅前将源码解压到按游戏版本区分的参考目录：
 
 ```shell
-mkdir -p reference && unzip common/build/moddev/artifacts/vanilla-*-sources.jar -d reference/vanilla-26.2/
+mkdir -p reference && unzip common/build/moddev/artifacts/vanilla-*-sources.jar -d reference/vanilla-26.3/
 ```
 
 解压后可使用 `rg` 检索，例如：
 
 ```shell
-rg -n "class Minecraft|record KeyEvent" reference/vanilla-26.2 -g "*.java"
-rg -n "methodName" reference/vanilla-26.2/net/minecraft -g "*.java"
+rg -n "class Minecraft|record KeyEvent" reference/vanilla-26.3 -g "*.java"
+rg -n "methodName" reference/vanilla-26.3/net/minecraft -g "*.java"
 ```
 
 升级 Minecraft 后，不得继续使用旧版源码 Jar 或旧版 `reference/vanilla-xx.x/`；重新运行生成任务，并解压到新的版本目录。

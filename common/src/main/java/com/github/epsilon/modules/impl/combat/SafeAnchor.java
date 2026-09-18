@@ -19,6 +19,7 @@ import com.github.epsilon.utils.rotation.Rot2f;
 import com.github.epsilon.utils.rotation.RotationUtils;
 import com.github.epsilon.utils.timer.TimerUtils;
 import com.github.epsilon.utils.world.BlockUtils;
+import com.github.epsilon.utils.player.PlayerUtils;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.util.Mth;
@@ -275,7 +276,7 @@ public class SafeAnchor extends Module {
 
         InvUtils.swap(anchor.slot(), false);
         mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND, pendingAnchorHit);
-        mc.player.swing(InteractionHand.MAIN_HAND);
+        PlayerUtils.swingHand(InteractionHand.MAIN_HAND);
         currentAnchorPos = pendingAnchorPos;
         targetRotation = null;
         targetBlockPos = null;
@@ -933,7 +934,7 @@ public class SafeAnchor extends Module {
         );
         BlockHitResult hit = new BlockHitResult(hitVec, side, pos, false);
         mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND, hit);
-        mc.player.swing(InteractionHand.MAIN_HAND);
+        PlayerUtils.swingHand(InteractionHand.MAIN_HAND);
     }
 
     private void setShiftState(boolean state) {

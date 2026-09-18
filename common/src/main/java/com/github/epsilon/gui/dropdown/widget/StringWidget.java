@@ -1,5 +1,6 @@
 package com.github.epsilon.gui.dropdown.widget;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import com.github.epsilon.gui.dropdown.DropdownScreen;
 import com.github.epsilon.gui.dropdown.DropdownTheme;
 import com.github.epsilon.gui.dropdown.ReisaDropdownCompanion;
@@ -49,7 +50,7 @@ public class StringWidget extends SettingWidget<StringSetting> {
         float fieldW = width - DropdownTheme.SETTING_PADDING_X * 2.0f;
         float fieldH = DropdownTheme.INPUT_HEIGHT;
 
-        if (button == 0 && isHovered(mouseX, mouseY, fieldX, fieldY, fieldW, fieldH)) {
+        if (button == InputConstants.MOUSE_BUTTON_LEFT && isHovered(mouseX, mouseY, fieldX, fieldY, fieldW, fieldH)) {
             if (!inputField.isFocused()) {
                 inputField.setText(setting.getValue());
             }

@@ -1,5 +1,6 @@
 package com.github.epsilon.gui.panel.component.setting;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import com.github.epsilon.graphics.renderers.TextRenderer;
 import com.github.epsilon.gui.lib.UiRect;
 import com.github.epsilon.gui.lib.UiTree;
@@ -63,7 +64,7 @@ public class EnumSettingRow extends SettingRow<EnumSetting<?>> {
 
     @Override
     public boolean mouseClicked(UiRect bounds, MouseButtonEvent event, boolean isDoubleClick) {
-        return bounds.contains(event.x(), event.y()) && event.button() == 0;
+        return bounds.contains(event.x(), event.y()) && event.button() == InputConstants.MOUSE_BUTTON_LEFT;
     }
 
 }

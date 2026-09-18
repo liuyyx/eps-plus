@@ -6,9 +6,9 @@ import com.github.epsilon.accounts.types.SessionAccount;
 import com.github.epsilon.accounts.types.TheAlteningAccount;
 import com.google.gson.JsonObject;
 import com.mojang.authlib.minecraft.UserApiService;
-import com.mojang.authlib.yggdrasil.FriendsService;
-import com.mojang.authlib.yggdrasil.ServicesKeyType;
-import com.mojang.authlib.yggdrasil.YggdrasilAuthenticationService;
+import com.mojang.authlib.services.FriendsService;
+import com.mojang.authlib.services.MinecraftServicesDiscoveryService;
+import com.mojang.authlib.services.ServicesKeyType;
 import net.minecraft.client.User;
 import net.minecraft.client.gui.screens.social.PlayerSocialManager;
 import net.minecraft.client.gui.screens.social.RemoteFriendListUpdateHandler;
@@ -42,8 +42,7 @@ public abstract class Account<T extends Account<?>> {
     public abstract boolean fetchInfo();
 
     public boolean login() {
-        YggdrasilAuthenticationService authenticationService = new YggdrasilAuthenticationService(mc.getProxy());
-        applyLoginEnvironment(authenticationService);
+        applyLoginEnvironment(MinecraftServicesDiscoveryService.create(mc.getProxy()));
         return true;
     }
 
@@ -63,10 +62,10 @@ public abstract class Account<T extends Account<?>> {
     public static void setSession(User session) {
         mc.user = session;
 
-        YggdrasilAuthenticationService yggdrasilAuthenticationService = new YggdrasilAuthenticationService(mc.getProxy());
+        MinecraftServicesDiscoveryService discoveryService = MinecraftServicesDiscoveryService.create(mc.getProxy());
 
-        UserApiService apiService = yggdrasilAuthenticationService.createUserApiService(session.getAccessToken());
-        FriendsService friendsService = yggdrasilAuthenticationService.createFriendsService(session.getAccessToken());
+        UserApiService apiService = discoveryService.createUserApiService(session.getAccessToken());
+        FriendsService friendsService = discoveryService.createFriendsService(session.getAccessToken());
         RemoteFriendListUpdateHandler remoteFriendListUpdateHandler = new RemoteFriendListUpdateHandler(friendsService, mc);
         mc.userApiService = apiService;
         mc.playerSocialManager = new PlayerSocialManager(mc, apiService, friendsService, remoteFriendListUpdateHandler);
@@ -75,11 +74,20 @@ public abstract class Account<T extends Account<?>> {
         mc.profileFuture = CompletableFuture.supplyAsync(() -> mc.services().sessionService().fetchProfile(mc.getUser().getProfileId(), true), Util.ioPool());
     }
 
-    public static void applyLoginEnvironment(YggdrasilAuthenticationService authService) {
-        SignatureValidator.from(authService.getServicesKeySet(), ServicesKeyType.PROFILE_KEY);
+    /**
+     * 应用登录环境。
+     *
+     * <p>authlib 10 用 {@link MinecraftServicesDiscoveryService} 取代了
+     * {@code YggdrasilAuthenticationService}：会话、资料和好友服务都通过 discovery 文档创建，
+     * 因此这里统一改为传入 discovery 服务。
+     *
+     * @param discoveryService 已创建的 Minecraft 服务发现入口
+     */
+    public static void applyLoginEnvironment(MinecraftServicesDiscoveryService discoveryService) {
+        SignatureValidator.from(discoveryService.getServicesKeySet(), ServicesKeyType.PROFILE_KEY);
         SkinManager.TextureCache skinCache = mc.getSkinManager().skinTextures;
         Path skinCachePath = skinCache.root;
-        mc.services = Services.create(authService, mc.gameDirectory);
+        mc.services = Services.create(discoveryService, mc.gameDirectory);
         mc.skinManager = new SkinManager(skinCachePath, mc.services(), new SkinTextureDownloader(mc.getProxy(), mc.getTextureManager(), mc), mc);
     }
 

@@ -42,7 +42,8 @@ public class MyModule extends Module {
 状态。`setDefaultEnabled()` 和 `setDefaultHidden()` 同时影响 `reset()` 行为；普通模块默认 disabled、hidden。
 
 键位默认值为 `-1`。`Module.BindMode.Toggle` 在按下时切换，`Hold` 在按下时启用、松开时禁用。鼠标键由
-`KeybindUtils` 编码。
+`KeybindUtils` 编码：26.3 起键盘保存 SDL 扫描码，鼠标键保存 SDL 编号（左 1、中 2、右 3），
+旧配置由 `ConfigManager` 在读取时迁移，见[配置与旋转](configuration-and-rotation.md)。
 
 ## Setting DSL
 
