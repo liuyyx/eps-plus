@@ -12,9 +12,26 @@ import org.spongepowered.asm.mixin.injection.invoke.arg.Args;
 @Mixin(InventoryScreen.class)
 public class MixinInventoryScreen {
 
-    // 26.3 只保留 extractEntityInInventoryFollowsMouse，原来的 renderEntityInInventoryFollowsAngle 已合并进该方法。
-    @ModifyArgs(method = "extractEntityInInventoryFollowsMouse", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/GuiGraphicsExtractor;entity(Lnet/minecraft/client/renderer/entity/state/EntityRenderState;FLorg/joml/Vector3fc;Lorg/joml/Quaternionfc;Lorg/joml/Quaternionfc;IIII)V"))
+    /**
+     * 缩放库存界面中的实体预览。
+     *
+     * <p>26.3 的原版把实体渲染合并进 {@code extractEntityInInventoryFollowsMouse}，而 NeoForge 补丁为兼容
+     * 保留了旧结构：{@code extractEntityInInventoryFollowsMouse} 只是转发，真正的
+     * {@code GuiGraphicsExtractor#entity} 调用在 {@code renderEntityInInventoryFollowsAngle} 里。
+     * 两个注入点各自只在对应加载器中命中，因此都使用 {@code require = 0}（两边的字节码均已核对）。
+     */
+    @ModifyArgs(method = "extractEntityInInventoryFollowsMouse", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/GuiGraphicsExtractor;entity(Lnet/minecraft/client/renderer/entity/state/EntityRenderState;FLorg/joml/Vector3fc;Lorg/joml/Quaternionfc;Lorg/joml/Quaternionfc;IIII)V"), require = 0)
     private static void animateInventoryEntity(Args args) {
+        epsilon$scaleInventoryEntity(args);
+    }
+
+    @ModifyArgs(method = "renderEntityInInventoryFollowsAngle", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/GuiGraphicsExtractor;entity(Lnet/minecraft/client/renderer/entity/state/EntityRenderState;FLorg/joml/Vector3fc;Lorg/joml/Quaternionfc;Lorg/joml/Quaternionfc;IIII)V"), require = 0)
+    private static void animateInventoryEntityNeoForge(Args args) {
+        epsilon$scaleInventoryEntity(args);
+    }
+
+    @Unique
+    private static void epsilon$scaleInventoryEntity(Args args) {
         float animationScale = GameAnimation.INSTANCE.getCurrentInventoryScale();
         if (animationScale >= 1.0f) return;
 
