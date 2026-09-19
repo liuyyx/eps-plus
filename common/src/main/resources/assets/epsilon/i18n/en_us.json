@@ -974,6 +974,18 @@
           "high": "High",
           "highest": "Highest"
         },
+        "aim mode": {
+          "_value": "Aim Mode",
+          "normal": "Normal",
+          "ai": "AI"
+        },
+        "ai model": {
+          "_value": "AI Model",
+          "model21kc11kp": "21KC11KP",
+          "model19kc8kp": "19KC8KP"
+        },
+        "ai yaw multiplier": "AI Yaw Multiplier",
+        "ai pitch multiplier": "AI Pitch Multiplier",
         "cps": "CPS",
         "players": "Players",
         "mobs": "Mobs",
@@ -1852,6 +1864,16 @@
         "require press": "Require Press",
         "blocks only": "Blocks Only"
       },
+      "telly": {
+        "_value": "Telly",
+        "auto swap": "Auto Swap",
+        "disable safewalk": "Disable SafeWalk",
+        "show activation hitbox": "Show Activation Hitbox",
+        "print": "Print",
+        "debug log": "Debug Log",
+        "activation time": "Activation Time",
+        "snap degrees": "Snap Degrees"
+      },
       "scaffold": {
         "_value": "Scaffold",
         "blacklisted blocks": "Blacklisted Blocks",
@@ -1859,7 +1881,8 @@
         "mode": {
           "_value": "Mode",
           "tellybridge": "Telly Bridge",
-          "godbridge": "God Bridge"
+          "godbridge": "God Bridge",
+          "legit": "Legit"
         },
         "swap mode": {
           "_value": "Swap Mode",
@@ -1886,6 +1909,11 @@
         "rotation speed 2": "Rotation Speed 2",
         "rotation back speed": "Rotation Back Speed",
         "telly ticks": "Telly Ticks",
+        "place delay": "Place Delay",
+        "place delay random": "Place Delay Random",
+        "legit sneak delay": "Legit Sneak Delay",
+        "legit sneak random": "Legit Sneak Random",
+        "legit mode speed": "Legit Mode Speed",
         "swing hand": "Swing Hand",
         "render": "Render",
         "fade": "Fade",

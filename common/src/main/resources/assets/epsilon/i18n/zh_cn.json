@@ -974,6 +974,18 @@
           "high": "高",
           "highest": "最高"
         },
+        "aim mode": {
+          "_value": "瞄准模式",
+          "normal": "普通",
+          "ai": "AI"
+        },
+        "ai model": {
+          "_value": "AI模型",
+          "model21kc11kp": "21KC11KP",
+          "model19kc8kp": "19KC8KP"
+        },
+        "ai yaw multiplier": "AI水平倍率",
+        "ai pitch multiplier": "AI俯仰倍率",
         "cps": "每秒点击数",
         "players": "玩家",
         "mobs": "怪物",
@@ -1852,6 +1864,16 @@
         "require press": "需要按住使用键",
         "blocks only": "仅手持方块"
       },
+      "telly": {
+        "_value": "Telly桥",
+        "auto swap": "自动切换",
+        "disable safewalk": "禁用 SafeWalk",
+        "show activation hitbox": "显示激活命中框",
+        "print": "状态打印",
+        "debug log": "调试日志",
+        "activation time": "激活计时",
+        "snap degrees": "吸附基准角"
+      },
       "scaffold": {
         "_value": "自动搭路",
         "blacklisted blocks": "黑名单方块",
@@ -1859,7 +1881,8 @@
         "mode": {
           "_value": "模式",
           "tellybridge": "Telly桥",
-          "godbridge": "神桥"
+          "godbridge": "神桥",
+          "legit": "蹲起搭"
         },
         "swap mode": {
           "_value": "切换模式",
@@ -1886,6 +1909,11 @@
         "rotation speed 2": "旋转速度 2",
         "rotation back speed": "回转速度",
         "telly ticks": "Telly刻数",
+        "place delay": "放置延迟",
+        "place delay random": "放置随机延迟",
+        "legit sneak delay": "蹲起搭潜行延迟",
+        "legit sneak random": "蹲起搭随机蹲起",
+        "legit mode speed": "蹲起搭旋转速度",
         "swing hand": "挥手",
         "render": "渲染",
         "fade": "变淡",
