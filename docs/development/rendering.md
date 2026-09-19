@@ -132,7 +132,10 @@ RenderPass 的使用方式也随之收紧：
 - 实体描边由 `LevelRenderer` 内部的 `executeOutline` 渲染进 `entityOutlineTarget`，`Shaders` 启用时
   `MixinLevelRenderer` 会取消原版后处理链，并在 `LevelRenderer.render` 返回后处理描边目标再混回主目标。
 - 手部描边由 `MixinItemInHandRenderer` 提交，`MixinGameRenderer`/Iris 兼容 Mixin 在
-  `FeatureRenderDispatcher.renderAllFeatures` 之后补一次 `executeOutline`，渲染进 `handTarget`。
+  `FeatureRenderDispatcher.PreparedFrame.close()` 之前补一次 `executeOutline`，渲染进 `handTarget`。
+  原版把 `PreparedFrame` 与 `RenderPass` 放在同一个 try-with-resources 中（关闭顺序为先 RenderPass
+  后帧），描边需要自己的 RenderPass；若挂在 `renderAllFeatures` 之后，此时原版 RenderPass 仍未关闭，
+  `FrontendCommandEncoder` 会抛出 “Close the existing render pass before creating a new one!”。
 - 胸箱描边由 `MixinChestRenderer` 提交到 `ShaderManager` 自己的 `chestOutlineStorage`，
   `ShaderManager.processChestOutlineTarget` 在 `render3dHud` 结束后准备帧并渲染。
 

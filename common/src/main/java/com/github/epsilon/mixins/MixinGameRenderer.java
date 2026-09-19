@@ -7,7 +7,6 @@ import com.github.epsilon.modules.impl.render.Shaders;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.mojang.blaze3d.vertex.PoseStack;
-import com.mojang.renderpearl.api.commands.RenderPass;
 import com.mojang.renderpearl.api.textures.GpuTextureView;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.FirstPersonHandsAndItemsRenderer;
@@ -53,21 +52,25 @@ public class MixinGameRenderer {
     }
 
     /**
-     * 把手部描边渲染进手部目标。
+     * 在关闭手部渲染帧前把手部描边渲染进手部目标。
      *
-     * <p>26.3 的手部渲染帧由 {@code GameRenderer} 准备，{@code renderAllFeatures} 不包含描边阶段，
-     * 因此这里在原版渲染结束后补充手部描边的 RenderPass。
+     * <p>26.3 的手部渲染把 {@code PreparedFrame} 与 {@code RenderPass} 放在同一个 try-with-resources 中，
+     * 关闭顺序为先 RenderPass 后帧。{@code renderAllFeatures} 不包含描边阶段，而描边需要自己的 RenderPass，
+     * 此时原版 RenderPass 尚未关闭，{@code FrontendCommandEncoder} 会抛出
+     * “Close the existing render pass before creating a new one!”，因此必须挪到帧关闭前执行。
+     * {@code ordinal = 0} 只命中正常返回路径的关闭调用，异常展开路径上的关闭不应再触发渲染。
      */
-    @WrapOperation(method = "renderItemInHand", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/feature/FeatureRenderDispatcher;renderAllFeatures(Lcom/mojang/renderpearl/api/commands/RenderPass;Lnet/minecraft/client/renderer/feature/FeatureRenderDispatcher$PreparedFrame;)V"))
-    private void renderHandFeaturesWithOutline(RenderPass renderPass, FeatureRenderDispatcher.PreparedFrame frame, Operation<Void> original) {
-        original.call(renderPass, frame);
-        if (Shaders.INSTANCE.isEnabled() && Shaders.INSTANCE.hands.getValue()) {
+    @WrapOperation(method = "renderItemInHand", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/feature/FeatureRenderDispatcher$PreparedFrame;close()V", ordinal = 0))
+    private void renderHandOutlineBeforeFrameClose(FeatureRenderDispatcher.PreparedFrame frame, Operation<Void> original) {
+        Shaders shaders = Shaders.INSTANCE;
+        if (shaders.isEnabled() && shaders.hands.getValue()) {
             try {
                 ShaderManager.INSTANCE.renderHandOutline(frame);
             } finally {
                 ShaderManager.INSTANCE.endHandOutlineCapture();
             }
         }
+        original.call(frame);
     }
 
     /**
