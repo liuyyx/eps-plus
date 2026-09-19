@@ -527,7 +527,22 @@ public class Telly extends Module {
     @EventHandler
     private void onMouse(MousePressEvent event) {
         boolean state = event.getAction() == InputConstants.PRESS;
-        if (!onMouse(event.getButton(), state)) event.cancel();
+        if (!onMouse(scriptMouseButton(event.getButton()), state)) event.cancel();
+    }
+
+    /**
+     * 把 26.3 的 SDL 鼠标按键编号映射为脚本使用的原版约定（0 左键、1 右键）。
+     *
+     * <p>26.3 的输入系统改用 SDL，{@code MouseButtonInfo.button()} 返回 1 左键 / 2 中键 / 3 右键；
+     * 本模块的脚本分支（{@link #onMouse(int, boolean)}、{@link #autoPlaceOnMouse(int, boolean)}）
+     * 沿用原版 0/1 的约定，因此必须在这里换算。其它按键返回 -1，不会命中任何脚本分支。</p>
+     */
+    private static int scriptMouseButton(int sdlButton) {
+        return switch (sdlButton) {
+            case InputConstants.MOUSE_BUTTON_LEFT -> 0;
+            case InputConstants.MOUSE_BUTTON_RIGHT -> 1;
+            default -> -1;
+        };
     }
 
     /** 脚本 onKey(name, code, state, inGui)。 */

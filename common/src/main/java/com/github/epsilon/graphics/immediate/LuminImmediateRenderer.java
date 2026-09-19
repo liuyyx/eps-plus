@@ -345,6 +345,14 @@ public class LuminImmediateRenderer {
                     return;
                 }
 
+                // 26.3 起 TextureManager.getTexture() 会在首次加载时同步上传纹理，
+                // 而上传要求当前没有打开的 render pass。必须在这里（pass 之外）解析，
+                // 否则首个使用该纹理的绘制会抛
+                // IllegalStateException: Close the existing render pass before performing additional commands。
+                AbstractTexture resolvedTexture = this.texture == null
+                        ? null
+                        : mc.getTextureManager().getTexture(this.texture);
+
                 GpuBufferSlice dynamicUniforms = RenderSystem.getDynamicUniforms().writeTransform(
                         RenderSystem.getModelViewMatrixCopy(),
                         new Vector4f(1, 1, 1, 1),
@@ -362,9 +370,8 @@ public class LuminImmediateRenderer {
                     pass.setUniform("DynamicTransforms", dynamicUniforms);
                     pass.setVertexBuffer(0, this.ringBuffer.getGpuBuffer().slice());
 
-                    if (this.texture != null) {
-                        AbstractTexture textureObject = mc.getTextureManager().getTexture(this.texture);
-                        pass.setUniform("Sampler0", textureObject.getTextureView(), textureObject.getSampler());
+                    if (resolvedTexture != null) {
+                        pass.setUniform("Sampler0", resolvedTexture.getTextureView(), resolvedTexture.getSampler());
                     }
 
                     if (this.passConfigurer != null) {
