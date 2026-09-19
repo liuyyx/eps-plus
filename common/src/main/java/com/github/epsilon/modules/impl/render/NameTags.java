@@ -41,6 +41,8 @@ public class NameTags extends Module {
 
     private final DoubleSetting range = doubleSetting("Range", 128.0, 8.0, 256.0, 1.0);
     private final DoubleSetting scale = doubleSetting("Scale", 0.75, 0.4, 1.4, 0.05);
+    private final BoolSetting limitMinScale = boolSetting("Limit Min Scale", false);
+    private final DoubleSetting minScale = doubleSetting("Min Scale", 0.5, 0.1, 1.4, 0.05, limitMinScale::getValue);
     private final DoubleSetting heightOffset = doubleSetting("Height Offset", 0.5, 0.0, 1.5, 0.05);
     private final BoolSetting showSelf = boolSetting("Show Self", false);
     private final BoolSetting friendStatus = boolSetting("Friend Status", true);
@@ -101,6 +103,10 @@ public class NameTags extends Module {
             if (!Float.isFinite(perspectiveScale) || perspectiveScale <= 0.0f) continue;
 
             float renderScale = perspectiveScale * scale.getValue().floatValue();
+            // 选择性限制最小尺寸：避免远距离或低视野缩放下标签过小
+            if (limitMinScale.getValue()) {
+                renderScale = Math.max(renderScale, minScale.getValue().floatValue());
+            }
             TagLayout tag = createLayout(metrics, player, projected.x, projected.y, renderScale);
             if (tag.x() + tag.width() < 0.0f || tag.y() + tag.height() < 0.0f
                     || tag.x() > screenWidth || tag.y() > screenHeight) {

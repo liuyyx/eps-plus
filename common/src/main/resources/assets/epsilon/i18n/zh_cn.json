@@ -2342,6 +2342,8 @@
         "_value": "名字标签",
         "range": "范围",
         "scale": "缩放",
+        "limit min scale": "限制最小缩放",
+        "min scale": "最小缩放",
         "height offset": "高度偏移",
         "show self": "显示自己",
         "friend status": "好友标识",

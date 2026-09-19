@@ -2342,6 +2342,8 @@
         "_value": "Name Tags",
         "range": "Range",
         "scale": "Scale",
+        "limit min scale": "Limit Min Scale",
+        "min scale": "Min Scale",
         "height offset": "Height Offset",
         "show self": "Show Self",
         "friend status": "Friend Status",
