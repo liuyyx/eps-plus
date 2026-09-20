@@ -723,7 +723,47 @@
         "place cps": "放置CPS",
         "charge cps": "充能CPS"
       },
-      "anti bot": "反人机",
+      "anti bot": {
+        "_value": "反人机",
+        "mode": {
+          "_value": "模式",
+          "default": "默认",
+          "advanced": "进阶"
+        },
+        "advanced": {
+          "_value": "进阶",
+          "conditions": "条件"
+        },
+        "literal npc": "字面NPC",
+        "not in tab list": "不在Tab列表",
+        "invalid ground": "无效地面",
+        "vl to consider as bot": "判定为假人的VL",
+        "always in radius": "始终在半径内",
+        "always in radius range": "半径",
+        "age": "年龄",
+        "minimum": "最小值",
+        "armor": "护甲",
+        "helmet": "头盔",
+        "chestplate": "胸甲",
+        "leggings": "护腿",
+        "boots": "靴子",
+        "name": "名字",
+        "name length min": "名字长度最小",
+        "name length max": "名字长度最大",
+        "validate vanilla chars": "校验原版字符",
+        "validate cyrillic chars": "校验西里尔字符",
+        "validate cjk chars": "校验中日韩字符",
+        "no game mode": "无游戏模式",
+        "illegal pitch": "非法俯仰",
+        "fake entity id": "伪造实体ID",
+        "duplicate": "重复",
+        "need hit": "需要被击中",
+        "illegal health": "非法血量",
+        "swung": "挥臂",
+        "critted": "暴击",
+        "attributes": "属性",
+        "illegal scale": "非法体型"
+      },
       "backtrack": {
         "_value": "回溯",
         "min range": "最小距离",
@@ -977,6 +1017,7 @@
         "aim mode": {
           "_value": "瞄准模式",
           "normal": "普通",
+          "polar": "Polar",
           "ai": "AI"
         },
         "ai model": {
@@ -986,6 +1027,15 @@
         },
         "ai yaw multiplier": "AI水平倍率",
         "ai pitch multiplier": "AI俯仰倍率",
+        "polar yaw acceleration min": "Polar 水平加速度最小",
+        "polar yaw acceleration max": "Polar 水平加速度最大",
+        "polar pitch acceleration min": "Polar 垂直加速度最小",
+        "polar pitch acceleration max": "Polar 垂直加速度最大",
+        "polar click min cps": "Polar 最低CPS",
+        "polar click max cps": "Polar 最高CPS",
+        "polar ignore attack cooldown": "Polar 忽略攻击冷却",
+        "polar cooldown min": "Polar 冷却下限",
+        "polar cooldown max": "Polar 冷却上限",
         "cps": "每秒点击数",
         "players": "玩家",
         "mobs": "怪物",
@@ -1737,6 +1787,22 @@
         "render color": "渲染颜色",
         "render width": "渲染线宽"
       },
+      "fake lag": {
+        "_value": "假延迟",
+        "range min": "最小距离",
+        "range max": "最大距离",
+        "delay min": "最小延迟",
+        "delay max": "最大延迟",
+        "recoil time": "反冲时间",
+        "mode": {
+          "_value": "模式",
+          "constant": "恒定",
+          "dynamic": "动态"
+        },
+        "flush on entity interact": "实体交互时补发",
+        "flush on block interact": "方块交互时补发",
+        "flush on action": "动作时补发"
+      },
       "dolphin": "海豚",
       "auto sprint": "自动疾跑",
       "blink": {
@@ -1914,6 +1980,37 @@
         "legit sneak delay": "蹲起搭潜行延迟",
         "legit sneak random": "蹲起搭随机蹲起",
         "legit mode speed": "蹲起搭旋转速度",
+        "god bridge variant": {
+          "_value": "神桥变体",
+          "classic": "经典",
+          "polar": "Polar"
+        },
+        "ledge action": {
+          "_value": "边缘动作",
+          "jump": "跳跃",
+          "sneak": "潜行",
+          "stopinput": "停手",
+          "backwards": "后退"
+        },
+        "force sneak below count": "强制潜行方块数",
+        "sneak time min": "潜行刻数最小",
+        "sneak time max": "潜行刻数最大",
+        "fake click": "假点击",
+        "fake click min cps": "假点击最低CPS",
+        "fake click max cps": "假点击最高CPS",
+        "fake click failed only": "假点击仅失败时",
+        "rotation smooth": {
+          "_value": "转向平滑",
+          "linear": "线性",
+          "sigmoid": "Sigmoid"
+        },
+        "sigmoid horizontal speed min": "Sigmoid 水平速度最小",
+        "sigmoid horizontal speed max": "Sigmoid 水平速度最大",
+        "sigmoid vertical speed min": "Sigmoid 垂直速度最小",
+        "sigmoid vertical speed max": "Sigmoid 垂直速度最大",
+        "sigmoid steepness": "Sigmoid 陡度",
+        "sigmoid midpoint": "Sigmoid 中点",
+        "hide swing on client": "隐藏本地挥手",
         "swing hand": "挥手",
         "render": "渲染",
         "fade": "变淡",
@@ -1985,7 +2082,8 @@
           "_value": "模式",
           "cancel": "取消",
           "reduce": "减少",
-          "delay": "延迟"
+          "delay": "延迟",
+          "jumpreset": "跳劈重置"
         },
         "server motion": "服务端移动",
         "explosion": "爆炸",
@@ -1998,7 +2096,14 @@
         "max delay": "最大延迟",
         "swing hand": "挥手",
         "delay ticks": "延迟刻数",
-        "jump reset": "跳跃重置"
+        "jump reset": "跳跃重置",
+        "jump reset chance": "跳劈重置概率",
+        "jump by received hits": "按受击次数起跳",
+        "hits until jump min": "起跳所需最少受击次数",
+        "hits until jump max": "起跳所需最多受击次数",
+        "jump by delay": "按延迟起跳",
+        "until jump min": "起跳延迟最小刻数",
+        "until jump max": "起跳延迟最大刻数"
       },
       "kill effect": {
         "_value": "击杀特效",

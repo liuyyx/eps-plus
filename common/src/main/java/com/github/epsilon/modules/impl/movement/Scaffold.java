@@ -14,6 +14,7 @@ import com.github.epsilon.managers.NotificationManager;
 import com.github.epsilon.managers.rotation.RotationManager;
 import com.github.epsilon.modules.Category;
 import com.github.epsilon.modules.Module;
+import com.github.epsilon.settings.Setting;
 import com.github.epsilon.settings.impl.*;
 import com.github.epsilon.utils.math.MathUtils;
 import com.github.epsilon.utils.player.FallingPlayer;
@@ -32,14 +33,18 @@ import net.minecraft.network.protocol.game.ServerboundUseItemPacket;
 import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.StandingAndWallBlockItem;
+import net.minecraft.world.item.context.BlockPlaceContext;
+import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.block.*;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 
 import java.awt.*;
@@ -113,6 +118,30 @@ public class Scaffold extends Module {
         Normal,
         Silent,
         InvSwitch
+    }
+
+    /**
+     * 神桥（GodBridge）内部的实现变体。
+     * Classic 沿用 Epsilon 原有手感；Polar 追加 LiquidBounce GodBridge 的
+     * 假点击、边缘动作与 Sigmoid 转向。
+     */
+    private enum GodBridgeVariant {
+        Classic,
+        Polar
+    }
+
+    /** Polar 变体走到边缘时的动作，对应 LB GodBridge 技术的 {@code Modes}。 */
+    private enum PolarLedgeAction {
+        Jump,
+        Sneak,
+        StopInput,
+        Backwards
+    }
+
+    /** Polar 变体的转向平滑方式，对应 LB 的 {@code AngleSmooth}。 */
+    private enum PolarRotationSmooth {
+        Linear,
+        Sigmoid
     }
 
     private final RegistryListSetting<Block> blacklistedBlocks = blockListSetting("Blacklisted Blocks", List.of(
@@ -192,6 +221,61 @@ public class Scaffold extends Module {
     private final IntSetting placeDelayRandom = intSetting("Place Delay Random", 2, 0, 5, 1);
     private final IntSetting legitModeSpeed = intSetting("Legit Mode Speed", 180, 1, 180, 1, () -> mode.is(Mode.Legit));
 
+    /*
+     * ===== 神桥 Polar 变体 =====
+     * 默认值取自社区 polar（pika-network）配置里 Scaffold 段的存档值，
+     * 未覆盖到的项取 LiquidBounce 源码默认值。
+     */
+
+    /** 变体开关：只有神桥模式 + Polar 才启用下面这组设置。 */
+    private final EnumSetting<GodBridgeVariant> godBridgeVariant =
+            enumSetting("God Bridge Variant", GodBridgeVariant.Classic, () -> mode.is(Mode.GodBridge));
+
+    /** Polar 变体的生效条件，供下面所有设置复用。 */
+    private final Setting.Dependency polarDependency =
+            () -> mode.is(Mode.GodBridge) && godBridgeVariant.is(GodBridgeVariant.Polar);
+
+    /** 边缘动作，对应 LB GodBridge 的 Modes（配置里只勾了 Jump）。 */
+    private final EnumSetting<PolarLedgeAction> polarLedgeAction =
+            enumSetting("Ledge Action", PolarLedgeAction.Jump, polarDependency);
+    /** 方块少于该数量时强制改用潜行（LB ForceSneakBelowCount）。 */
+    private final IntSetting polarForceSneakBelow =
+            intSetting("Force Sneak Below Count", 5, 0, 10, 1, polarDependency);
+    /** 潜行边缘动作的持续刻数（LB SneakTime）。 */
+    private final IntSetting polarSneakTimeMin =
+            intSetting("Sneak Time Min", 1, 1, 10, 1, polarDependency);
+    private final IntSetting polarSneakTimeMax =
+            intSetting("Sneak Time Max", 1, 1, 10, 1, polarDependency);
+    /** 假点击总开关（LB SimulatePlacementAttempts）。 */
+    private final BoolSetting polarFakeClick = boolSetting("Fake Click", true, polarDependency);
+    /** 假点击节奏（LB Clicker.CPS）。 */
+    private final IntSetting polarFakeClickMinCps =
+            intSetting("Fake Click Min CPS", 11, 1, 60, 1, polarDependency);
+    private final IntSetting polarFakeClickMaxCps =
+            intSetting("Fake Click Max CPS", 12, 1, 60, 1, polarDependency);
+    /** 只在"这一下放不下去"时补点（LB FailedAttemptsOnly，配置为关）。 */
+    private final BoolSetting polarFakeClickFailedOnly =
+            boolSetting("Fake Click Failed Only", false, polarDependency);
+    /** 转向平滑方式（LB AngleSmooth，配置为 Sigmoid）。 */
+    private final EnumSetting<PolarRotationSmooth> polarRotationSmooth =
+            enumSetting("Rotation Smooth", PolarRotationSmooth.Sigmoid, polarDependency);
+    /** Sigmoid 转向的速度区间与曲线参数（LB SigmoidAngleSmooth）。 */
+    private final DoubleSetting polarSigmoidHorizontalSpeedMin =
+            doubleSetting("Sigmoid Horizontal Speed Min", 19.8, 0.0, 180.0, 0.1, polarDependency);
+    private final DoubleSetting polarSigmoidHorizontalSpeedMax =
+            doubleSetting("Sigmoid Horizontal Speed Max", 40.5, 0.0, 180.0, 0.1, polarDependency);
+    private final DoubleSetting polarSigmoidVerticalSpeedMin =
+            doubleSetting("Sigmoid Vertical Speed Min", 8.1, 0.0, 180.0, 0.1, polarDependency);
+    private final DoubleSetting polarSigmoidVerticalSpeedMax =
+            doubleSetting("Sigmoid Vertical Speed Max", 30.6, 0.0, 180.0, 0.1, polarDependency);
+    private final DoubleSetting polarSigmoidSteepness =
+            doubleSetting("Sigmoid Steepness", 10.0, 0.0, 20.0, 0.1, polarDependency);
+    private final DoubleSetting polarSigmoidMidpoint =
+            doubleSetting("Sigmoid Midpoint", 0.3, 0.0, 1.0, 0.01, polarDependency);
+    /** 挥手只在服务端可见（LB Swing = HideForClient）。 */
+    private final BoolSetting polarHideSwingOnClient =
+            boolSetting("Hide Swing On Client", true, polarDependency);
+
     private final BoolSetting swingHand = boolSetting("Swing Hand", true);
     private final BoolSetting render = boolSetting("Render", true);
     private final BoolSetting fade = boolSetting("Fade", true, render::getValue);
@@ -232,6 +316,16 @@ public class Scaffold extends Module {
     /** 放置冷却剩余刻数；>0 时不放置。见 {@link #placeDelay}。 */
     private int placeDelayCounter = 0;
 
+    /** Polar 假点击节奏累加器：每刻按 CPS 累加，满 1 发一次点击。 */
+    private double polarClickAccumulator;
+    /** Polar 本刻的边缘动作（每刻重算，避免残留）。 */
+    private boolean polarLedgeJump;
+    private boolean polarLedgeStopInput;
+    private boolean polarLedgeBackwards;
+    private int polarLedgeSneakTicks;
+    /** Polar 强制潜行的剩余刻数，跨刻保留（LB 的 forceSneak）。 */
+    private int polarForceSneak;
+
     private final List<RenderInfo> renderBoxes = new ArrayList<>();
 
     @Override
@@ -246,6 +340,7 @@ public class Scaffold extends Module {
         emergencyPlacementActive = false;
         pearlUsePacketSent = false;
         resetLegitEdgeState();
+        resetPolarState();
     }
 
     @Override
@@ -254,6 +349,7 @@ public class Scaffold extends Module {
         emergencyPlacementActive = false;
         pearlUsePacketSent = false;
         resetLegitEdgeState();
+        resetPolarState();
         if (shouldSwapBack) {
             InvUtils.swapBack();
             shouldSwapBack = false;
@@ -263,6 +359,8 @@ public class Scaffold extends Module {
     @EventHandler
     private void onPlayerTick(PlayerTickEvent.Pre event) {
         if (!event.isCancelled()) emergencyPlacementActive = false;
+
+        resetPolarLedgeAction();
 
         if (placeDelayCounter > 0) placeDelayCounter--;
 
@@ -318,11 +416,8 @@ public class Scaffold extends Module {
                     new BlockHitResult(getVec3(blockPos, direction), direction, blockPos, false)
             );
             if (result.consumesAction()) {
-                if (swingHand.getValue()) {
-                    mc.player.swing(hand);
-                } else {
-                    mc.getConnection().send(new ServerboundSwingPacket(hand));
-                }
+                swing(hand);
+
                 if (render.getValue()) {
                     renderBoxes.add(new RenderInfo(new AABB(blockPos.relative(direction)), lineColor.getValue(), sideColor.getValue(), System.currentTimeMillis(), fade.getValue(), shrink.getValue()));
                 }
@@ -336,7 +431,7 @@ public class Scaffold extends Module {
 
         switch (mode.getValue()) {
             case TellyBridge -> handleTelly();
-            case GodBridge -> handleNormal();
+            case GodBridge -> handleGodBridge();
             case Legit -> handleLegit();
         }
     }
@@ -357,6 +452,40 @@ public class Scaffold extends Module {
             event.setSneak(true);
             event.setSprint(false);
             mc.player.setSprinting(false);
+        }
+    }
+
+    /**
+     * Polar 边缘动作的注入点：放在 {@link EventPriority#LOW}，
+     * 让 MovementFix（HIGH）先按托管转向修正完 WASD，再叠加"停手/后退"，
+     * 否则这两个动作会被移动修正再旋转一次。LB 同样在移动修正之后处理边缘动作。
+     */
+    @EventHandler(priority = EventPriority.LOW)
+    private void onPolarLedgeInput(KeyboardInputEvent event) {
+        if (!polarDependency.check()) return;
+
+        // LB 的 forceSneak 是跨刻倒计时：先扣减，再让本刻动作续期。
+        if (polarForceSneak > 0) {
+            event.setSneak(true);
+            polarForceSneak--;
+        }
+
+        if (polarLedgeJump) {
+            event.setJump(true);
+        }
+
+        if (polarLedgeStopInput) {
+            event.setForward(0.0f);
+            event.setStrafe(0.0f);
+        }
+
+        if (polarLedgeBackwards) {
+            event.setForward(-1.0f);
+        }
+
+        if (polarLedgeSneakTicks > polarForceSneak) {
+            event.setSneak(true);
+            polarForceSneak = polarLedgeSneakTicks;
         }
     }
 
@@ -436,9 +565,247 @@ public class Scaffold extends Module {
     private void handleNormal() {
         if (Eagle.INSTANCE.isOverEdge() || !snap.getValue() | !mc.player.onGround()) {
             rotation = getRotation(blockPos, direction);
-            RotationManager.INSTANCE.setRotations(rotation, rotationSpeed.getValue());
+            applyRotation(rotation);
         }
         place();
+    }
+
+    /**
+     * 神桥入口：Classic 走原逻辑；Polar 在完全复用原放置流程的基础上，
+     * 追加 LiquidBounce GodBridge 的假点击与边缘动作。
+     */
+    private void handleGodBridge() {
+        if (!godBridgeVariant.is(GodBridgeVariant.Polar)) {
+            handleNormal();
+            return;
+        }
+
+        handlePolar();
+    }
+
+    private void handlePolar() {
+        handleNormal();
+        polarFakeClick();
+        updatePolarLedgeAction();
+    }
+
+    /**
+     * 应用转向。Polar + Sigmoid 时改为按加速度曲线自行步进（LB SigmoidAngleSmooth），
+     * 其余情况沿用原本的固定 {@link #rotationSpeed}。
+     */
+    private void applyRotation(Rot2f target) {
+        if (!polarDependency.check() || !polarRotationSmooth.is(PolarRotationSmooth.Sigmoid)) {
+            RotationManager.INSTANCE.setRotations(target, rotationSpeed.getValue());
+            return;
+        }
+
+        Rot2f stepped = polarStep(RotationManager.INSTANCE.getRotation(), target,
+                MathUtils.getRandom(polarSigmoidHorizontalSpeedMin.getValue(), polarSigmoidHorizontalSpeedMax.getValue()),
+                MathUtils.getRandom(polarSigmoidVerticalSpeedMin.getValue(), polarSigmoidVerticalSpeedMax.getValue()));
+
+        // 提交与管线基准（lastRotations）完全相同的角度，会让 RotationUtils.move 出现 0/0 的 NaN，
+        // 而 NaN 会一直留在托管角里直到重生。偏一个远小于鼠标灵敏度网格的微小量即可避开，
+        // 量化后会舍回同一格，观感仍是原地不动。
+        if (polarDeltaLength(stepped, RotationManager.INSTANCE.lastRotations) < 1.0E-3) {
+            stepped = new Rot2f(stepped.getYaw() + 1.0E-3f, stepped.getPitch());
+        }
+
+        // 步长已在此算好，speed 传 180 让管理器直接落到该角度，避免被二次平滑。
+        RotationManager.INSTANCE.setRotations(stepped, 180.0);
+    }
+
+    /**
+     * 移植 LB {@code SigmoidAngleSmooth}：从 {@code from} 朝目标推进一刻，
+     * 水平/垂直步长按 {@code 1 / (1 + e^(-steepness * (角差 / 120 - midpoint)))} 缩放后
+     * 再按方向分配，角差越大步长越大、越接近目标越小。
+     */
+    private Rot2f polarStep(Rot2f from, Rot2f target, double horizontalSpeed, double verticalSpeed) {
+        float deltaYaw = Mth.wrapDegrees(target.getYaw() - from.getYaw());
+        float deltaPitch = target.getPitch() - from.getPitch();
+        double length = Math.sqrt(deltaYaw * deltaYaw + deltaPitch * deltaPitch);
+        if (length < 1.0E-4) return target;
+
+        double factor = polarSigmoidFactor((float) Math.min(length, 180.0));
+        double maxYaw = Math.abs(deltaYaw / length) * Math.clamp(factor * horizontalSpeed, 0.0, 180.0);
+        double maxPitch = Math.abs(deltaPitch / length) * Math.clamp(factor * verticalSpeed, 0.0, 180.0);
+
+        float yaw = from.getYaw() + (float) Math.clamp(deltaYaw, -maxYaw, maxYaw);
+        float pitch = from.getPitch() + (float) Math.clamp(deltaPitch, -maxPitch, maxPitch);
+        return new Rot2f(yaw, Mth.clamp(pitch, -90.0f, 90.0f));
+    }
+
+    /** Sigmoid 系数，曲线输入为限制到 180 度以内的角差（LB 除以 120 归一）。 */
+    private double polarSigmoidFactor(float rotationDifference) {
+        double scaled = rotationDifference / 120.0;
+        return 1.0 / (1.0 + Math.exp(-polarSigmoidSteepness.getValue() * (scaled - polarSigmoidMidpoint.getValue())));
+    }
+
+    /**
+     * 按区间下限（最慢）速度估算转向到位还需几刻，对应 LB {@code AngleSmooth.calculateTicks}，
+     * 供"还没转好就先别往外走"的边缘判定使用。
+     */
+    private int polarTicksUntilTarget(Rot2f target) {
+        Rot2f current = RotationManager.INSTANCE.getRotation();
+        boolean sigmoid = polarRotationSmooth.is(PolarRotationSmooth.Sigmoid);
+
+        for (int ticks = 0; ticks < 80; ticks++) {
+            if (polarDeltaLength(current, target) <= 2.0) {
+                return ticks;
+            }
+
+            current = sigmoid
+                    ? polarStep(current, target, polarSigmoidHorizontalSpeedMin.getValue(), polarSigmoidVerticalSpeedMin.getValue())
+                    : polarLinearStep(current, target);
+        }
+
+        return 80;
+    }
+
+    /**
+     * Linear 变体的单刻步进：与 {@link RotationUtils#move} 同构，速度按两轴角差比例分配。
+     */
+    private Rot2f polarLinearStep(Rot2f from, Rot2f target) {
+        Rot2f move = RotationUtils.move(from, target, rotationSpeed.getValue());
+        return new Rot2f(from.getYaw() + move.getYaw(), Mth.clamp(from.getPitch() + move.getPitch(), -90.0f, 90.0f));
+    }
+
+    private double polarDeltaLength(Rot2f from, Rot2f to) {
+        float deltaYaw = Mth.wrapDegrees(to.getYaw() - from.getYaw());
+        float deltaPitch = to.getPitch() - from.getPitch();
+        return Math.sqrt(deltaYaw * deltaYaw + deltaPitch * deltaPitch);
+    }
+
+    /**
+     * Polar 假点击：移植 LB {@code ModuleScaffold.SimulatePlacementAttempts}。
+     * 与普通放置不同，这一步不要求射线已压在目标方块上，只按 CPS 节奏对着
+     * 当前托管转向命中的方块点一下，让"放置尝试"的时序更接近真人。
+     */
+    private void polarFakeClick() {
+        if (!polarFakeClick.getValue() || nullCheck() || !mc.player.isMoving()) return;
+
+        polarClickAccumulator += MathUtils.getRandom(
+                polarFakeClickMinCps.getValue(), polarFakeClickMaxCps.getValue()) / 20.0;
+        if (polarClickAccumulator < 1.0) return;
+
+        // 节奏已到：先扣掉这一发，再看条件是否允许发出去（与 LB Clicker 被门控跳过时一致）。
+        polarClickAccumulator -= 1.0;
+
+        if (!blockResult.found() || !canUseBlockResult()) return;
+
+        HitResult hitResult = RotationManager.INSTANCE.getHitResult();
+        if (hitResult.getType() != HitResult.Type.BLOCK || !(hitResult instanceof BlockHitResult hit)) return;
+
+        InteractionHand hand = blockResult.getHand();
+        if (!shouldPolarFakeClick(hit, hand)) return;
+
+        placeOn(hit, true);
+    }
+
+    /**
+     * 是否满足假点击条件（LB {@code simulatePlacementAttempts}）。
+     * LB 的 {@code sameYMode} 在配置中为 Off，此时只按"点击位置在脚下高度且不是普通垫塔"
+     * 判定，因此这里只保留 {@code FailedAttemptsOnly} 开关：开启时仅在"这一下放不下去"时点击。
+     */
+    private boolean shouldPolarFakeClick(BlockHitResult hit, InteractionHand hand) {
+        ItemStack stack = mc.player.getItemInHand(hand);
+        if (!(stack.getItem() instanceof BlockItem blockItem)) return false;
+
+        BlockPlaceContext context = new BlockPlaceContext(new UseOnContext(mc.player, hand, hit));
+        // BlockItem#getPlacementState 是 protected：这里用等价的公开组合，
+        // 即"能算出放置状态，且该状态能在点击位置存活"。
+        BlockState placementState = blockItem.getBlock().getStateForPlacement(context);
+        boolean canPlaceOnFace = placementState != null && placementState.canSurvive(mc.level, context.getClickedPos());
+
+        if (polarFakeClickFailedOnly.getValue()) {
+            return !canPlaceOnFace;
+        }
+
+        boolean targetUnderPlayer = context.getClickedPos().getY() <= mc.player.getBlockY() - 1;
+        boolean towering = context.getClickedPos().getY() == mc.player.getBlockY() - 1
+                && canPlaceOnFace && context.getClickedFace() == Direction.UP;
+        return targetUnderPlayer && !towering;
+    }
+
+    /**
+     * Polar 边缘动作：移植 LB {@code ScaffoldLedgeFeature.ledge} 与
+     * {@code ScaffoldGodBridgeTechnique.ledge}。
+     * 到边缘后：转向还没到位或方块见底 → 按所需刻数蹲住；
+     * 转向已到位但射线没压在目标方块上 → 执行 {@link #polarLedgeAction}。
+     */
+    private void updatePolarLedgeAction() {
+        if (blockPos == null || direction == null || rotation == null) return;
+        if (!Eagle.INSTANCE.isOverEdge()) return;
+
+        int ticks = polarTicksUntilTarget(rotation);
+        if (getBlockCount() <= 0 || ticks >= 1) {
+            polarLedgeSneakTicks = Math.max(1, ticks);
+            return;
+        }
+
+        // 射线已经压在目标方块上，不需要额外动作。
+        if (raytraceOverTarget()) return;
+
+        PolarLedgeAction action = polarLedgeAction.getValue();
+        if (getBlockCount() < polarForceSneakBelow.getValue()) {
+            // LB：方块见底时强制潜行。
+            action = PolarLedgeAction.Sneak;
+        } else if (action == PolarLedgeAction.Jump && !canJumpTwoBlocksHigh()) {
+            // LB：跳不上两格时退化为潜行（可选项只剩 Jump 时的等价降级）。
+            action = PolarLedgeAction.Sneak;
+        }
+
+        switch (action) {
+            case Jump -> polarLedgeJump = true;
+            case Sneak -> polarLedgeSneakTicks = polarSneakTicks();
+            case StopInput -> polarLedgeStopInput = true;
+            case Backwards -> polarLedgeBackwards = true;
+        }
+    }
+
+    private int polarSneakTicks() {
+        int min = polarSneakTimeMin.getValue();
+        int max = polarSneakTimeMax.getValue();
+        return min + (max > min ? legitRandom.nextInt(max - min + 1) : 0);
+    }
+
+    /**
+     * 原版跳跃能否上 2 格（LB {@code canJumpTwoBlocksHigh}）。
+     * LB 用的是 {@code player.jumpPower}，而 {@code LivingEntity#getJumpPower} 是 protected，
+     * 这里改读同源的跳跃强度属性（含跳跃提升等修饰符）。
+     */
+    private boolean canJumpTwoBlocksHigh() {
+        double verticalMotion = mc.player.getAttributeValue(Attributes.JUMP_STRENGTH);
+        double height = 0.0;
+
+        while (verticalMotion > 0.0) {
+            height += verticalMotion;
+            verticalMotion = (verticalMotion - 0.08) * 0.98;
+        }
+
+        return height >= 2.0;
+    }
+
+    /** 当前托管转向的射线是否压在目标方块（面上）；与 {@code place()} 的放置闸门同一判据。 */
+    private boolean raytraceOverTarget() {
+        if (blockPos == null || direction == null) return false;
+
+        return switch (raytrace.getValue()) {
+            case Normal -> RaytraceUtils.overBlock(RotationManager.INSTANCE.getRotation(), blockPos);
+            case Strict -> RaytraceUtils.overBlock(RotationManager.INSTANCE.getRotation(), blockPos, direction);
+        };
+    }
+
+    private void resetPolarLedgeAction() {
+        polarLedgeJump = false;
+        polarLedgeStopInput = false;
+        polarLedgeBackwards = false;
+        polarLedgeSneakTicks = 0;
+    }
+
+    private void resetPolarState() {
+        polarClickAccumulator = 0.0;
+        polarForceSneak = 0;
+        resetPolarLedgeAction();
     }
 
     private void handleLegit() {
@@ -555,35 +922,56 @@ public class Scaffold extends Module {
         // 放置节流：冷却未结束时不再放置，避免逐刻连续放置形成规律时序。
         if (placeDelayCounter > 0) return;
 
-        if (switch (raytrace.getValue()) {
-            case Normal -> !RaytraceUtils.overBlock(RotationManager.INSTANCE.getRotation(), blockPos);
-            case Strict -> !RaytraceUtils.overBlock(RotationManager.INSTANCE.getRotation(), blockPos, direction);
-        }) {
+        if (!raytraceOverTarget()) {
             return;
         }
+
+        placeOn(new BlockHitResult(getVec3(blockPos, direction), direction, blockPos, false), true);
+    }
+
+    /**
+     * 真正执行一次放置交互（换手 → useItemOn → 冷却/挥手/渲染）。
+     * 与 {@link #place()} 的分工：调用方负责条件与冷却校验，
+     * 这样 Polar 假点击可以复用同一套交互与挥手逻辑。
+     *
+     * @param hit             命中结果，普通放置传自己算出的目标面，假点击传托管转向的命中
+     * @param renderPlacement 是否按本次命中渲染放置方块
+     * @return 本次交互是否真的放下了方块
+     */
+    private boolean placeOn(BlockHitResult hit, boolean renderPlacement) {
+        if (!canUseBlockResult()) return false;
 
         swap();
 
         InteractionHand hand = blockResult.getHand();
+        InteractionResult result = mc.gameMode.useItemOn(mc.player, hand, hit);
+        boolean placed = result.consumesAction();
 
-        InteractionResult result = mc.gameMode.useItemOn(mc.player, hand, new BlockHitResult(getVec3(blockPos, direction), direction, blockPos, false));
-
-        if (result.consumesAction()) {
+        if (placed) {
             // 冷却 = 基准 + 随机量，每次放置重新掷一次
             placeDelayCounter = placeDelay.getValue()
                     + (placeDelayRandom.getValue() > 0 ? legitRandom.nextInt(placeDelayRandom.getValue() + 1) : 0);
-            if (swingHand.getValue()) {
-                mc.player.swing(hand);
-            } else {
-                mc.getConnection().send(new ServerboundSwingPacket(hand));
-            }
+            swing(hand);
 
-            if (render.getValue()) {
-                renderBoxes.add(new RenderInfo(new AABB(blockPos.relative(direction)), lineColor.getValue(), sideColor.getValue(), System.currentTimeMillis(), fade.getValue(), shrink.getValue()));
+            if (renderPlacement && render.getValue()) {
+                renderBoxes.add(new RenderInfo(new AABB(hit.getBlockPos().relative(hit.getDirection())), lineColor.getValue(), sideColor.getValue(), System.currentTimeMillis(), fade.getValue(), shrink.getValue()));
             }
         }
 
         swapBack();
+        return placed;
+    }
+
+    /**
+     * 挥手。Polar + Hide Swing On Client 时只把 swing 包发给服务端、本地不播动画，
+     * 对应 LB 的 {@code Swing = HideForClient}。
+     */
+    private void swing(InteractionHand hand) {
+        if (swingHand.getValue() && !(polarDependency.check() && polarHideSwingOnClient.getValue())) {
+            mc.player.swing(hand);
+        } else {
+            mc.getConnection().send(new ServerboundSwingPacket(hand));
+        }
     }
 
     private int getYLevel() {

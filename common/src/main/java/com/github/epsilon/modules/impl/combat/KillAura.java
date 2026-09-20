@@ -17,6 +17,7 @@ import com.github.epsilon.modules.impl.movement.Scaffold;
 import com.github.epsilon.modules.impl.movement.Velocity;
 import com.github.epsilon.settings.impl.*;
 import com.github.epsilon.utils.ai.AiRotationModelManager;
+import com.github.epsilon.utils.math.MathUtils;
 import com.github.epsilon.utils.player.PlayerUtils;
 import com.github.epsilon.utils.render.esp.CaptureMarkESP;
 import com.github.epsilon.utils.render.esp.CircleESP;
@@ -87,6 +88,7 @@ public class KillAura extends Module {
 
     private enum AimMode {
         Normal,
+        Polar,
         Ai
     }
 
@@ -111,6 +113,17 @@ public class KillAura extends Module {
     private final EnumSetting<AiModel> aiModel = enumSetting("AI Model", AiModel.Model21KC11KP, () -> aimMode.is(AimMode.Ai));
     private final DoubleSetting aiYawMultiplier = doubleSetting("AI Yaw Multiplier", 1.5, 0.5, 2.0, 0.05, () -> aimMode.is(AimMode.Ai));
     private final DoubleSetting aiPitchMultiplier = doubleSetting("AI Pitch Multiplier", 1.0, 0.5, 2.0, 0.05, () -> aimMode.is(AimMode.Ai));
+    // Polar 瞄准：把 LiquidBounce AccelerationAngleSmooth 的「区间设置」拆成 Min/Max 两项
+    // （Epsilon 没有区间型设置），每刻在区间内随机取一次加速度上限。
+    private final DoubleSetting polarYawAccelerationMin = doubleSetting("Polar Yaw Acceleration Min", 22.0, 1.0, 180.0, 0.1, () -> aimMode.is(AimMode.Polar));
+    private final DoubleSetting polarYawAccelerationMax = doubleSetting("Polar Yaw Acceleration Max", 25.0, 1.0, 180.0, 0.1, () -> aimMode.is(AimMode.Polar));
+    private final DoubleSetting polarPitchAccelerationMin = doubleSetting("Polar Pitch Acceleration Min", 15.0, 1.0, 180.0, 0.1, () -> aimMode.is(AimMode.Polar));
+    private final DoubleSetting polarPitchAccelerationMax = doubleSetting("Polar Pitch Acceleration Max", 17.0, 1.0, 180.0, 0.1, () -> aimMode.is(AimMode.Polar));
+    private final IntSetting polarClickMinCps = intSetting("Polar Click Min CPS", 9, 1, 60, 1, () -> aimMode.is(AimMode.Polar));
+    private final IntSetting polarClickMaxCps = intSetting("Polar Click Max CPS", 11, 1, 60, 1, () -> aimMode.is(AimMode.Polar));
+    private final BoolSetting polarIgnoreAttackCooldown = boolSetting("Polar Ignore Attack Cooldown", true, () -> aimMode.is(AimMode.Polar));
+    private final DoubleSetting polarCooldownMin = doubleSetting("Polar Cooldown Min", 0.15, 0.0, 2.0, 0.01, () -> aimMode.is(AimMode.Polar));
+    private final DoubleSetting polarCooldownMax = doubleSetting("Polar Cooldown Max", 0.36, 0.0, 2.0, 0.01, () -> aimMode.is(AimMode.Polar));
     private final IntSetting cps = intSetting("CPS", 12, 1, 20, 1, () -> mode.is(Mode.OnePointEight));
 
     private final BoolSetting players = boolSetting("Players", true);
@@ -169,6 +182,21 @@ public class KillAura extends Module {
     private float previousManagedYaw;
     private float previousManagedPitch;
     private int previousManagedTick = Integer.MIN_VALUE;
+
+    // Polar 转向：上一刻实际提交的步长（yaw/pitch），是加速度模型里的「动量」项。
+    // polarLastTarget / polarLastTick 用于识别目标切换与跳刻：一旦不连续就把动量清零，
+    // 否则恢复瞄准的首刻会按中断前的旧步长跳一大步。
+    private float polarPrevYawDelta;
+    private float polarPrevPitchDelta;
+    private Entity polarLastTarget;
+    private int polarLastTick = Integer.MIN_VALUE;
+
+    // Polar 点击：与 MultiAura 同一写法的每分钟点击累加器，整点击落转交 attacks。
+    private double polarClickAccumulator;
+
+    // 提交速度取满旋转管线的步进上限（见 RotationUtils.smooth），使 Polar 自己算出的逐刻步长
+    // 原样生效，不被旋转管线按速度再次截断。
+    private static final double POLAR_ROTATION_SPEED = 180.0;
 
     private final TimerUtils switchTimer = new TimerUtils();
 
@@ -274,14 +302,21 @@ public class KillAura extends Module {
 
         if (aimMode.is(AimMode.Ai)) {
             if (!applyAiRotation(target)) return;
+        } else if (aimMode.is(AimMode.Polar)) {
+            if (!applyPolarRotation(target)) return;
         } else {
-            Rot2f calculate = RotationUtils.calculate(target, true, aimRange.getValue());
-            if (RaytraceUtils.raytrace(calculate, aimRange.getValue()).getType() == HitResult.Type.BLOCK) return;
+            Rot2f calculate = calculateAimRotation(target);
+            if (calculate == null) return;
             RotationManager.INSTANCE.setRotations(calculate, rotationSpeed.getValue(), rotation -> RaytraceUtils.raytrace(rotation, 3.0f) instanceof EntityHitResult entityHitResult && entityHitResult.getEntity() == target, rotationPriority.getValue());
         }
 
+        // Polar 的点击节奏按刻推进，与 1.8 秒表 / 1.9+ 蓄力两条既有路径互斥
+        if (aimMode.is(AimMode.Polar)) {
+            advancePolarClicks();
+        }
+
         HitResult hitResult = RotationManager.INSTANCE.getHitResult();
-        if (hitSelect.getValue() && hitResult instanceof EntityHitResult entityHitResult && entityHitResult.getEntity() instanceof Player player && !AntiBot.INSTANCE.isBot(player) && !TargetManager.INSTANCE.isSameTeam(player) && velocity.attackQueue <= 0) {
+        if (!aimMode.is(AimMode.Polar) && hitSelect.getValue() && hitResult instanceof EntityHitResult entityHitResult && entityHitResult.getEntity() instanceof Player player && !AntiBot.INSTANCE.isBot(player) && !TargetManager.INSTANCE.isSameTeam(player) && velocity.attackQueue <= 0) {
             ClientPacketListener connection = mc.getConnection();
             PlayerInfo localPlayerInfo = connection == null ? null : connection.getPlayerInfo(mc.player.getUUID());
             int latencyTicks = localPlayerInfo == null ? 0 : localPlayerInfo.getLatency() / 50;
@@ -329,7 +364,8 @@ public class KillAura extends Module {
 
     @EventHandler
     private void onRender3D(Render3DEvent event) {
-        if (target != null && Velocity.INSTANCE.attackQueue <= 0) {
+        // Polar 的点击节奏在 onClientTick 按刻推进；渲染事件是逐帧的，不能作为其计时基准
+        if (target != null && !aimMode.is(AimMode.Polar) && Velocity.INSTANCE.attackQueue <= 0) {
             HitResult hitResult = RotationManager.INSTANCE.getHitResult();
             if (!hitSelect.getValue() || !(hitResult instanceof EntityHitResult entityHitResult && entityHitResult.getEntity() instanceof Player)) {
                 switch (mode.getValue()) {
@@ -480,12 +516,116 @@ public class KillAura extends Module {
         return true;
     }
 
+    /**
+     * 计算普通（Normal）瞄准的目标旋转：自适应瞄准点 + 方块遮挡检查。
+     *
+     * <p>Normal 与 Polar 共用这一段，确保两种模式瞄准的是同一个角度，
+     * Polar 只改变「如何逼近该角度」，不改变目标本身。</p>
+     *
+     * @return 目标旋转；被方块遮挡时返回 {@code null}，调用方应中止整个 tick
+     */
+    private Rot2f calculateAimRotation(Entity aimTarget) {
+        Rot2f calculate = RotationUtils.calculate(aimTarget, true, aimRange.getValue());
+        if (RaytraceUtils.raytrace(calculate, aimRange.getValue()).getType() == HitResult.Type.BLOCK) return null;
+        return calculate;
+    }
+
+    /**
+     * Polar 转向模式：移植 LiquidBounce 的 AccelerationAngleSmooth（误差注入关闭）。
+     *
+     * <p>与普通模式「直接设定目标角 + 速度上限」不同，这里把上一刻的步长当作动量：
+     * 先取本刻与目标角的残差，用区间内随机取的加速度上限夹取残差得到本刻加速度，
+     * 本刻步长 = 上刻步长 + 加速度。角差越大步长越大，接近目标时残差反向而自然减速，
+     * 因此形成加速曲线而非恒速逼近。</p>
+     *
+     * <p>提交速度为 {@link #POLAR_ROTATION_SPEED}（旋转管线的步进上限），使本方法算出的
+     * 逐步旋转原样生效，不被管线二次平滑。旋转优先级固定 {@link Priority#High}。</p>
+     *
+     * @return {@code true} 表示本刻转向已处理；{@code false} 表示被方块遮挡，
+     * 调用方应中止整个 tick（与普通模式行为一致）
+     */
+    private boolean applyPolarRotation(Entity aimTarget) {
+        Rot2f current = RotationManager.INSTANCE.getRotation();
+        Rot2f wanted = calculateAimRotation(aimTarget);
+        if (wanted == null) return false;
+
+        // 目标切换或跳刻后，上一刻步长不再是有效的动量依据，清零以免首刻跳变
+        int nowTick = mc.player.tickCount;
+        if (polarLastTarget != aimTarget || polarLastTick == Integer.MIN_VALUE || nowTick - polarLastTick != 1) {
+            polarPrevYawDelta = 0.0f;
+            polarPrevPitchDelta = 0.0f;
+        }
+        polarLastTarget = aimTarget;
+        polarLastTick = nowTick;
+
+        float diffYaw = Mth.wrapDegrees(wanted.getYaw() - current.getYaw());
+        float diffPitch = wanted.getPitch() - current.getPitch();
+
+        float maxYawAcceleration = (float) MathUtils.getRandom(polarYawAccelerationMin.getValue().doubleValue(), polarYawAccelerationMax.getValue().doubleValue());
+        float maxPitchAcceleration = (float) MathUtils.getRandom(polarPitchAccelerationMin.getValue().doubleValue(), polarPitchAccelerationMax.getValue().doubleValue());
+
+        float accelerationYaw = Mth.clamp(Mth.wrapDegrees(diffYaw - polarPrevYawDelta), -maxYawAcceleration, maxYawAcceleration);
+        float accelerationPitch = Mth.clamp(diffPitch - polarPrevPitchDelta, -maxPitchAcceleration, maxPitchAcceleration);
+
+        float nextYaw = current.getYaw() + polarPrevYawDelta + accelerationYaw;
+        float nextPitch = Mth.clamp(current.getPitch() + polarPrevPitchDelta + accelerationPitch, -90.0f, 90.0f);
+
+        // 旋转管线以 lastRotations 为基准，提交与基准完全相同的角度会让 RotationUtils.move
+        // 出现 0/0 的 NaN（本模型收敛后步长恰为 0，会稳定命中该情形，而 NaN 会一直留在托管角里
+        // 直到重生）。偏一个 ULP 量级的微小量即可避开，灵敏度量化会把它舍入回原位，观感仍是原地不动。
+        if (!(polarSubmittedDelta(nextYaw, nextPitch) > 1.0e-6)) {
+            nextYaw += Math.max(1.0e-3f, Math.ulp(nextYaw) * 4.0f);
+        }
+
+        polarPrevYawDelta = Mth.wrapDegrees(nextYaw - current.getYaw());
+        polarPrevPitchDelta = nextPitch - current.getPitch();
+
+        RotationManager.INSTANCE.setRotations(new Rot2f(nextYaw, nextPitch), POLAR_ROTATION_SPEED, Priority.High);
+        return true;
+    }
+
+    /**
+     * 该角度相对旋转管线基准（{@link RotationManager#lastRotations}）的位移量，
+     * 用于识别会触发 {@link RotationUtils#move} 中 0/0 的零位移提交。
+     */
+    private double polarSubmittedDelta(float yaw, float pitch) {
+        Rot2f moveBase = RotationManager.INSTANCE.lastRotations;
+        return Math.hypot(Mth.wrapDegrees(yaw - moveBase.getYaw()), pitch - moveBase.getPitch());
+    }
+
+    /**
+     * Polar 瞄准模式的点击节奏：每刻以区间内随机 CPS 推进累加器（与 {@code MultiAura} 同一写法），
+     * 整点击落累加到既有的 {@link #attacks} 计数上，由 {@code onPlayerTick} 统一消费。
+     *
+     * <p>开启 {@code Polar Ignore Attack Cooldown} 时不看攻击冷却；否则要求
+     * {@code getAttackStrengthScale(0.0f)} 达到 {@code Polar Cooldown Min~Max} 内的随机阈值，
+     * 未达标的点落被丢弃，因此实际频率只会低于设定 CPS。</p>
+     */
+    private void advancePolarClicks() {
+        if (target == null || Velocity.INSTANCE.attackQueue > 0) return;
+
+        polarClickAccumulator += MathUtils.getRandom(polarClickMinCps.getValue(), polarClickMaxCps.getValue()) / 20.0;
+
+        while (polarClickAccumulator >= 1.0) {
+            polarClickAccumulator -= 1.0;
+            if (polarIgnoreAttackCooldown.getValue()
+                    || mc.player.getAttackStrengthScale(0.0f) >= MathUtils.getRandom(polarCooldownMin.getValue().doubleValue(), polarCooldownMax.getValue().doubleValue())) {
+                attacks++;
+            }
+        }
+    }
+
     private void resetState() {
         targets = null;
         target = null;
         attacks = 0;
         lastAttackTime = 0L;
         previousManagedTick = Integer.MIN_VALUE;
+        polarClickAccumulator = 0.0;
+        polarPrevYawDelta = 0.0f;
+        polarPrevPitchDelta = 0.0f;
+        polarLastTarget = null;
+        polarLastTick = Integer.MIN_VALUE;
     }
 
     /**

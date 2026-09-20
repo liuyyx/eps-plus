@@ -58,6 +58,7 @@ public class ModuleManager {
         addModule(FeetTrap.INSTANCE);
         addModule(DoubleAnchor.INSTANCE);
         addModule(ElytraCombat.INSTANCE);
+        addModule(FakeLag.INSTANCE);
         addModule(HoverTotem.INSTANCE);
         addModule(KillAura.INSTANCE);
         addModule(KeyPearl.INSTANCE);

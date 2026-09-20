@@ -723,7 +723,47 @@
         "place cps": "Place CPS",
         "charge cps": "Charge CPS"
       },
-      "anti bot": "Anti Bot",
+      "anti bot": {
+        "_value": "Anti Bot",
+        "mode": {
+          "_value": "Mode",
+          "default": "Default",
+          "advanced": "Advanced"
+        },
+        "advanced": {
+          "_value": "Advanced",
+          "conditions": "Conditions"
+        },
+        "literal npc": "Literal NPC",
+        "not in tab list": "Not In Tab List",
+        "invalid ground": "Invalid Ground",
+        "vl to consider as bot": "VL To Consider As Bot",
+        "always in radius": "Always In Radius",
+        "always in radius range": "Always In Radius Range",
+        "age": "Age",
+        "minimum": "Minimum",
+        "armor": "Armor",
+        "helmet": "Helmet",
+        "chestplate": "Chestplate",
+        "leggings": "Leggings",
+        "boots": "Boots",
+        "name": "Name",
+        "name length min": "Name Length Min",
+        "name length max": "Name Length Max",
+        "validate vanilla chars": "Validate Vanilla Chars",
+        "validate cyrillic chars": "Validate Cyrillic Chars",
+        "validate cjk chars": "Validate CJK Chars",
+        "no game mode": "No Game Mode",
+        "illegal pitch": "Illegal Pitch",
+        "fake entity id": "Fake Entity ID",
+        "duplicate": "Duplicate",
+        "need hit": "Need Hit",
+        "illegal health": "Illegal Health",
+        "swung": "Swung",
+        "critted": "Critted",
+        "attributes": "Attributes",
+        "illegal scale": "Illegal Scale"
+      },
       "backtrack": {
         "_value": "Backtrack",
         "min range": "Min Range",
@@ -977,6 +1017,7 @@
         "aim mode": {
           "_value": "Aim Mode",
           "normal": "Normal",
+          "polar": "Polar",
           "ai": "AI"
         },
         "ai model": {
@@ -986,6 +1027,15 @@
         },
         "ai yaw multiplier": "AI Yaw Multiplier",
         "ai pitch multiplier": "AI Pitch Multiplier",
+        "polar yaw acceleration min": "Polar Yaw Acceleration Min",
+        "polar yaw acceleration max": "Polar Yaw Acceleration Max",
+        "polar pitch acceleration min": "Polar Pitch Acceleration Min",
+        "polar pitch acceleration max": "Polar Pitch Acceleration Max",
+        "polar click min cps": "Polar Click Min CPS",
+        "polar click max cps": "Polar Click Max CPS",
+        "polar ignore attack cooldown": "Polar Ignore Attack Cooldown",
+        "polar cooldown min": "Polar Cooldown Min",
+        "polar cooldown max": "Polar Cooldown Max",
         "cps": "CPS",
         "players": "Players",
         "mobs": "Mobs",
@@ -1737,6 +1787,22 @@
         "render color": "Render Color",
         "render width": "Render Width"
       },
+      "fake lag": {
+        "_value": "FakeLag",
+        "range min": "Range Min",
+        "range max": "Range Max",
+        "delay min": "Delay Min",
+        "delay max": "Delay Max",
+        "recoil time": "Recoil Time",
+        "mode": {
+          "_value": "Mode",
+          "constant": "Constant",
+          "dynamic": "Dynamic"
+        },
+        "flush on entity interact": "Flush On Entity Interact",
+        "flush on block interact": "Flush On Block Interact",
+        "flush on action": "Flush On Action"
+      },
       "dolphin": "Dolphin",
       "auto sprint": "Auto Sprint",
       "blink": {
@@ -1914,6 +1980,37 @@
         "legit sneak delay": "Legit Sneak Delay",
         "legit sneak random": "Legit Sneak Random",
         "legit mode speed": "Legit Mode Speed",
+        "god bridge variant": {
+          "_value": "God Bridge Variant",
+          "classic": "Classic",
+          "polar": "Polar"
+        },
+        "ledge action": {
+          "_value": "Ledge Action",
+          "jump": "Jump",
+          "sneak": "Sneak",
+          "stopinput": "Stop Input",
+          "backwards": "Backwards"
+        },
+        "force sneak below count": "Force Sneak Below Count",
+        "sneak time min": "Sneak Time Min",
+        "sneak time max": "Sneak Time Max",
+        "fake click": "Fake Click",
+        "fake click min cps": "Fake Click Min CPS",
+        "fake click max cps": "Fake Click Max CPS",
+        "fake click failed only": "Fake Click Failed Only",
+        "rotation smooth": {
+          "_value": "Rotation Smooth",
+          "linear": "Linear",
+          "sigmoid": "Sigmoid"
+        },
+        "sigmoid horizontal speed min": "Sigmoid Horizontal Speed Min",
+        "sigmoid horizontal speed max": "Sigmoid Horizontal Speed Max",
+        "sigmoid vertical speed min": "Sigmoid Vertical Speed Min",
+        "sigmoid vertical speed max": "Sigmoid Vertical Speed Max",
+        "sigmoid steepness": "Sigmoid Steepness",
+        "sigmoid midpoint": "Sigmoid Midpoint",
+        "hide swing on client": "Hide Swing On Client",
         "swing hand": "Swing Hand",
         "render": "Render",
         "fade": "Fade",
@@ -1985,7 +2082,8 @@
           "_value": "Mode",
           "cancel": "Cancel",
           "reduce": "Reduce",
-          "delay": "Delay"
+          "delay": "Delay",
+          "jumpreset": "JumpReset"
         },
         "server motion": "Server Motion",
         "explosion": "Explosion",
@@ -1998,7 +2096,14 @@
         "max delay": "Max Delay",
         "swing hand": "Swing Hand",
         "delay ticks": "Delay Ticks",
-        "jump reset": "Jump Reset"
+        "jump reset": "Jump Reset",
+        "jump reset chance": "Jump Reset Chance",
+        "jump by received hits": "Jump By Received Hits",
+        "hits until jump min": "Hits Until Jump Min",
+        "hits until jump max": "Hits Until Jump Max",
+        "jump by delay": "Jump By Delay",
+        "until jump min": "Until Jump Min",
+        "until jump max": "Until Jump Max"
       },
       "kill effect": {
         "_value": "Kill Effect",

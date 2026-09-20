@@ -29,6 +29,7 @@ import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.*;
+import java.util.concurrent.ThreadLocalRandom;
 
 public class Velocity extends Module {
 
@@ -44,12 +45,14 @@ public class Velocity extends Module {
     public enum Mode {
         Cancel,
         Reduce,
-        Delay
+        Delay,
+        JumpReset
     }
 
     public final EnumSetting<Mode> mode = enumSetting("Mode", Mode.Cancel, newMode -> {
         if (newMode != Mode.Reduce) resetReduceState();
         if (newMode != Mode.Delay) resetDelayState();
+        if (newMode != Mode.JumpReset) resetJumpResetState();
     });
     private final BoolSetting serverMotion = boolSetting("Server Motion", true, () -> mode.is(Mode.Cancel));
     private final BoolSetting explosion = boolSetting("Explosion", true, () -> mode.is(Mode.Cancel));
@@ -64,6 +67,15 @@ public class Velocity extends Module {
     private final IntSetting delayTicks = intSetting("Delay Ticks", 3, 1, 5, 1, () -> mode.is(Mode.Delay));
     private final BoolSetting jumpReset = boolSetting("Jump Reset", false, () -> mode.is(Mode.Delay));
 
+    // JumpReset 模式设置（移植自 LiquidBounce VelocityJumpReset）
+    private final IntSetting jumpResetChance = intSetting("Jump Reset Chance", 100, 0, 100, 1, () -> mode.is(Mode.JumpReset));
+    private final BoolSetting jumpByReceivedHits = boolSetting("Jump By Received Hits", false, () -> mode.is(Mode.JumpReset));
+    private final IntSetting hitsUntilJumpMin = intSetting("Hits Until Jump Min", 2, 0, 10, 1, () -> mode.is(Mode.JumpReset));
+    private final IntSetting hitsUntilJumpMax = intSetting("Hits Until Jump Max", 2, 0, 10, 1, () -> mode.is(Mode.JumpReset));
+    private final BoolSetting jumpByDelay = boolSetting("Jump By Delay", true, () -> mode.is(Mode.JumpReset));
+    private final IntSetting untilJumpMin = intSetting("Until Jump Min", 0, 0, 20, 1, () -> mode.is(Mode.JumpReset));
+    private final IntSetting untilJumpMax = intSetting("Until Jump Max", 0, 0, 20, 1, () -> mode.is(Mode.JumpReset));
+
     private volatile long lag;
     private volatile long delayLag;
     private volatile long startDelay;
@@ -73,6 +85,12 @@ public class Velocity extends Module {
     public volatile boolean delay;
     private volatile boolean jump;
     private volatile int delayTicksRemaining;
+
+    // JumpReset 模式状态：冷却计数、本次所需的命中/延迟 tick、摔落伤害标记
+    private int jumpResetLimit;
+    private int jumpResetHitsNeeded;
+    private int jumpResetTicksNeeded;
+    private boolean jumpResetFallDamage;
 
     public boolean ownsIncomingDelayQueue() {
         return isEnabled() && (mode.is(Mode.Reduce) && delay || mode.is(Mode.Delay) && delayTicksRemaining > 0);
@@ -91,7 +109,13 @@ public class Velocity extends Module {
             case Cancel -> "";
             case Reduce -> " " + (delay ? System.currentTimeMillis() - startDelay + "ms" : "");
             case Delay -> " " + delayTicksRemaining + "t";
+            case JumpReset -> " " + jumpResetLimit;
         };
+    }
+
+    @Override
+    protected void onEnable() {
+        resetJumpResetState();
     }
 
     @Override
@@ -100,6 +124,7 @@ public class Velocity extends Module {
         flushDelay();
         resetReduceState();
         resetDelayState();
+        resetJumpResetState();
     }
 
     @EventHandler
@@ -278,6 +303,40 @@ public class Velocity extends Module {
         }
     }
 
+    /**
+     * 记录自身速度包：纯竖直向下的速度代表摔落伤害，此时起跳无法削减击退。
+     * 每次收到都覆盖记录，因为后续是否被击退可以从速度中分辨出来。
+     */
+    @EventHandler(priority = EventPriority.HIGH)
+    private void onJumpResetPacket(PacketEvent.Receive event) {
+        if (!isEnabled() || !mode.is(Mode.JumpReset) || nullCheck()) return;
+
+        if (event.getPacket() instanceof ClientboundSetEntityMotionPacket(int id, Vec3 movement)
+                && id == mc.player.getId()) {
+            jumpResetFallDamage = movement.x == 0.0 && movement.z == 0.0 && movement.y < 0.0;
+        }
+    }
+
+    /**
+     * JumpReset 模式：被击退（hurtTime == 9）瞬间模拟起跳，从而削减服务端下发的击退速度。
+     * 玩家必须处于冲刺且在地面上，否则跳跃无法改变击退。
+     */
+    @EventHandler
+    private void onJumpResetInput(KeyboardInputEvent event) {
+        if (!mode.is(Mode.JumpReset) || nullCheck()) return;
+
+        if (mc.player.hurtTime != 9 || !mc.player.onGround() || !mc.player.isSprinting()
+                || jumpResetFallDamage || !jumpResetCooldownOver()
+                || ThreadLocalRandom.current().nextInt(100) >= jumpResetChance.getValue()) {
+            jumpResetUpdateLimit();
+            return;
+        }
+
+        event.setJump(true);
+        jumpResetLimit = 0;
+        jumpResetRollNeeds();
+    }
+
     private boolean flush() {
         List<Packet<? super ClientPacketListener>> pending;
         synchronized (packetLock) {
@@ -320,6 +379,49 @@ public class Velocity extends Module {
             delayPackets.clear();
             delayLag = 0L;
         }
+    }
+
+    /**
+     * 复位 JumpReset 状态：清零冷却计数与摔落伤害标记，并重新随机本次所需的命中次数与延迟 tick。
+     */
+    private void resetJumpResetState() {
+        jumpResetLimit = 0;
+        jumpResetFallDamage = false;
+        jumpResetRollNeeds();
+    }
+
+    /**
+     * 重新随机本次起跳所需的命中次数与延迟 tick（对应 LB 的两个 intRange 随机取值）。
+     */
+    private void jumpResetRollNeeds() {
+        jumpResetHitsNeeded = randomBetween(hitsUntilJumpMin.getValue(), hitsUntilJumpMax.getValue());
+        jumpResetTicksNeeded = randomBetween(untilJumpMin.getValue(), untilJumpMax.getValue());
+    }
+
+    /**
+     * 冷却判定：优先按“受击次数”，否则按“延迟 tick”；两者都未开启时始终可起跳。
+     */
+    private boolean jumpResetCooldownOver() {
+        if (jumpByReceivedHits.getValue()) return jumpResetLimit >= jumpResetHitsNeeded;
+        if (jumpByDelay.getValue()) return jumpResetLimit >= jumpResetTicksNeeded;
+        return true;
+    }
+
+    /**
+     * 冷却累加：按受击次数计时时仅在受击瞬间累加，否则每 tick 累加。
+     */
+    private void jumpResetUpdateLimit() {
+        if (jumpByReceivedHits.getValue()) {
+            if (mc.player.hurtTime == 9) jumpResetLimit++;
+            return;
+        }
+        jumpResetLimit++;
+    }
+
+    private static int randomBetween(int first, int second) {
+        int min = Math.min(first, second);
+        int max = Math.max(first, second);
+        return min == max ? min : ThreadLocalRandom.current().nextInt(min, max + 1);
     }
 
     private static <T> List<T> drain(Queue<T> queue) {
