@@ -50,6 +50,7 @@ import net.minecraft.world.phys.Vec3;
 
 import java.awt.*;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Random;
 
@@ -334,8 +335,47 @@ public class Scaffold extends Module {
     private boolean polarPlacedThisTick;
     /** 上一拍是否真的放上了方块；tick 开头顺延，供边缘动作判定使用。 */
     private boolean polarPlacedLastTick;
-    /** 本刻的 Polar 放置目标（每刻只做一次射线，放置与边缘动作共用同一结果）。 */
-    private BlockHitResult polarTarget;
+    /**
+     * LB {@code BlockPlacementTarget}：搜出来的放置目标。
+     *
+     * @param interacted 要点右键的那一格（LB interactedBlockPos）
+     * @param placed     新方块落下的那一格（LB placedBlock）
+     * @param direction  点的是哪一面（LB interactionDirection）
+     * @param point      该面上的命中点（LB CenterTargetPositionFactory = 面中心）
+     * @param minY       命中高度下限（LB minPlacementY）
+     * @param rotation   朝该命中点的角度（LB Rotation.lookingAt）
+     */
+    private record PolarTarget(BlockPos interacted, BlockPos placed, Direction direction,
+                               Vec3 point, double minY, Rot2f rotation) {
+
+        /** LB {@code BlockPlacementTarget.doesCrosshairTargetMatchRequirements}。 */
+        private boolean matches(BlockHitResult hit) {
+            return hit.getBlockPos().equals(interacted)
+                    && hit.getDirection() == direction
+                    && hit.getLocation().y >= minY;
+        }
+    }
+
+    /** LB {@code BlockPosOffsets.NORMAL}：以目标格为中心、Y 取 0 / -1 的 3×3 两层共 18 个偏移。 */
+    private static final List<BlockPos> POLAR_OFFSETS = polarOffsets();
+    /** 每刻复用的候选排序结果（避免每刻新建列表）。 */
+    private static final List<BlockPos> POLAR_CANDIDATES = new ArrayList<>(18);
+    /** LB {@code BootstrapBackoff} 默认值：预测位置从边缘往回退多少格。 */
+    private static final double POLAR_BOOTSTRAP_BACKOFF = 0.2;
+
+    private static List<BlockPos> polarOffsets() {
+        List<BlockPos> offsets = new ArrayList<>(18);
+        for (int x = -1; x <= 1; x++) {
+            for (int z = -1; z <= 1; z++) {
+                offsets.add(new BlockPos(x, 0, z));
+                offsets.add(new BlockPos(x, -1, z));
+            }
+        }
+        return offsets;
+    }
+
+    /** 本刻的 Polar 放置目标（每刻算一次，放置与边缘动作共用同一结果）。 */
+    private PolarTarget polarTarget;
 
     private final List<RenderInfo> renderBoxes = new ArrayList<>();
 
@@ -377,7 +417,7 @@ public class Scaffold extends Module {
         // 放置与边缘动作共用它，避免两边口径不一致（日志里曾出现两边都判 false、
         // 动作每刻狂触发、而放置一秒才一两个）。
         boolean polar = polarDependency.check();
-        polarTarget = polar ? findPolarPlacementTarget() : null;
+        polarTarget = polar ? findPolarTarget(predictPolarPlacementPos()) : null;
 
         // 边缘动作在 tick 最开头评估：它只看"上一拍的状态"，因此不受后面那些早退
         // （没方块 / 没有放置目标 / 紧急放置）影响。之前挂在 handlePolar() 尾部，
@@ -573,7 +613,7 @@ public class Scaffold extends Module {
 
     private void handleNormal() {
         if (Eagle.INSTANCE.isOverEdge() || !snap.getValue() | !mc.player.onGround()) {
-            rotation = polarDependency.check() ? getPolarRotation(blockPos, direction) : getRotation(blockPos, direction);
+            rotation = polarDependency.check() ? getPolarRotation() : getRotation(blockPos, direction);
             applyRotation(rotation);
         }
         place();
@@ -591,41 +631,39 @@ public class Scaffold extends Module {
      * <p>找不到目标方块时退到 LB 的移动方向定角，保证不会因为没有目标就停止转向；
      * 两者不再逐刻切换（那会让目标角来回跳上百十度）。</p>
      */
-    private Rot2f getPolarRotation(BlockPos pos, Direction dir) {
-        // 1) 优先瞄准"本刻射线已经命中的那个可放位置"——它就是要放上去的那一块，
-        //    这样瞄准与随后发出的放置包指向同一处（放置跟得上，桥面不会出现缺口 -> 不掉）。
-        if (polarTarget != null) {
-            return RotationUtils.calculate(polarTarget.getBlockPos(), polarTarget.getDirection());
-        }
-
-        // 2) 再退模块自己找的目标面（它要求脚下是虚空格，实测只有一部分时刻成立）
-        if (pos != null && dir != null) {
-            return RotationUtils.calculate(pos, dir);
-        }
-
-        // 3) 都没有时才用 LB 的移动方向定角，保证不会停止转向
-        Rot2f heuristic = calculatePolarGodBridgeRotation(pos, dir);
-        if (heuristic != null) return heuristic;
-
-        return rotation != null ? rotation : new Rot2f(mc.player.getYRot(), mc.player.getXRot());
-    }
-
-    private Rot2f calculatePolarGodBridgeRotation(BlockPos pos, Direction dir) {
-        // 无输入：以目标面朝向为基准取 +45°，俯仰 75
+    /**
+     * Polar 的转向目标 = LB {@code ScaffoldGodBridgeTechnique.getRotations}。
+     *
+     * <p>有输入：移动方向 ± 45°（直行按左右侧交替 isOnRightSide，斜向直接取移动方向），
+     * 俯仰 75.7 / 75.6；无输入：以搜出来的目标面朝向取轴 + 45°，俯仰 75。</p>
+     *
+     * <p><b>瞄准不参与找目标</b>（LB 也一样）：目标由 {@link #findPolarTarget} 独立搜出来，
+     * 射线必须正好压在它上面才会放置（LB doesCrosshairTargetMatchRequirements）。
+     * 之前把瞄准改成"朝射线命中的那一面"是自洽闭环 —— 一直瞄着脚下那格的顶面，
+     * 而它对应的放置格正是玩家自己站的格子，结果一格都放不下去。</p>
+     *
+     * <p>关于 LB 源码里的 {@code +180}：那句是为"按 S 倒着走"的用法写的（他们的
+     * {@code getMovementDirectionOfInput} 以朝向前进为基准）。Epsilon 的 {@link #rawInputYaw}
+     * 已经是移动方向本身，正常前进时再 +180 会把视线甩到身后 ——
+     * 表现就是"桥搭在身后、前方缺格、人掉下去"。</p>
+     */
+    private Rot2f getPolarRotation() {
         if (forwardInput == 0.0f && strafeInput == 0.0f) {
-            if (pos == null || dir == null) return null;
-            float targetYaw = RotationUtils.calculate(pos, dir).getYaw();
-            return new Rot2f((float) (Math.floor(targetYaw / 90.0) * 90.0) + 45.0f, 75.0f);
+            PolarTarget target = polarTarget;
+            if (target == null) {
+                return rotation != null ? rotation : new Rot2f(mc.player.getYRot(), mc.player.getXRot());
+            }
+
+            float axis = Mth.floor(target.rotation().getYaw() / 90.0f) * 90.0f;
+            return new Rot2f(Mth.wrapDegrees(axis + 45.0f), 75.0f);
         }
 
-        float movingYaw = Mth.wrapDegrees(Math.round((rawInputYaw + 180.0f) / 45.0f) * 45.0f);
+        float movingYaw = Mth.wrapDegrees(Math.round(rawInputYaw / 45.0f) * 45.0f);
 
-        // 斜向：直接朝移动方向，俯仰 75.6
         if (movingYaw % 90.0f != 0.0f) {
             return new Rot2f(movingYaw, 75.6f);
         }
 
-        // 直行：按"身体偏向哪一侧"交替 ±45，俯仰 75.7；踩在方块外沿且前方脚下是空气时翻转一次
         if (mc.player.onGround()) {
             polarOnRightSide = Mth.floor(mc.player.getX() + Math.cos(Math.toRadians(movingYaw)) * 0.5) != Mth.floor(mc.player.getX())
                     || Mth.floor(mc.player.getZ() + Math.sin(Math.toRadians(movingYaw)) * 0.5) != Mth.floor(mc.player.getZ());
@@ -638,6 +676,7 @@ public class Scaffold extends Module {
 
         return new Rot2f(Mth.wrapDegrees(movingYaw + (polarOnRightSide ? 45.0f : -45.0f)), 75.7f);
     }
+
 
     /** 该角度下射线是否命中目标方块（按 {@link #raytrace} 设置的宽严）。 */
     private boolean polarRaycastHits(Rot2f rot) {
@@ -657,22 +696,150 @@ public class Scaffold extends Module {
      * NCP 一类检查会直接判"Tried to place a block in an unusual way"。
      * 取不到就这一拍不放，下一拍重新取角。</p>
      */
-    private BlockHitResult findPolarPlacementTarget() {
-        if (nullCheck()) return null;
+    /**
+     * LB {@code findBestBlockPlacementTarget}：以"预测位置脚下一格"为中心，
+     * 在 {@link #POLAR_OFFSETS}（3×3 两层共 18 个偏移）里按"离预测位置最近"逐个尝试，
+     * 每个候选格再挑一个"面朝向玩家、且点上去最接近当前朝向"的邻居面作为点击目标。
+     *
+     * <p>候选格是**先搜出来**的，不依赖当前视线 —— 这正是 LB 的做法；之前拿射线去"搜"格子，
+     * 会把玩家自己站的格子当成目标，放置必然失败（反馈的"连搭路都搭不了"）。</p>
+     */
+    private PolarTarget findPolarTarget(Vec3 predictedPos) {
+        if (nullCheck() || predictedPos == null) return null;
 
+        BlockPos targetPos = polarTargetedPosition(predictedPos);
+        if (isPolarSolid(targetPos)) return null;
+
+        POLAR_CANDIDATES.clear();
+        POLAR_CANDIDATES.addAll(POLAR_OFFSETS);
+        POLAR_CANDIDATES.sort(Comparator.comparingDouble(offset -> {
+            BlockPos cell = targetPos.offset(offset);
+            return cell.distToCenterSqr(predictedPos.x, predictedPos.y, predictedPos.z);
+        }));
+
+        Vec3 eye = predictedPos.add(0.0, mc.player.getEyeHeight(mc.player.getPose()), 0.0);
+
+        for (BlockPos offset : POLAR_CANDIDATES) {
+            BlockPos cell = targetPos.offset(offset);
+            if (isPolarSolid(cell)) continue;
+
+            BlockState state = mc.level.getBlockState(cell);
+            boolean replaceExisting = !state.isAir() && state.getFluidState().isEmpty();
+            if (replaceExisting && !state.canBeReplaced()) continue;
+
+            PolarTarget best = null;
+            double bestDelta = Double.MAX_VALUE;
+
+            for (Direction direction : Direction.values()) {
+                BlockPos interacted = cell.relative(direction.getOpposite());
+                if (mc.level.getBlockState(interacted).canBeReplaced()) continue;
+
+                Vec3 point = polarFaceCenter(interacted, direction);
+                Vec3 toFace = eye.subtract(point);
+                double length = Math.max(1.0E-4, toFace.length());
+                double facing = (toFace.x * direction.getStepX() + toFace.y * direction.getStepY()
+                        + toFace.z * direction.getStepZ()) / length;
+                if (facing < 0.0) continue;
+
+                Rot2f rotation = RotationUtils.calculate(eye, point);
+                double delta = polarDeltaLength(RotationManager.INSTANCE.getRotation(), rotation);
+
+                if (delta < bestDelta) {
+                    bestDelta = delta;
+                    best = new PolarTarget(interacted, cell, direction, point,
+                            polarMinY(interacted, direction), rotation);
+                }
+            }
+
+            if (best != null) return best;
+        }
+
+        return null;
+    }
+
+    /** LB {@code ModuleScaffold.getTargetedPosition}（SameY = Off）：预测位置脚下一格。 */
+    private BlockPos polarTargetedPosition(Vec3 predictedPos) {
+        return BlockPos.containing(predictedPos).below();
+    }
+
+    /**
+     * LB {@code ScaffoldMovementPrediction.getPredictedPlacementPos}：
+     * 沿移动方向走到"脚下支撑即将消失"的那一点，再朝玩家回退 {@link #POLAR_BOOTSTRAP_BACKOFF}
+     * （LB BootstrapBackoff 默认 0.2）。这是"方块落在下一格"而不是补脚下窟窿的关键 ——
+     * 只补脚下就会一直漏前方，人必掉。
+     */
+    private Vec3 predictPolarPlacementPos() {
+        Vec3 pos = mc.player.position();
+        if (isOnEdge()) return pos;
+
+        Vec3 dir = polarMovementDirection();
+        if (dir == null) return pos;
+
+        double feetY = mc.player.getY();
+        Vec3 fallOff = null;
+
+        for (int step = 1; step <= 8; step++) {
+            Vec3 probe = pos.add(dir.x * step * 0.25, 0.0, dir.z * step * 0.25);
+            if (!isPolarSolid(BlockPos.containing(probe.x, feetY - 0.1, probe.z))) {
+                fallOff = pos.add(dir.x * (step - 1) * 0.25, 0.0, dir.z * (step - 1) * 0.25);
+                break;
+            }
+        }
+
+        if (fallOff == null) return pos;
+
+        Vec3 toPlayer = pos.subtract(fallOff);
+        double length = Math.sqrt(toPlayer.x * toPlayer.x + toPlayer.z * toPlayer.z);
+        if (length < 1.0E-4) return fallOff;
+
+        double back = POLAR_BOOTSTRAP_BACKOFF / length;
+        return fallOff.add(toPlayer.x * back, 0.0, toPlayer.z * back);
+    }
+
+    /** 移动方向：有输入取输入方向，无输入退到速度方向（LB 用 optimalLine.direction）。 */
+    private Vec3 polarMovementDirection() {
+        float yaw;
+        if (forwardInput != 0.0f || strafeInput != 0.0f) {
+            yaw = rawInputYaw;
+        } else {
+            Vec3 velocity = mc.player.getDeltaMovement();
+            if (velocity.x * velocity.x + velocity.z * velocity.z < 1.0E-6) return null;
+            yaw = (float) Math.toDegrees(Math.atan2(-velocity.x, velocity.z));
+        }
+
+        double radians = Math.toRadians(yaw);
+        return new Vec3(-Math.sin(radians), 0.0, Math.cos(radians));
+    }
+
+    /** LB {@code isBlockSolid}：以 UP 面支撑判定"实心"（台阶/火把这类非整方块会被排除）。 */
+    private boolean isPolarSolid(BlockPos pos) {
+        return mc.level.getBlockState(pos).isFaceSturdy(mc.level, pos, Direction.UP);
+    }
+
+    /** LB {@code CenterTargetPositionFactory}：整方块的"面中心"。 */
+    private Vec3 polarFaceCenter(BlockPos pos, Direction direction) {
+        return new Vec3(pos.getX() + 0.5 + direction.getStepX() * 0.5,
+                pos.getY() + 0.5 + direction.getStepY() * 0.5,
+                pos.getZ() + 0.5 + direction.getStepZ() * 0.5);
+    }
+
+    /** LB {@code BlockPlacementTarget.minPlacementY}：命中高度下限（整方块侧面 = 底面，顶面 = 顶面）。 */
+    private double polarMinY(BlockPos pos, Direction direction) {
+        return pos.getY() + (direction == Direction.UP ? 1.0 : 0.0);
+    }
+
+    /** LB {@code technique.getCrosshairTarget} = {@code traceFromPlayer(rotation)}。 */
+    private BlockHitResult polarCrosshairHit() {
         HitResult result = RaytraceUtils.raytrace(RotationManager.INSTANCE.getRotation(), 4.5, 0.0f);
-        if (result == null || result.getType() != HitResult.Type.BLOCK) return null;
+        return result instanceof BlockHitResult hit ? hit : null;
+    }
 
-        BlockHitResult hit = (BlockHitResult) result;
-        BlockPos placePos = hit.getBlockPos().relative(hit.getDirection());
-        if (!mc.level.getBlockState(placePos).canBeReplaced()) return null;
+    /** LB：当前托管转向的射线是否正好压在搜出来的目标上。 */
+    private boolean polarCrosshairMatchesTarget() {
+        if (polarTarget == null || nullCheck()) return false;
 
-        // 保持"搭桥"语义：只放在脚下附近（水平 3 格内、Y 在脚下 -3 ~ +1 之间）
-        BlockPos feet = mc.player.blockPosition();
-        if (placePos.getY() > feet.getY() + 1 || placePos.getY() < feet.getY() - 3) return null;
-        if (Math.abs(placePos.getX() - feet.getX()) > 3 || Math.abs(placePos.getZ() - feet.getZ()) > 3) return null;
-
-        return hit;
+        BlockHitResult hit = polarCrosshairHit();
+        return hit != null && polarTarget.matches(hit);
     }
 
     /**
@@ -818,49 +985,49 @@ public class Scaffold extends Module {
      * 的目标角本来就压在目标方块上，条件恒成立会变成死代码；也不能拿"步进还差几刻"当判据——
      * 那个值在搭桥时几乎恒 ≥1，会变成每刻都在蹲。</p>
      */
+    /**
+     * Polar 边缘动作：LB {@code ScaffoldLedgeFeature.ledge} + {@code ScaffoldGodBridgeTechnique.ledge}。
+     *
+     * <p>第一段与勾选的动作无关：边缘上"没方块"或"转向还没到位"（LB {@code ticks >= 1}）→ 潜行。</p>
+     *
+     * <p>第二段是 GodBridge 扩展：边缘上射线没能压在搜出来的目标上 → 按勾选的动作自保；
+     * 方块少于 ForceSneakBelowCount 强制潜行；勾了 Jump 但能跳两格高时改走别的动作。</p>
+     */
     private void updatePolarLedgeAction() {
         boolean edge = isOnEdge();
         int blocks = getBlockCount();
-        boolean hasTarget = polarTarget != null;
-        boolean rayOnTarget = hasTarget;
+        boolean crosshairOnTarget = polarCrosshairMatchesTarget();
+        boolean rotationReady = rotation != null
+                && polarDeltaLength(RotationManager.INSTANCE.getRotation(), rotation) < 1.0;
 
         if (POLAR_DEBUG && mc.player.tickCount % 10 == 0) {
-            Constants.LOGGER.info("[ScaffoldPolar] edge={} blocks={} delay={} placedLast={} target={} ray={} onAir={} rot={}",
-                    edge, blocks, placeDelayCounter, polarPlacedLastTick, hasTarget, rayOnTarget, onAir(),
+            Constants.LOGGER.info("[ScaffoldPolar] edge={} blocks={} delay={} placedLast={} target={} crosshair={} ready={} onAir={} rot={}",
+                    edge, blocks, placeDelayCounter, polarPlacedLastTick, polarTarget != null, crosshairOnTarget,
+                    rotationReady, onAir(),
                     rotation == null ? "null" : String.format("%.1f/%.1f", rotation.getYaw(), rotation.getPitch()));
         }
 
         if (!edge) return;
 
-        // 1) 手里没方块：蹲住（LB 通用分支的"没方块"）
-        if (blocks <= 0) {
+        // 1) LB ledge()：边缘 + （没方块 | 转向没到位）→ 潜行
+        if (blocks <= 0 || !rotationReady) {
             polarLedgeSneakTicks = polarSneakTicks();
-            debugAction("sneak(no-blocks)");
+            debugAction("sneak(blocks=" + blocks + ",ready=" + rotationReady + ")");
             return;
         }
 
-        // 2) 方块低于阈值：强制潜行
+        // 2) LB GodBridge.ledge()：射线已经压在目标上 → 不需要任何自保动作
+        if (crosshairOnTarget) return;
+
+        // 3) 方块少于阈值 → 强制潜行
         if (blocks < polarForceSneakBelow.getValue()) {
             polarLedgeSneakTicks = polarSneakTicks();
             debugAction("sneak(low-blocks=" + blocks + ")");
             return;
         }
 
-        // 3) 冷却中的那一拍只是放置节奏，不算"放不下去"
-        if (placeDelayCounter > 0) return;
-
-        // 4) 上一拍已经放上了方块，不需要自保
-        if (polarPlacedLastTick) return;
-
-        // 5) 这一拍其实放得下去（射线命中可替换格）→ 不动作
-        if (rayOnTarget) return;
-
-        // 6) 边缘 + 这一拍放不下去 → 执行勾选的边缘动作（可多选，与 LB 的 Modes 一致）
+        // 4) 按勾选的动作执行（可多选，对应 LB Modes 的多选）
         if (polarLedgeJumpAction.getValue()) {
-            // LB 的原话是"能跳两格高时避开跳跃"：能跳两格（跳跃提升等）就换成别的动作，
-            // **普通跳跃（约 1.25 格）才是真正要跳的时机**。
-            // 之前我翻成了"跳不上两格就退化成潜行"，默认属性下每次都退化成潜行 —— 表现就是
-            // "开着边缘跳跃还在走一步蹲一步"。
             if (!canJumpTwoBlocksHigh()) {
                 polarLedgeJump = true;
                 debugAction("action=jump");
@@ -992,10 +1159,25 @@ public class Scaffold extends Module {
      * 实测日志里那个闸门让 target 常年为 false、一秒只放一两个方块（搭桥必掉）。
      * 改成 LB 的模型：以**当前托管转向的真实射线**为准。
      */
+    /**
+     * Polar 的放置（LB {@code ModuleScaffold.tickHandler}）：取"当前托管转向的真实射线"，
+     * 要求它**正好命中搜出来的那个目标**（方块 + 面 + 命中高度下限），命中则把射线结果原样发出。
+     *
+     * <p>合法客户端发的永远是射线与面的交点；合成点（比如 UP 面给 {@code pos.y + 0.5}）不在面上，
+     * 会被 NCP 判成 "Tried to place a block in an unusual way"。</p>
+     */
     private void polarPlace() {
         if (placeDelayCounter > 0 || !canUseBlockResult() || polarTarget == null) return;
 
-        placeOn(polarTarget, true);
+        BlockHitResult hit = polarCrosshairHit();
+        if (hit == null || !polarTarget.matches(hit)) return;
+
+        if (POLAR_DEBUG && mc.player.tickCount % 20 == 0) {
+            Constants.LOGGER.info("[ScaffoldPolar] place interacted={} face={} placed={} player={}",
+                    hit.getBlockPos(), hit.getDirection(), polarTarget.placed(), mc.player.blockPosition());
+        }
+
+        placeOn(hit, true);
     }
 
     /**
