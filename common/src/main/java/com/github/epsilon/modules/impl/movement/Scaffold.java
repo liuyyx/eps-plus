@@ -220,6 +220,12 @@ public class Scaffold extends Module {
      * 每次放置重新掷一次，避免固定间隔本身成为新的可识别特征。
      */
     private final IntSetting placeDelayRandom = intSetting("Place Delay Random", 2, 0, 5, 1);
+    /**
+     * 失败/坠落时的强制放置重试（Epsilon 原有行为）：判定"够不到目标方块或水平速度过快"时，
+     * 取消本刻玩家 tick 强行转向放置，最多连试 8 次。这段会连续发出转向包与放置包，
+     * 容易被反作弊连着记违规，因此给一个能整段关掉的开关。
+     */
+    private final BoolSetting emergencyPlacement = boolSetting("Emergency Placement", true);
     private final IntSetting legitModeSpeed = intSetting("Legit Mode Speed", 180, 1, 180, 1, () -> mode.is(Mode.Legit));
 
     /*
@@ -412,7 +418,7 @@ public class Scaffold extends Module {
         if (strength >= 1.5) {
             NotificationManager.INSTANCE.warning(this.getTranslatedName(), EpsilonTranslations.Notifications.SCAFFOLD_FLYING_WARNING.getTranslatedName(), this.hashCode());
         }
-        if ((!reachable || strength >= 1.5) && rotateCount <= 8 && getBlockCount() >= 1 && canUseBlockResult()) {
+        if (emergencyPlacement.getValue() && (!reachable || strength >= 1.5) && rotateCount <= 8 && getBlockCount() >= 1 && canUseBlockResult()) {
             emergencyPlacementActive = true;
             event.cancel();
 
