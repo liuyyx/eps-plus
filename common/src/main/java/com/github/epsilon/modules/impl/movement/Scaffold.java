@@ -327,6 +327,8 @@ public class Scaffold extends Module {
     private int polarForceSneak;
     /** Polar 直行搭桥时的左右侧交替状态（LB GodBridge 的 isOnRightSide）。 */
     private boolean polarOnRightSide;
+    /** 本刻是否真的放上了方块（边缘动作的等价判据，每刻复位）。 */
+    private boolean polarPlacedThisTick;
 
     private final List<RenderInfo> renderBoxes = new ArrayList<>();
 
@@ -805,28 +807,39 @@ public class Scaffold extends Module {
     /**
      * Polar 边缘动作：移植 LB {@code ScaffoldLedgeFeature.ledge} 与
      * {@code ScaffoldGodBridgeTechnique.ledge}。
-     * 到边缘后：转向还没到位或方块见底 → 按所需刻数蹲住；
-     * 转向已到位但射线没压在目标方块上 → 执行 {@link #polarLedgeAction}。
+     *
+     * <p>LB 的判据是"在边缘 + 这一拍没能完成放置"（它的 crosshair 目标不满足放置要求），
+     * 不能翻成"射线没压在目标方块上"——{@link #getRotation} 本来就是挑一个能压住目标方块的角度，
+     * 那个条件恒不成立，整段动作会变成死代码。这里改用"这一拍是否真的放上了"作等价判据：
+     * 冷却中的那一拍只是节奏（不算失败），已经放上的那一拍也不需要自保。</p>
      */
     private void updatePolarLedgeAction() {
         if (blockPos == null || direction == null || rotation == null) return;
         if (!Eagle.INSTANCE.isOverEdge()) return;
 
+        // 1) 方块见底 / 转向还没到位：先按所需刻数蹲住（LB 的通用分支）
         int ticks = polarTicksUntilTarget(rotation);
         if (getBlockCount() <= 0 || ticks >= 1) {
             polarLedgeSneakTicks = Math.max(1, ticks);
             return;
         }
 
-        // 射线已经压在目标方块上，不需要额外动作。
-        if (raytraceOverTarget()) return;
-
-        PolarLedgeAction action = polarLedgeAction.getValue();
+        // 2) 方块低于阈值：强制潜行（不问朝向）
         if (getBlockCount() < polarForceSneakBelow.getValue()) {
-            // LB：方块见底时强制潜行。
-            action = PolarLedgeAction.Sneak;
-        } else if (action == PolarLedgeAction.Jump && !canJumpTwoBlocksHigh()) {
-            // LB：跳不上两格时退化为潜行（可选项只剩 Jump 时的等价降级）。
+            polarLedgeSneakTicks = polarSneakTicks();
+            return;
+        }
+
+        // 3) 冷却中的那一拍只是放置节奏，不算"放不下去"
+        if (placeDelayCounter > 0) return;
+
+        // 4) 本刻已经放上方块，不需要自保
+        if (polarPlacedThisTick) return;
+
+        // 5) 边缘 + 这一拍没能放置 → 执行边缘动作
+        PolarLedgeAction action = polarLedgeAction.getValue();
+        if (action == PolarLedgeAction.Jump && !canJumpTwoBlocksHigh()) {
+            // LB：跳不上两格时退化为潜行。
             action = PolarLedgeAction.Sneak;
         }
 
@@ -871,6 +884,7 @@ public class Scaffold extends Module {
         polarLedgeStopInput = false;
         polarLedgeBackwards = false;
         polarLedgeSneakTicks = 0;
+        polarPlacedThisTick = false;
     }
 
     private void resetPolarState() {
@@ -1026,6 +1040,8 @@ public class Scaffold extends Module {
         boolean placed = result.consumesAction();
 
         if (placed) {
+            polarPlacedThisTick = true;
+
             // 冷却 = 基准 + 随机量，每次放置重新掷一次
             placeDelayCounter = placeDelay.getValue()
                     + (placeDelayRandom.getValue() > 0 ? legitRandom.nextInt(placeDelayRandom.getValue() + 1) : 0);
