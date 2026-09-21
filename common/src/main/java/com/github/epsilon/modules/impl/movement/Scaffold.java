@@ -691,6 +691,10 @@ public class Scaffold extends Module {
                 MathUtils.getRandom(polarSigmoidHorizontalSpeedMin.getValue(), polarSigmoidHorizontalSpeedMax.getValue()),
                 MathUtils.getRandom(polarSigmoidVerticalSpeedMin.getValue(), polarSigmoidVerticalSpeedMax.getValue()));
 
+        // 规范化后再提交：偏航必须落在 (-180,180]、俯仰钳到 ±90。
+        // 实测日志里出现过 rot=-214.8（超范围偏航）—— 这种角度发给服务器就是明牌违规。
+        stepped = new Rot2f(Mth.wrapDegrees(stepped.getYaw()), Mth.clamp(stepped.getPitch(), -90.0f, 90.0f));
+
         // 提交与管线基准（lastRotations）完全相同的角度，会让 RotationUtils.move 出现 0/0 的 NaN，
         // 而 NaN 会一直留在托管角里直到重生。偏一个远小于鼠标灵敏度网格的微小量即可避开，
         // 量化后会舍回同一格，观感仍是原地不动。
