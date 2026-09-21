@@ -1978,21 +1978,15 @@
         "place delay": "放置延迟",
         "place delay random": "放置随机延迟",
         "emergency placement": "坠落强制放置",
-        "legit sneak delay": "蹲起搭潜行延迟",
-        "legit sneak random": "蹲起搭随机蹲起",
-        "legit mode speed": "蹲起搭旋转速度",
         "god bridge variant": {
           "_value": "神桥变体",
           "classic": "经典",
           "polar": "Polar"
         },
-        "ledge action": {
-          "_value": "边缘动作",
-          "jump": "跳跃",
-          "sneak": "潜行",
-          "stopinput": "停手",
-          "backwards": "后退"
-        },
+        "ledge jump": "边缘跳跃",
+        "ledge sneak": "边缘潜行",
+        "ledge stop input": "边缘停手",
+        "ledge step back": "边缘后退",
         "force sneak below count": "强制潜行方块数",
         "sneak time min": "潜行刻数最小",
         "sneak time max": "潜行刻数最大",

@@ -27,7 +27,7 @@ import java.util.zip.ZipOutputStream;
 
 public class ConfigManager {
 
-    private static final int CONFIG_VERSION = 3;
+    private static final int CONFIG_VERSION = 4;
     private static final String DEFAULT_CONFIG_NAME = "default";
     private static final String CONFIGS_FOLDER = "configs";
     private static final String IMPORTS_FOLDER = "imports";

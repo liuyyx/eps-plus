@@ -131,14 +131,6 @@ public class Scaffold extends Module {
         Polar
     }
 
-    /** Polar 变体走到边缘时的动作，对应 LB GodBridge 技术的 {@code Modes}。 */
-    private enum PolarLedgeAction {
-        Jump,
-        Sneak,
-        StopInput,
-        Backwards
-    }
-
     /** Polar 变体的转向平滑方式，对应 LB 的 {@code AngleSmooth}。 */
     private enum PolarRotationSmooth {
         Linear,
@@ -207,8 +199,6 @@ public class Scaffold extends Module {
     private final IntSetting rotationSpeed2 = intSetting("Rotation Speed 2", 36, 10, 180, 10, () -> rotationMode.is(RotationMode.Heypixel));
     private final IntSetting rotationBackSpeed = intSetting("Rotation Back Speed", 180, 10, 180, 10, () -> mode.is(Mode.TellyBridge));
     private final IntSetting tellyTicks = intSetting("Telly Ticks", 1, 0, 6, 1, () -> mode.is(Mode.TellyBridge));
-    private final IntSetting legitSneakDelay = intSetting("Legit Sneak Delay", 4, 1, 5, 1, () -> mode.is(Mode.Legit));
-    private final IntSetting legitSneakRandom = intSetting("Legit Sneak Random", 2, 0, 5, 1, () -> mode.is(Mode.Legit));
     /**
      * 放置后的冷却刻数（与 leader 的 Place Delay 同义，默认 1、范围 0~5）。
      * 缺少节流时只要方块搜索成功就每刻放置，形成完全规律的时序，
@@ -226,7 +216,6 @@ public class Scaffold extends Module {
      * 容易被反作弊连着记违规，因此给一个能整段关掉的开关。
      */
     private final BoolSetting emergencyPlacement = boolSetting("Emergency Placement", true);
-    private final IntSetting legitModeSpeed = intSetting("Legit Mode Speed", 180, 1, 180, 1, () -> mode.is(Mode.Legit));
 
     /*
      * ===== 神桥 Polar 变体 =====
@@ -238,13 +227,26 @@ public class Scaffold extends Module {
     private final EnumSetting<GodBridgeVariant> godBridgeVariant =
             enumSetting("God Bridge Variant", GodBridgeVariant.Classic, () -> mode.is(Mode.GodBridge));
 
-    /** Polar 变体的生效条件，供下面所有设置复用。 */
+    /**
+     * Polar 流水线的生效条件，供下面所有设置复用。
+     * 含 Legit（原"蹲起搭"）：该模式已被这套 LB 实现覆盖，因此同样使用这些设置。
+     */
     private final Setting.Dependency polarDependency =
-            () -> mode.is(Mode.GodBridge) && godBridgeVariant.is(GodBridgeVariant.Polar);
+            () -> mode.is(Mode.Legit) || (mode.is(Mode.GodBridge) && godBridgeVariant.is(GodBridgeVariant.Polar));
 
-    /** 边缘动作，对应 LB GodBridge 的 Modes（配置里只勾了 Jump）。 */
-    private final EnumSetting<PolarLedgeAction> polarLedgeAction =
-            enumSetting("Ledge Action", PolarLedgeAction.Jump, polarDependency);
+    /**
+     * 边缘动作。LB 的 {@code GodBridge.Modes} 是**多选**（可以同时勾 Jump 和 StopInput），
+     * Epsilon 没有多选枚举设置，这里按同义展开成 4 个开关：默认只开 Jump（= polar 配置的 Modes=[Jump]）。
+     * 四个都不勾 = 不做任何边缘动作。
+     */
+    private final BoolSetting polarLedgeJumpAction =
+            boolSetting("Ledge Jump", true, polarDependency);
+    private final BoolSetting polarLedgeSneakAction =
+            boolSetting("Ledge Sneak", false, polarDependency);
+    private final BoolSetting polarLedgeStopAction =
+            boolSetting("Ledge Stop Input", false, polarDependency);
+    private final BoolSetting polarLedgeBackAction =
+            boolSetting("Ledge Step Back", false, polarDependency);
     /** 方块少于该数量时强制改用潜行（LB ForceSneakBelowCount）。 */
     private final IntSetting polarForceSneakBelow =
             intSetting("Force Sneak Below Count", 5, 0, 10, 1, polarDependency);
@@ -307,18 +309,9 @@ public class Scaffold extends Module {
     private boolean emergencyPlacementActive;
     private boolean pearlUsePacketSent;
 
-    private static final double LEGIT_EDGE_THRESHOLD = 0.15;
-    private int legitEdgeState = 0;
-    private int legitEdgeTimer = 0;
-    private boolean legitWasOnEdge = false;
-
-    /**
-     * 转向未到位时的放置闸门（与 leader 的 {@code rotationTick} 同义）。
-     * 目标角偏离当前托管角超过 {@code legitModeSpeed} 容差时置 1，逐刻递减；
-     * 非 0 期间不放置，避免转向过程中的放置包朝向与服务器所见不一致而被丢弃。
-     */
-    private int legitRotationTick = 0;
-    private final Random legitRandom = new Random();
+    /** 边缘判定的阈值（玩家距离所在方块边界的距离）。 */
+    private static final double EDGE_THRESHOLD = 0.15;
+    private final Random placeRandom = new Random();
 
     /** 放置冷却剩余刻数；>0 时不放置。见 {@link #placeDelay}。 */
     private int placeDelayCounter = 0;
@@ -355,7 +348,6 @@ public class Scaffold extends Module {
         shouldSwapBack = false;
         emergencyPlacementActive = false;
         pearlUsePacketSent = false;
-        resetLegitEdgeState();
         resetPolarState();
     }
 
@@ -364,7 +356,6 @@ public class Scaffold extends Module {
         yLevel = 0;
         emergencyPlacementActive = false;
         pearlUsePacketSent = false;
-        resetLegitEdgeState();
         resetPolarState();
         if (shouldSwapBack) {
             InvUtils.swapBack();
@@ -389,12 +380,6 @@ public class Scaffold extends Module {
         if (placeDelayCounter > 0) placeDelayCounter--;
 
         blockResult = findBlockResult();
-
-        if (mode.is(Mode.Legit)) {
-            updateLegitEdgeState();
-        } else {
-            resetLegitEdgeState();
-        }
 
         if (!blockResult.found()) return;
 
@@ -469,13 +454,6 @@ public class Scaffold extends Module {
 
         if (mode.is(Mode.TellyBridge) && mc.player.onGround() && !mc.options.keyJump.isDown() && mc.player.isMoving()) {
             event.setJump(true);
-        }
-
-        if (mode.is(Mode.Legit) && mc.gui.screen() == null
-                && mc.player.onGround() && (legitEdgeState == 1 || legitEdgeState == 2)) {
-            event.setSneak(true);
-            event.setSprint(false);
-            mc.player.setSprinting(false);
         }
     }
 
@@ -712,8 +690,12 @@ public class Scaffold extends Module {
             stepped = new Rot2f(stepped.getYaw() + 1.0E-3f, stepped.getPitch());
         }
 
-        // 步长已在此算好，speed 传 180 让管理器直接落到该角度，避免被二次平滑。
-        RotationManager.INSTANCE.setRotations(stepped, 180.0);
+        // 速度取"本步位移"而不是 180：管线是从 lastRotations 出发算 move() 的，
+        // 这一步位移本身就很小，速度略大于它必然落到 stepped；
+        // 而把 180 度/刻 这种极端速度留在管线里，会让"停止瞄准后归还视角"
+        // 以及 SNAP 模式下的可见转向变成一次瞬移 —— 表现就是"视角被强制拧一下"。
+        double step = Math.max(0.5, polarDeltaLength(RotationManager.INSTANCE.lastRotations, stepped) * 1.05);
+        RotationManager.INSTANCE.setRotations(stepped, step);
     }
 
     /**
@@ -845,19 +827,28 @@ public class Scaffold extends Module {
         // 5) 有目标且射线已压在目标面上（下一拍就能放）→ 不动作
         if (rayOnTarget) return;
 
-        // 6) 边缘 + 这一拍放不下去 → 执行边缘动作
-        PolarLedgeAction action = polarLedgeAction.getValue();
-        if (action == PolarLedgeAction.Jump && !canJumpTwoBlocksHigh()) {
-            // LB：跳不上两格时退化为潜行。
-            action = PolarLedgeAction.Sneak;
+        // 6) 边缘 + 这一拍放不下去 → 执行勾选的边缘动作（可多选，与 LB 的 Modes 一致）
+        if (polarLedgeJumpAction.getValue()) {
+            if (canJumpTwoBlocksHigh()) {
+                polarLedgeJump = true;
+                debugAction("action=jump");
+            } else {
+                // LB：跳不上两格时退化为潜行
+                polarLedgeSneakTicks = polarSneakTicks();
+                debugAction("action=jump->sneak");
+            }
         }
-        debugAction("action=" + action);
-
-        switch (action) {
-            case Jump -> polarLedgeJump = true;
-            case Sneak -> polarLedgeSneakTicks = polarSneakTicks();
-            case StopInput -> polarLedgeStopInput = true;
-            case Backwards -> polarLedgeBackwards = true;
+        if (polarLedgeSneakAction.getValue()) {
+            polarLedgeSneakTicks = polarSneakTicks();
+            debugAction("action=sneak");
+        }
+        if (polarLedgeStopAction.getValue()) {
+            polarLedgeStopInput = true;
+            debugAction("action=stop-input");
+        }
+        if (polarLedgeBackAction.getValue()) {
+            polarLedgeBackwards = true;
+            debugAction("action=step-back");
         }
     }
 
@@ -870,7 +861,7 @@ public class Scaffold extends Module {
     private int polarSneakTicks() {
         int min = polarSneakTimeMin.getValue();
         int max = polarSneakTimeMax.getValue();
-        return min + (max > min ? legitRandom.nextInt(max - min + 1) : 0);
+        return min + (max > min ? placeRandom.nextInt(max - min + 1) : 0);
     }
 
     /**
@@ -910,85 +901,13 @@ public class Scaffold extends Module {
         resetPolarLedgeAction();
     }
 
+    /**
+     * Legit（原"蹲起搭"）。原实现（固定潜行刻数 + rotationTick 闸门）只能过 Grim 一类，
+     * 过不了 Polar，因此整段被 LB 那套 polar 搭桥覆盖：走"定角转向 + Sigmoid 平滑 +
+     * 假点击 + 边缘动作（走一步蹲一步 / 到边缘跳）"的同一条流程。
+     */
     private void handleLegit() {
-        // 每刻递减一次（等价于 leader 在 tick 处理入口的 rotationTick--）。
-        if (legitRotationTick > 0) legitRotationTick--;
-
-        float beforeYaw = RotationManager.INSTANCE.getRotation().getYaw();
-        rotation = getRotation(blockPos, direction);
-        RotationManager.INSTANCE.setRotations(rotation, legitModeSpeed.getValue());
-
-        // 剩余偏角超过容差 => 本刻仍在转向，标记延后放置。
-        // 转向尚未到位时发出的放置包，其朝向与服务器所见不一致，会被服务器丢弃
-        // （单机无此校验，故只在联机时表现为“吞方块”）。
-        if (Math.abs(Mth.wrapDegrees(rotation.getYaw() - beforeYaw)) > legitModeSpeed.getValue()) {
-            legitRotationTick = Math.max(legitRotationTick, 1);
-        }
-        if (legitRotationTick > 0) return;
-
-        if (legitCanPlace()) {
-            place();
-        }
-    }
-
-    /**
-     * Legit（蹲起搭）边缘状态机：
-     * 0 = 未在边缘；1 = 刚踏上边缘，潜行等待 legitSneakDelay 刻（此阶段不放置）；
-     * 2 = 等待结束，潜行继续但允许放置。
-     */
-    private void updateLegitEdgeState() {
-        boolean onGround = mc.player.onGround();
-        boolean atEdge = onGround && isOnEdge();
-        boolean holdingBlock = blockResult != null && blockResult.found() && canUseBlockResult();
-        boolean justReachedEdge = atEdge && !legitWasOnEdge;
-
-        if (!onGround) {
-            legitEdgeState = 0;
-            legitEdgeTimer = 0;
-        } else if (atEdge && holdingBlock) {
-            switch (legitEdgeState) {
-                case 0 -> {
-                    if (justReachedEdge || legitEdgeTimer == 0) {
-                        legitEdgeState = 1;
-                        // 蹲起时长 = 基准 + [0, random]；每次进入状态 1 重新掷一次，
-                        // 避免固定刻数形成可被反作弊识别的周期性节奏。
-                        legitEdgeTimer = legitSneakDelay.getValue()
-                                + (legitSneakRandom.getValue() > 0 ? legitRandom.nextInt(legitSneakRandom.getValue() + 1) : 0);
-                    }
-                }
-                case 1 -> {
-                    legitEdgeTimer--;
-                    if (legitEdgeTimer <= 0) {
-                        legitEdgeState = 2;
-                        legitEdgeTimer = 0;
-                    }
-                }
-                case 2 -> {
-                }
-                default -> {
-                    legitEdgeState = 0;
-                    legitEdgeTimer = 0;
-                }
-            }
-        } else {
-            legitEdgeState = 0;
-            legitEdgeTimer = 0;
-        }
-        legitWasOnEdge = atEdge;
-    }
-
-    private void resetLegitEdgeState() {
-        legitEdgeState = 0;
-        legitEdgeTimer = 0;
-        legitWasOnEdge = false;
-        legitRotationTick = 0;
-    }
-
-    /**
-     * Legit 放置闸门：在地面且处于状态 1（潜行等待期）时禁止放置。
-     */
-    private boolean legitCanPlace() {
-        return !mc.player.onGround() || legitEdgeState == 0 || legitEdgeState == 2;
+        handlePolar();
     }
 
     /**
@@ -1005,10 +924,10 @@ public class Scaffold extends Module {
 
         double xOff = mc.player.getX() - playerX;
         double zOff = mc.player.getZ() - playerZ;
-        if (xOff < LEGIT_EDGE_THRESHOLD || xOff > 1.0 - LEGIT_EDGE_THRESHOLD
-                || zOff < LEGIT_EDGE_THRESHOLD || zOff > 1.0 - LEGIT_EDGE_THRESHOLD) {
-            int checkX = playerX + (xOff < LEGIT_EDGE_THRESHOLD ? -1 : (xOff > 1.0 - LEGIT_EDGE_THRESHOLD ? 1 : 0));
-            int checkZ = playerZ + (zOff < LEGIT_EDGE_THRESHOLD ? -1 : (zOff > 1.0 - LEGIT_EDGE_THRESHOLD ? 1 : 0));
+        if (xOff < EDGE_THRESHOLD || xOff > 1.0 - EDGE_THRESHOLD
+                || zOff < EDGE_THRESHOLD || zOff > 1.0 - EDGE_THRESHOLD) {
+            int checkX = playerX + (xOff < EDGE_THRESHOLD ? -1 : (xOff > 1.0 - EDGE_THRESHOLD ? 1 : 0));
+            int checkZ = playerZ + (zOff < EDGE_THRESHOLD ? -1 : (zOff > 1.0 - EDGE_THRESHOLD ? 1 : 0));
             if (checkX != playerX || checkZ != playerZ) {
                 if (mc.level.getBlockState(new BlockPos(checkX, playerY - 1, checkZ)).canBeReplaced()) return true;
             }
@@ -1060,7 +979,7 @@ public class Scaffold extends Module {
 
             // 冷却 = 基准 + 随机量，每次放置重新掷一次
             placeDelayCounter = placeDelay.getValue()
-                    + (placeDelayRandom.getValue() > 0 ? legitRandom.nextInt(placeDelayRandom.getValue() + 1) : 0);
+                    + (placeDelayRandom.getValue() > 0 ? placeRandom.nextInt(placeDelayRandom.getValue() + 1) : 0);
             swing(hand);
 
             if (renderPlacement && render.getValue()) {

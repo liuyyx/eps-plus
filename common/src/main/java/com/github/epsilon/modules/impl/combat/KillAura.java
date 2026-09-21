@@ -196,7 +196,6 @@ public class KillAura extends Module {
 
     // 提交速度取满旋转管线的步进上限（见 RotationUtils.smooth），使 Polar 自己算出的逐刻步长
     // 原样生效，不被旋转管线按速度再次截断。
-    private static final double POLAR_ROTATION_SPEED = 180.0;
 
     private final TimerUtils switchTimer = new TimerUtils();
 
@@ -538,7 +537,7 @@ public class KillAura extends Module {
      * 本刻步长 = 上刻步长 + 加速度。角差越大步长越大，接近目标时残差反向而自然减速，
      * 因此形成加速曲线而非恒速逼近。</p>
      *
-     * <p>提交速度为 {@link #POLAR_ROTATION_SPEED}（旋转管线的步进上限），使本方法算出的
+     * <p>提交速度取"本步位移"（旋转管线的速度参数），使本方法算出的
      * 逐步旋转原样生效，不被管线二次平滑。旋转优先级固定 {@link Priority#High}。</p>
      *
      * @return {@code true} 表示本刻转向已处理；{@code false} 表示被方块遮挡，
@@ -580,7 +579,10 @@ public class KillAura extends Module {
         polarPrevYawDelta = Mth.wrapDegrees(nextYaw - current.getYaw());
         polarPrevPitchDelta = nextPitch - current.getPitch();
 
-        RotationManager.INSTANCE.setRotations(new Rot2f(nextYaw, nextPitch), POLAR_ROTATION_SPEED, Priority.High);
+        // 速度取"相对管线基准的位移"而不是 180 度/刻：位移很小、略大于它就能精确落到 next，
+        // 同时不会把极端速度留在管线里（否则停止瞄准归还视角、SNAP 模式下的可见转向都会瞬移）。
+        double polarStepSpeed = Math.max(0.5, polarSubmittedDelta(nextYaw, nextPitch) * 1.05);
+        RotationManager.INSTANCE.setRotations(new Rot2f(nextYaw, nextPitch), polarStepSpeed, Priority.High);
         return true;
     }
 
