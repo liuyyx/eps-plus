@@ -586,7 +586,12 @@ public class Scaffold extends Module {
         Rot2f target = calculatePolarGodBridgeRotation(pos, dir);
         if (target != null && polarRaycastHits(target)) return target;
 
-        return getRotation(pos, dir);
+        // 打不中时退到"正对目标面中心"的解析角：与 LB 定角同量级（都是向下俯视的搭桥角），
+        // 而且是稳定值。**绝不能**退回候选择角搜索——那套会逐刻整块换候选，
+        // 挑到 ±135° 偏航或俯仰 -90° 之类的角度，表现就是"视角突然一转"。
+        if (pos != null && dir != null) return RotationUtils.calculate(pos, dir);
+
+        return rotation != null ? rotation : new Rot2f(mc.player.getYRot(), mc.player.getXRot());
     }
 
     private Rot2f calculatePolarGodBridgeRotation(BlockPos pos, Direction dir) {
@@ -786,7 +791,12 @@ public class Scaffold extends Module {
      */
     private void updatePolarLedgeAction() {
         if (blockPos == null || direction == null || rotation == null) return;
-        if (!Eagle.INSTANCE.isOverEdge()) return;
+
+        // 是否"快到边缘"用本模块自己的 isOnEdge()（Legit 模式一直在用的同一判据）：
+        // 千万别用 Eagle.isOverEdge()——它把碰撞箱整体下移 1 格再判碰撞，
+        // 站在桥面上时箱体仍与脚下那块重叠，几乎恒为 false，整条边缘动作链会被它挡死
+        // （实测就是不蹲、不跳、不停）。
+        if (!isOnEdge()) return;
 
         // 1) 手里没方块：蹲住（LB 通用分支的"没方块"）
         if (getBlockCount() <= 0) {
