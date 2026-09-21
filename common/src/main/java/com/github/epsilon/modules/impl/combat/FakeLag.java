@@ -5,6 +5,7 @@ import com.github.epsilon.events.bus.EventPriority;
 import com.github.epsilon.events.impl.PacketEvent;
 import com.github.epsilon.events.impl.PlayerTickEvent;
 import com.github.epsilon.managers.FriendManager;
+import com.github.epsilon.managers.rotation.RotationManager;
 import com.github.epsilon.managers.target.TargetManager;
 import com.github.epsilon.modules.Category;
 import com.github.epsilon.modules.Module;
@@ -13,6 +14,7 @@ import com.github.epsilon.settings.impl.DoubleSetting;
 import com.github.epsilon.settings.impl.EnumSetting;
 import com.github.epsilon.settings.impl.IntSetting;
 import com.github.epsilon.utils.network.NetworkUtils;
+import com.github.epsilon.utils.rotation.Rot2f;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.protocol.Packet;
@@ -23,12 +25,14 @@ import net.minecraft.network.protocol.game.ClientboundSetEntityMotionPacket;
 import net.minecraft.network.protocol.game.ClientboundSetHealthPacket;
 import net.minecraft.network.protocol.game.ServerboundAttackPacket;
 import net.minecraft.network.protocol.game.ServerboundInteractPacket;
+import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 import net.minecraft.network.protocol.game.ServerboundPlayerActionPacket;
 import net.minecraft.network.protocol.game.ServerboundSignUpdatePacket;
 import net.minecraft.network.protocol.game.ServerboundSpectatorActionPacket;
 import net.minecraft.network.protocol.game.ServerboundSwingPacket;
 import net.minecraft.network.protocol.game.ServerboundUseItemOnPacket;
 import net.minecraft.network.protocol.handshake.ClientIntentionPacket;
+import net.minecraft.util.Mth;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -48,6 +52,10 @@ import java.util.concurrent.ThreadLocalRandom;
  *
  * <p>与原实现的差异：LB 命中「不压包」或结束压包的条件时只重置计时器、把已压的包继续留在队列里，
  * 会造成新旧包乱序甚至长期滞留；本实现统一改为先补发已压包再放行当前包，保证补发不丢包、不乱序。
+ *
+ * <p>另一处差异：因自身动作（攻击 / 交互 / 破坏方块）触发补发时，补发完旧包还会再补一发当前位置与朝向。
+ * LB 直接放行动作包，服务端于是用压包前的位置判定这次攻击——距离偏大被判 reach、射线打不到实体盒被判 hitbox；
+ * 补一发当前位置即可消除这个窗口。
  */
 public class FakeLag extends Module {
 
@@ -126,7 +134,7 @@ public class FakeLag extends Module {
         }
 
         if (shouldFlushOnSend(packet)) {
-            releaseAll();
+            releaseAllAndSyncPosition();
             return;
         }
 
@@ -289,6 +297,29 @@ public class FakeLag extends Module {
         }
         heldPosition = null;
         holdStartAt = System.currentTimeMillis();
+    }
+
+    /**
+     * 因自身动作（攻击 / 交互 / 破坏方块）而补发时，补发完旧包还要再补一发"当前坐标 + 当前朝向"。
+     *
+     * <p>不补这一发的话，服务器处理紧接着的动作包时手上的位置还是压包前那一份（最多
+     * {@code Delay Max} ≈ 150ms ≈ 3 刻 ≈ 0.6 格），距离与射线都对不上：
+     * 距离偏大就是反作弊的 reach，射线打不到实体盒就是 hitbox。
+     * 朝向取托管转向（没有托管转向时即玩家真实朝向），与旋转管线发出的值一致。</p>
+     */
+    private void releaseAllAndSyncPosition() {
+        releaseAll();
+
+        if (nullCheck()) return;
+
+        Rot2f rotation = RotationManager.INSTANCE.getRotation();
+        NetworkUtils.sendPacketNoEvent(new ServerboundMovePlayerPacket.PosRot(
+                mc.player.position(),
+                rotation.getYaw(),
+                Mth.clamp(rotation.getPitch(), -90.0f, 90.0f),
+                mc.player.onGround(),
+                mc.player.horizontalCollision
+        ));
     }
 
     private void resetState() {
