@@ -580,16 +580,32 @@ public class Scaffold extends Module {
     }
 
     /**
-     * Polar 的转向目标：**完全按 LB 的做法**——有移动输入时只由"移动方向 + 左右侧交替"决定
-     * （LB 的 {@code getMovementDirectionOfInput} 根本不看目标方块），无输入时才朝目标面 +45°。
+     * Polar 的转向目标。
      *
-     * <p>之前这里还挂了两层"保险"（射线打不中就用候选择角 / 解析角），实测日志显示它们和定角
-     * 逐刻来回翻，目标角在 -162.7 与 -45.0 之间跳 —— 既是"视角突然一转"，也是反作弊 erratic 的来源。
-     * 现在只剩定角：打不中就不改目标（保持上一刻），不再翻。</p>
+     * <p><b>有目标方块时，直接朝"要放上去的那一面"</b>（{@link RotationUtils#calculate(BlockPos, Direction)}）。
+     * 这是搭桥真正需要的几何：视线落在即将放的那一块上，射线才打得到、放置才跟得上。
+     * 之前这里用的是 LB 的"移动方向 ±45°"定角（{@code ScaffoldGodBridgeTechnique.getRotations}）——
+     * 那套要配合 LB 自己的移动方式才成立；正常往前搭时视线那一侧没有要放的方块，
+     * 实测一秒只放 1~2 个方块、桥面出现缺口（反馈的"非常垃圾"）。</p>
+     *
+     * <p>找不到目标方块时退到 LB 的移动方向定角，保证不会因为没有目标就停止转向；
+     * 两者不再逐刻切换（那会让目标角来回跳上百十度）。</p>
      */
     private Rot2f getPolarRotation(BlockPos pos, Direction dir) {
-        Rot2f target = calculatePolarGodBridgeRotation(pos, dir);
-        if (target != null) return target;
+        // 1) 优先瞄准"本刻射线已经命中的那个可放位置"——它就是要放上去的那一块，
+        //    这样瞄准与随后发出的放置包指向同一处（放置跟得上，桥面不会出现缺口 -> 不掉）。
+        if (polarTarget != null) {
+            return RotationUtils.calculate(polarTarget.getBlockPos(), polarTarget.getDirection());
+        }
+
+        // 2) 再退模块自己找的目标面（它要求脚下是虚空格，实测只有一部分时刻成立）
+        if (pos != null && dir != null) {
+            return RotationUtils.calculate(pos, dir);
+        }
+
+        // 3) 都没有时才用 LB 的移动方向定角，保证不会停止转向
+        Rot2f heuristic = calculatePolarGodBridgeRotation(pos, dir);
+        if (heuristic != null) return heuristic;
 
         return rotation != null ? rotation : new Rot2f(mc.player.getYRot(), mc.player.getXRot());
     }
@@ -620,7 +636,7 @@ public class Scaffold extends Module {
             if (leaningOffBlock && aheadIsAir) polarOnRightSide = !polarOnRightSide;
         }
 
-        return new Rot2f(movingYaw + (polarOnRightSide ? 45.0f : -45.0f), 75.7f);
+        return new Rot2f(Mth.wrapDegrees(movingYaw + (polarOnRightSide ? 45.0f : -45.0f)), 75.7f);
     }
 
     /** 该角度下射线是否命中目标方块（按 {@link #raytrace} 设置的宽严）。 */
