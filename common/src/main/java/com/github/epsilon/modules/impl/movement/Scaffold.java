@@ -325,6 +325,8 @@ public class Scaffold extends Module {
     private int polarLedgeSneakTicks;
     /** Polar 强制潜行的剩余刻数，跨刻保留（LB 的 forceSneak）。 */
     private int polarForceSneak;
+    /** Polar 直行搭桥时的左右侧交替状态（LB GodBridge 的 isOnRightSide）。 */
+    private boolean polarOnRightSide;
 
     private final List<RenderInfo> renderBoxes = new ArrayList<>();
 
@@ -564,10 +566,84 @@ public class Scaffold extends Module {
 
     private void handleNormal() {
         if (Eagle.INSTANCE.isOverEdge() || !snap.getValue() | !mc.player.onGround()) {
-            rotation = getRotation(blockPos, direction);
+            rotation = polarDependency.check() ? getPolarRotation(blockPos, direction) : getRotation(blockPos, direction);
             applyRotation(rotation);
         }
         place();
+    }
+
+    /**
+     * Polar 变体的转向目标：采用 LB {@code ScaffoldGodBridgeTechnique.getRotations} 的角度算法
+     * （直行时按移动方向 ±45° 交替、俯仰 75.7；斜向直接朝移动方向、俯仰 75.6；无输入时朝目标面 +45°、俯仰 75），
+     * 再用射线校验；打不中目标方块时退回 Epsilon 原有的候选搜索，避免因为角度问题漏放。
+     *
+     * <p>之所以不能用原来的候选搜索当目标：它按"哪个候选先打中"选角，逐刻可能整块换候选，
+     * 角度会突然跳 45°~180°，反作弊会判成 erratic 转向。</p>
+     */
+    private Rot2f getPolarRotation(BlockPos pos, Direction dir) {
+        Rot2f target = calculatePolarGodBridgeRotation(pos, dir);
+        if (target != null && polarRaycastHits(target)) return target;
+
+        return getRotation(pos, dir);
+    }
+
+    private Rot2f calculatePolarGodBridgeRotation(BlockPos pos, Direction dir) {
+        // 无输入：以目标面朝向为基准取 +45°，俯仰 75
+        if (forwardInput == 0.0f && strafeInput == 0.0f) {
+            if (pos == null || dir == null) return null;
+            float targetYaw = RotationUtils.calculate(pos, dir).getYaw();
+            return new Rot2f((float) (Math.floor(targetYaw / 90.0) * 90.0) + 45.0f, 75.0f);
+        }
+
+        float movingYaw = Mth.wrapDegrees(Math.round((rawInputYaw + 180.0f) / 45.0f) * 45.0f);
+
+        // 斜向：直接朝移动方向，俯仰 75.6
+        if (movingYaw % 90.0f != 0.0f) {
+            return new Rot2f(movingYaw, 75.6f);
+        }
+
+        // 直行：按"身体偏向哪一侧"交替 ±45，俯仰 75.7；踩在方块外沿且前方脚下是空气时翻转一次
+        if (mc.player.onGround()) {
+            polarOnRightSide = Mth.floor(mc.player.getX() + Math.cos(Math.toRadians(movingYaw)) * 0.5) != Mth.floor(mc.player.getX())
+                    || Mth.floor(mc.player.getZ() + Math.sin(Math.toRadians(movingYaw)) * 0.5) != Mth.floor(mc.player.getZ());
+
+            BlockPos ahead = BlockPos.containing(mc.player.position().relative(Direction.fromYRot(movingYaw), 0.6));
+            boolean leaningOffBlock = mc.level.getBlockState(mc.player.blockPosition().below()).isAir();
+            boolean aheadIsAir = mc.level.getBlockState(ahead.below()).isAir();
+            if (leaningOffBlock && aheadIsAir) polarOnRightSide = !polarOnRightSide;
+        }
+
+        return new Rot2f(movingYaw + (polarOnRightSide ? 45.0f : -45.0f), 75.7f);
+    }
+
+    /** 该角度下射线是否命中目标方块（按 {@link #raytrace} 设置的宽严）。 */
+    private boolean polarRaycastHits(Rot2f rot) {
+        if (blockPos == null || direction == null) return false;
+
+        return switch (raytrace.getValue()) {
+            case Normal -> RaytraceUtils.overBlock(rot, blockPos);
+            case Strict -> RaytraceUtils.overBlock(rot, blockPos, direction);
+        };
+    }
+
+    /**
+     * Polar 的放置命中结果：只接受"当前托管转向的真实射线正好命中目标方块的目标面"的结果。
+     *
+     * <p>合法客户端发的永远是射线与面的交点；原来那个合成点落在方块中心平面上（比如 UP 面给的是
+     * {@code pos.y + 0.5} 而不是面所在的 {@code +1.0}），既不在面上也不在射线上，
+     * NCP 一类检查会直接判"Tried to place a block in an unusual way"。
+     * 取不到就这一拍不放，下一拍重新取角。</p>
+     */
+    private BlockHitResult polarPlacementHit() {
+        if (blockPos == null || direction == null) return null;
+
+        HitResult result = RaytraceUtils.raytrace(RotationManager.INSTANCE.getRotation(), 4.5, 0.0f);
+        if (result == null || result.getType() != HitResult.Type.BLOCK) return null;
+
+        BlockHitResult hit = (BlockHitResult) result;
+        if (!hit.getBlockPos().equals(blockPos) || hit.getDirection() != direction) return null;
+
+        return hit;
     }
 
     /**
@@ -787,12 +863,7 @@ public class Scaffold extends Module {
 
     /** 当前托管转向的射线是否压在目标方块（面上）；与 {@code place()} 的放置闸门同一判据。 */
     private boolean raytraceOverTarget() {
-        if (blockPos == null || direction == null) return false;
-
-        return switch (raytrace.getValue()) {
-            case Normal -> RaytraceUtils.overBlock(RotationManager.INSTANCE.getRotation(), blockPos);
-            case Strict -> RaytraceUtils.overBlock(RotationManager.INSTANCE.getRotation(), blockPos, direction);
-        };
+        return polarRaycastHits(RotationManager.INSTANCE.getRotation());
     }
 
     private void resetPolarLedgeAction() {
@@ -805,6 +876,7 @@ public class Scaffold extends Module {
     private void resetPolarState() {
         polarClickAccumulator = 0.0;
         polarForceSneak = 0;
+        polarOnRightSide = false;
         resetPolarLedgeAction();
     }
 
@@ -926,7 +998,13 @@ public class Scaffold extends Module {
             return;
         }
 
-        placeOn(new BlockHitResult(getVec3(blockPos, direction), direction, blockPos, false), true);
+        // Polar：命中点用托管转向的真实射线交点；Classic 等其余分支保持原来的合成点。
+        BlockHitResult hit = polarDependency.check()
+                ? polarPlacementHit()
+                : new BlockHitResult(getVec3(blockPos, direction), direction, blockPos, false);
+        if (hit == null) return;
+
+        placeOn(hit, true);
     }
 
     /**
