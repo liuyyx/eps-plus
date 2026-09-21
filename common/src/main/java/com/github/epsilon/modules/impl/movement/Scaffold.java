@@ -334,6 +334,8 @@ public class Scaffold extends Module {
     private boolean polarPlacedThisTick;
     /** 上一拍是否真的放上了方块；tick 开头顺延，供边缘动作判定使用。 */
     private boolean polarPlacedLastTick;
+    /** 本刻的 Polar 放置目标（每刻只做一次射线，放置与边缘动作共用同一结果）。 */
+    private BlockHitResult polarTarget;
 
     private final List<RenderInfo> renderBoxes = new ArrayList<>();
 
@@ -371,11 +373,16 @@ public class Scaffold extends Module {
         polarPlacedLastTick = polarPlacedThisTick;
         resetPolarLedgeAction();
 
+        // Polar：本刻先算一次"能不能放"（托管转向的真实射线命中可替换格），
+        // 放置与边缘动作共用它，避免两边口径不一致（日志里曾出现两边都判 false、
+        // 动作每刻狂触发、而放置一秒才一两个）。
+        boolean polar = polarDependency.check();
+        polarTarget = polar ? findPolarPlacementTarget() : null;
+
         // 边缘动作在 tick 最开头评估：它只看"上一拍的状态"，因此不受后面那些早退
         // （没方块 / 没有放置目标 / 紧急放置）影响。之前挂在 handlePolar() 尾部，
-        // 只有"手里有方块 && 站在虚空格上(onAir) && 这一拍没放成"那种极窄状态才会执行到，
-        // 等于常年不触发 —— 这就是"不蹲、不跳、不停"的真正原因。
-        if (polarDependency.check()) updatePolarLedgeAction();
+        // 只有"手里有方块 && 站在虚空格上(onAir) && 这一拍没放成"那种极窄状态才会执行到。
+        if (polar) updatePolarLedgeAction();
 
         if (placeDelayCounter > 0) placeDelayCounter--;
 
@@ -573,21 +580,16 @@ public class Scaffold extends Module {
     }
 
     /**
-     * Polar 变体的转向目标：采用 LB {@code ScaffoldGodBridgeTechnique.getRotations} 的角度算法
-     * （直行时按移动方向 ±45° 交替、俯仰 75.7；斜向直接朝移动方向、俯仰 75.6；无输入时朝目标面 +45°、俯仰 75），
-     * 再用射线校验；打不中目标方块时退回 Epsilon 原有的候选搜索，避免因为角度问题漏放。
+     * Polar 的转向目标：**完全按 LB 的做法**——有移动输入时只由"移动方向 + 左右侧交替"决定
+     * （LB 的 {@code getMovementDirectionOfInput} 根本不看目标方块），无输入时才朝目标面 +45°。
      *
-     * <p>之所以不能用原来的候选搜索当目标：它按"哪个候选先打中"选角，逐刻可能整块换候选，
-     * 角度会突然跳 45°~180°，反作弊会判成 erratic 转向。</p>
+     * <p>之前这里还挂了两层"保险"（射线打不中就用候选择角 / 解析角），实测日志显示它们和定角
+     * 逐刻来回翻，目标角在 -162.7 与 -45.0 之间跳 —— 既是"视角突然一转"，也是反作弊 erratic 的来源。
+     * 现在只剩定角：打不中就不改目标（保持上一刻），不再翻。</p>
      */
     private Rot2f getPolarRotation(BlockPos pos, Direction dir) {
         Rot2f target = calculatePolarGodBridgeRotation(pos, dir);
-        if (target != null && polarRaycastHits(target)) return target;
-
-        // 打不中时退到"正对目标面中心"的解析角：与 LB 定角同量级（都是向下俯视的搭桥角），
-        // 而且是稳定值。**绝不能**退回候选择角搜索——那套会逐刻整块换候选，
-        // 挑到 ±135° 偏航或俯仰 -90° 之类的角度，表现就是"视角突然一转"。
-        if (pos != null && dir != null) return RotationUtils.calculate(pos, dir);
+        if (target != null) return target;
 
         return rotation != null ? rotation : new Rot2f(mc.player.getYRot(), mc.player.getXRot());
     }
@@ -639,14 +641,20 @@ public class Scaffold extends Module {
      * NCP 一类检查会直接判"Tried to place a block in an unusual way"。
      * 取不到就这一拍不放，下一拍重新取角。</p>
      */
-    private BlockHitResult polarPlacementHit() {
-        if (blockPos == null || direction == null) return null;
+    private BlockHitResult findPolarPlacementTarget() {
+        if (nullCheck()) return null;
 
         HitResult result = RaytraceUtils.raytrace(RotationManager.INSTANCE.getRotation(), 4.5, 0.0f);
         if (result == null || result.getType() != HitResult.Type.BLOCK) return null;
 
         BlockHitResult hit = (BlockHitResult) result;
-        if (!hit.getBlockPos().equals(blockPos) || hit.getDirection() != direction) return null;
+        BlockPos placePos = hit.getBlockPos().relative(hit.getDirection());
+        if (!mc.level.getBlockState(placePos).canBeReplaced()) return null;
+
+        // 保持"搭桥"语义：只放在脚下附近（水平 3 格内、Y 在脚下 -3 ~ +1 之间）
+        BlockPos feet = mc.player.blockPosition();
+        if (placePos.getY() > feet.getY() + 1 || placePos.getY() < feet.getY() - 3) return null;
+        if (Math.abs(placePos.getX() - feet.getX()) > 3 || Math.abs(placePos.getZ() - feet.getZ()) > 3) return null;
 
         return hit;
     }
@@ -793,8 +801,8 @@ public class Scaffold extends Module {
     private void updatePolarLedgeAction() {
         boolean edge = isOnEdge();
         int blocks = getBlockCount();
-        boolean hasTarget = blockPos != null && direction != null;
-        boolean rayOnTarget = hasTarget && raytraceOverTarget();
+        boolean hasTarget = polarTarget != null;
+        boolean rayOnTarget = hasTarget;
 
         if (POLAR_DEBUG && mc.player.tickCount % 10 == 0) {
             Constants.LOGGER.info("[ScaffoldPolar] edge={} blocks={} delay={} placedLast={} target={} ray={} onAir={} rot={}",
@@ -824,7 +832,7 @@ public class Scaffold extends Module {
         // 4) 上一拍已经放上了方块，不需要自保
         if (polarPlacedLastTick) return;
 
-        // 5) 有目标且射线已压在目标面上（下一拍就能放）→ 不动作
+        // 5) 这一拍其实放得下去（射线命中可替换格）→ 不动作
         if (rayOnTarget) return;
 
         // 6) 边缘 + 这一拍放不下去 → 执行勾选的边缘动作（可多选，与 LB 的 Modes 一致）
@@ -856,7 +864,7 @@ public class Scaffold extends Module {
     }
 
     private void debugAction(String what) {
-        if (POLAR_DEBUG) {
+        if (POLAR_DEBUG && mc.player.tickCount % 10 == 0) {
             Constants.LOGGER.info("[ScaffoldPolar] {}", what);
         }
     }
@@ -895,6 +903,7 @@ public class Scaffold extends Module {
         polarLedgeBackwards = false;
         polarLedgeSneakTicks = 0;
         polarPlacedThisTick = false;
+        polarTarget = null;
     }
 
     private void resetPolarState() {
@@ -939,6 +948,11 @@ public class Scaffold extends Module {
     }
 
     private void place() {
+        if (polarDependency.check()) {
+            polarPlace();
+            return;
+        }
+
         if (!onAir() || blockPos == null || direction == null || !canUseBlockResult()) {
             return;
         }
@@ -950,13 +964,18 @@ public class Scaffold extends Module {
             return;
         }
 
-        // Polar：命中点用托管转向的真实射线交点；Classic 等其余分支保持原来的合成点。
-        BlockHitResult hit = polarDependency.check()
-                ? polarPlacementHit()
-                : new BlockHitResult(getVec3(blockPos, direction), direction, blockPos, false);
-        if (hit == null) return;
+        placeOn(new BlockHitResult(getVec3(blockPos, direction), direction, blockPos, false), true);
+    }
 
-        placeOn(hit, true);
+    /**
+     * Polar 的放置：不套 Epsilon 那套"脚下必须是虚空格(onAir) 才去找目标"的闸门 ——
+     * 实测日志里那个闸门让 target 常年为 false、一秒只放一两个方块（搭桥必掉）。
+     * 改成 LB 的模型：以**当前托管转向的真实射线**为准。
+     */
+    private void polarPlace() {
+        if (placeDelayCounter > 0 || !canUseBlockResult() || polarTarget == null) return;
+
+        placeOn(polarTarget, true);
     }
 
     /**
