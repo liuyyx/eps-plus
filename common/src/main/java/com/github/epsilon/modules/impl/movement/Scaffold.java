@@ -51,7 +51,6 @@ import java.awt.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
-import java.util.function.Predicate;
 
 public class Scaffold extends Module {
 
@@ -277,20 +276,6 @@ public class Scaffold extends Module {
     private final BoolSetting polarHideSwingOnClient =
             boolSetting("Hide Swing On Client", true, polarDependency);
 
-    /*
-     * LB AutoBlock 组（polar 配置：Enabled=true、Always=true、SlotResetDelay=0、DoNotUseBelowCount=5）
-     */
-
-    /** 持续手持方块：换进来后不立刻换回，等 Slot Reset Delay 到期再还（LB AutoBlock.Always）。 */
-    private final BoolSetting polarHoldBlockAlways =
-            boolSetting("Hold Block Always", true, polarDependency);
-    /** 最后一次使用后多少刻才换回原槽位（LB AutoBlock.SlotResetDelay）。 */
-    private final IntSetting polarSlotResetDelay =
-            intSetting("Slot Reset Delay", 0, 0, 40, 1, polarDependency);
-    /** 剩余数量不超过该值的堆不再拿去用（LB AutoBlock.DoNotUseBelowCount）。 */
-    private final IntSetting polarDoNotUseBelowCount =
-            intSetting("Do Not Use Below Count", 5, 0, 64, 1, polarDependency);
-
     private final BoolSetting swingHand = boolSetting("Swing Hand", true);
     private final BoolSetting render = boolSetting("Render", true);
     private final BoolSetting fade = boolSetting("Fade", true, render::getValue);
@@ -344,8 +329,6 @@ public class Scaffold extends Module {
     private boolean polarOnRightSide;
     /** 本刻是否真的放上了方块（边缘动作的等价判据，每刻复位）。 */
     private boolean polarPlacedThisTick;
-    /** Polar 持续手持方块的换回时刻（-1 = 未持有）。 */
-    private int polarHoldResetTick = -1;
 
     private final List<RenderInfo> renderBoxes = new ArrayList<>();
 
@@ -370,7 +353,6 @@ public class Scaffold extends Module {
         emergencyPlacementActive = false;
         pearlUsePacketSent = false;
         resetLegitEdgeState();
-        resetPolarHold();
         resetPolarState();
         if (shouldSwapBack) {
             InvUtils.swapBack();
@@ -383,7 +365,6 @@ public class Scaffold extends Module {
         if (!event.isCancelled()) emergencyPlacementActive = false;
 
         resetPolarLedgeAction();
-        resetPolarHoldIfExpired();
 
         if (placeDelayCounter > 0) placeDelayCounter--;
 
@@ -737,35 +718,6 @@ public class Scaffold extends Module {
         return 1.0 / (1.0 + Math.exp(-polarSigmoidSteepness.getValue() * (scaled - polarSigmoidMidpoint.getValue())));
     }
 
-    /**
-     * 按区间下限（最慢）速度估算转向到位还需几刻，对应 LB {@code AngleSmooth.calculateTicks}，
-     * 供"还没转好就先别往外走"的边缘判定使用。
-     */
-    private int polarTicksUntilTarget(Rot2f target) {
-        Rot2f current = RotationManager.INSTANCE.getRotation();
-        boolean sigmoid = polarRotationSmooth.is(PolarRotationSmooth.Sigmoid);
-
-        for (int ticks = 0; ticks < 80; ticks++) {
-            if (polarDeltaLength(current, target) <= 2.0) {
-                return ticks;
-            }
-
-            current = sigmoid
-                    ? polarStep(current, target, polarSigmoidHorizontalSpeedMin.getValue(), polarSigmoidVerticalSpeedMin.getValue())
-                    : polarLinearStep(current, target);
-        }
-
-        return 80;
-    }
-
-    /**
-     * Linear 变体的单刻步进：与 {@link RotationUtils#move} 同构，速度按两轴角差比例分配。
-     */
-    private Rot2f polarLinearStep(Rot2f from, Rot2f target) {
-        Rot2f move = RotationUtils.move(from, target, rotationSpeed.getValue());
-        return new Rot2f(from.getYaw() + move.getYaw(), Mth.clamp(from.getPitch() + move.getPitch(), -90.0f, 90.0f));
-    }
-
     private double polarDeltaLength(Rot2f from, Rot2f to) {
         float deltaYaw = Mth.wrapDegrees(to.getYaw() - from.getYaw());
         float deltaPitch = to.getPitch() - from.getPitch();
@@ -827,23 +779,22 @@ public class Scaffold extends Module {
      * Polar 边缘动作：移植 LB {@code ScaffoldLedgeFeature.ledge} 与
      * {@code ScaffoldGodBridgeTechnique.ledge}。
      *
-     * <p>LB 的判据是"在边缘 + 这一拍没能完成放置"（它的 crosshair 目标不满足放置要求），
-     * 不能翻成"射线没压在目标方块上"——{@link #getRotation} 本来就是挑一个能压住目标方块的角度，
-     * 那个条件恒不成立，整段动作会变成死代码。这里改用"这一拍是否真的放上了"作等价判据：
-     * 冷却中的那一拍只是节奏（不算失败），已经放上的那一拍也不需要自保。</p>
+     * <p>判据是"在边缘 + 这一拍放不下去"，其中"放不下去"取**当前托管转向的射线没压在目标方块上**
+     * （LB 的 crosshair 不满足放置要求）。注意两处坑：不能拿"目标角"去算——{@link #getRotation}
+     * 的目标角本来就压在目标方块上，条件恒成立会变成死代码；也不能拿"步进还差几刻"当判据——
+     * 那个值在搭桥时几乎恒 ≥1，会变成每刻都在蹲。</p>
      */
     private void updatePolarLedgeAction() {
         if (blockPos == null || direction == null || rotation == null) return;
         if (!Eagle.INSTANCE.isOverEdge()) return;
 
-        // 1) 方块见底 / 转向还没到位：先按所需刻数蹲住（LB 的通用分支）
-        int ticks = polarTicksUntilTarget(rotation);
-        if (getBlockCount() <= 0 || ticks >= 1) {
-            polarLedgeSneakTicks = Math.max(1, ticks);
+        // 1) 手里没方块：蹲住（LB 通用分支的"没方块"）
+        if (getBlockCount() <= 0) {
+            polarLedgeSneakTicks = polarSneakTicks();
             return;
         }
 
-        // 2) 方块低于阈值：强制潜行（不问朝向）
+        // 2) 方块低于阈值：强制潜行
         if (getBlockCount() < polarForceSneakBelow.getValue()) {
             polarLedgeSneakTicks = polarSneakTicks();
             return;
@@ -855,7 +806,10 @@ public class Scaffold extends Module {
         // 4) 本刻已经放上方块，不需要自保
         if (polarPlacedThisTick) return;
 
-        // 5) 边缘 + 这一拍没能放置 → 执行边缘动作
+        // 5) 射线已经压在目标方块上（下拍就能放）→ 不动作
+        if (raytraceOverTarget()) return;
+
+        // 6) 边缘 + 这一拍放不下去 → 执行边缘动作
         PolarLedgeAction action = polarLedgeAction.getValue();
         if (action == PolarLedgeAction.Jump && !canJumpTwoBlocksHigh()) {
             // LB：跳不上两格时退化为潜行。
@@ -1052,11 +1006,7 @@ public class Scaffold extends Module {
     private boolean placeOn(BlockHitResult hit, boolean renderPlacement) {
         if (!canUseBlockResult()) return false;
 
-        boolean holdAlways = polarDependency.check() && polarHoldBlockAlways.getValue();
-        // 手里已经是可用方块就不再换手：InvSwitch 重复 swap 会把刚换进来的方块换回背包。
-        if (!(holdAlways && isValidStack(mc.player.getInventory().getSelectedItem()))) {
-            swap();
-        }
+        swap();
 
         InteractionHand hand = blockResult.getHand();
         InteractionResult result = mc.gameMode.useItemOn(mc.player, hand, hit);
@@ -1075,38 +1025,8 @@ public class Scaffold extends Module {
             }
         }
 
-        if (holdAlways) {
-            // LB AutoBlock.Always：换进来的方块先留着，Slot Reset Delay 刻内没有再放置才换回。
-            polarHoldResetTick = mc.player.tickCount + Math.max(0, polarSlotResetDelay.getValue());
-        } else {
-            swapBack();
-        }
-
+        swapBack();
         return placed;
-    }
-
-    /** 到点就把持续手持的方块换回原槽位（LB AutoBlock 的 SlotResetDelay 到期）。 */
-    private void resetPolarHoldIfExpired() {
-        if (polarHoldResetTick >= 0 && mc.player != null && mc.player.tickCount >= polarHoldResetTick) {
-            resetPolarHold();
-        }
-    }
-
-    /**
-     * 立即归还持续手持的方块。这里直接按 Swap Mode 换回，不经过 {@link #swapBack()}——
-     * 后者依赖当刻的 {@code blockResult}，而归还时机在 tick 开头，结果可能已经翻篇。
-     */
-    private void resetPolarHold() {
-        if (polarHoldResetTick < 0) return;
-
-        switch (swapMode.getValue()) {
-            case Silent -> InvUtils.swapBack();
-            case InvSwitch -> InvUtils.invSwapBack();
-            default -> {
-            }
-        }
-
-        polarHoldResetTick = -1;
     }
 
     /**
@@ -1305,15 +1225,7 @@ public class Scaffold extends Module {
         if (isValidStack(offhandStack)) {
             return new FindItemResult(40, offhandStack.getCount(), offhandStack.getMaxStackSize());
         }
-
-        Predicate<ItemStack> predicate = this::isValidStack;
-        if (polarDependency.check() && polarDoNotUseBelowCount.getValue() > 0) {
-            // LB AutoBlock.DoNotUseBelowCount：快用尽的堆不拿去搭（留作他用）。
-            int minimum = polarDoNotUseBelowCount.getValue();
-            predicate = stack -> isValidStack(stack) && stack.getCount() > minimum;
-        }
-
-        return swapMode.is(SwapMode.InvSwitch) ? InvUtils.find(predicate) : InvUtils.findInHotbar(predicate);
+        return swapMode.is(SwapMode.InvSwitch) ? InvUtils.find(this::isValidStack) : InvUtils.findInHotbar(this::isValidStack);
     }
 
     private boolean canUseBlockResult() {
