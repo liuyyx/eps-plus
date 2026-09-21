@@ -829,13 +829,16 @@ public class Scaffold extends Module {
 
         // 6) 边缘 + 这一拍放不下去 → 执行勾选的边缘动作（可多选，与 LB 的 Modes 一致）
         if (polarLedgeJumpAction.getValue()) {
-            if (canJumpTwoBlocksHigh()) {
+            // LB 的原话是"能跳两格高时避开跳跃"：能跳两格（跳跃提升等）就换成别的动作，
+            // **普通跳跃（约 1.25 格）才是真正要跳的时机**。
+            // 之前我翻成了"跳不上两格就退化成潜行"，默认属性下每次都退化成潜行 —— 表现就是
+            // "开着边缘跳跃还在走一步蹲一步"。
+            if (!canJumpTwoBlocksHigh()) {
                 polarLedgeJump = true;
                 debugAction("action=jump");
             } else {
-                // LB：跳不上两格时退化为潜行
                 polarLedgeSneakTicks = polarSneakTicks();
-                debugAction("action=jump->sneak");
+                debugAction("action=jump->sneak(can-jump-2-high)");
             }
         }
         if (polarLedgeSneakAction.getValue()) {
