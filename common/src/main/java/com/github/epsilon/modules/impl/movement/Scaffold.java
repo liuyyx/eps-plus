@@ -1,5 +1,6 @@
 package com.github.epsilon.modules.impl.movement;
 
+import com.github.epsilon.Constants;
 import com.github.epsilon.assets.i18n.EpsilonTranslations;
 import com.github.epsilon.events.bus.EventBus;
 import com.github.epsilon.events.bus.EventHandler;
@@ -316,6 +317,9 @@ public class Scaffold extends Module {
     /** 放置冷却剩余刻数；>0 时不放置。见 {@link #placeDelay}。 */
     private int placeDelayCounter = 0;
 
+    /** 临时诊断开关：定位边缘动作为何不触发，定位完改回 false 或删除相关代码。 */
+    private static final boolean POLAR_DEBUG = true;
+
     /** Polar 假点击节奏累加器：每刻按 CPS 累加，满 1 发一次点击。 */
     private double polarClickAccumulator;
     /** Polar 本刻的边缘动作（每刻重算，避免残留）。 */
@@ -329,6 +333,8 @@ public class Scaffold extends Module {
     private boolean polarOnRightSide;
     /** 本刻是否真的放上了方块（边缘动作的等价判据，每刻复位）。 */
     private boolean polarPlacedThisTick;
+    /** 上一拍是否真的放上了方块；tick 开头顺延，供边缘动作判定使用。 */
+    private boolean polarPlacedLastTick;
 
     private final List<RenderInfo> renderBoxes = new ArrayList<>();
 
@@ -364,7 +370,15 @@ public class Scaffold extends Module {
     private void onPlayerTick(PlayerTickEvent.Pre event) {
         if (!event.isCancelled()) emergencyPlacementActive = false;
 
+        // 先顺延"上一拍是否放上"，再清本拍状态
+        polarPlacedLastTick = polarPlacedThisTick;
         resetPolarLedgeAction();
+
+        // 边缘动作在 tick 最开头评估：它只看"上一拍的状态"，因此不受后面那些早退
+        // （没方块 / 没有放置目标 / 紧急放置）影响。之前挂在 handlePolar() 尾部，
+        // 只有"手里有方块 && 站在虚空格上(onAir) && 这一拍没放成"那种极窄状态才会执行到，
+        // 等于常年不触发 —— 这就是"不蹲、不跳、不停"的真正原因。
+        if (polarDependency.check()) updatePolarLedgeAction();
 
         if (placeDelayCounter > 0) placeDelayCounter--;
 
@@ -669,7 +683,6 @@ public class Scaffold extends Module {
     private void handlePolar() {
         handleNormal();
         polarFakeClick();
-        updatePolarLedgeAction();
     }
 
     /**
@@ -790,34 +803,41 @@ public class Scaffold extends Module {
      * 那个值在搭桥时几乎恒 ≥1，会变成每刻都在蹲。</p>
      */
     private void updatePolarLedgeAction() {
-        if (blockPos == null || direction == null || rotation == null) return;
+        boolean edge = isOnEdge();
+        int blocks = getBlockCount();
+        boolean hasTarget = blockPos != null && direction != null;
+        boolean rayOnTarget = hasTarget && raytraceOverTarget();
 
-        // 是否"快到边缘"用本模块自己的 isOnEdge()（Legit 模式一直在用的同一判据）：
-        // 千万别用 Eagle.isOverEdge()——它把碰撞箱整体下移 1 格再判碰撞，
-        // 站在桥面上时箱体仍与脚下那块重叠，几乎恒为 false，整条边缘动作链会被它挡死
-        // （实测就是不蹲、不跳、不停）。
-        if (!isOnEdge()) return;
+        if (POLAR_DEBUG && mc.player.tickCount % 10 == 0) {
+            Constants.LOGGER.info("[ScaffoldPolar] edge={} blocks={} delay={} placedLast={} target={} ray={} onAir={} rot={}",
+                    edge, blocks, placeDelayCounter, polarPlacedLastTick, hasTarget, rayOnTarget, onAir(),
+                    rotation == null ? "null" : String.format("%.1f/%.1f", rotation.getYaw(), rotation.getPitch()));
+        }
+
+        if (!edge) return;
 
         // 1) 手里没方块：蹲住（LB 通用分支的"没方块"）
-        if (getBlockCount() <= 0) {
+        if (blocks <= 0) {
             polarLedgeSneakTicks = polarSneakTicks();
+            debugAction("sneak(no-blocks)");
             return;
         }
 
         // 2) 方块低于阈值：强制潜行
-        if (getBlockCount() < polarForceSneakBelow.getValue()) {
+        if (blocks < polarForceSneakBelow.getValue()) {
             polarLedgeSneakTicks = polarSneakTicks();
+            debugAction("sneak(low-blocks=" + blocks + ")");
             return;
         }
 
         // 3) 冷却中的那一拍只是放置节奏，不算"放不下去"
         if (placeDelayCounter > 0) return;
 
-        // 4) 本刻已经放上方块，不需要自保
-        if (polarPlacedThisTick) return;
+        // 4) 上一拍已经放上了方块，不需要自保
+        if (polarPlacedLastTick) return;
 
-        // 5) 射线已经压在目标方块上（下拍就能放）→ 不动作
-        if (raytraceOverTarget()) return;
+        // 5) 有目标且射线已压在目标面上（下一拍就能放）→ 不动作
+        if (rayOnTarget) return;
 
         // 6) 边缘 + 这一拍放不下去 → 执行边缘动作
         PolarLedgeAction action = polarLedgeAction.getValue();
@@ -825,12 +845,19 @@ public class Scaffold extends Module {
             // LB：跳不上两格时退化为潜行。
             action = PolarLedgeAction.Sneak;
         }
+        debugAction("action=" + action);
 
         switch (action) {
             case Jump -> polarLedgeJump = true;
             case Sneak -> polarLedgeSneakTicks = polarSneakTicks();
             case StopInput -> polarLedgeStopInput = true;
             case Backwards -> polarLedgeBackwards = true;
+        }
+    }
+
+    private void debugAction(String what) {
+        if (POLAR_DEBUG) {
+            Constants.LOGGER.info("[ScaffoldPolar] {}", what);
         }
     }
 
