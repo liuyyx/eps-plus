@@ -51,6 +51,7 @@ import java.awt.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
+import java.util.function.Predicate;
 
 public class Scaffold extends Module {
 
@@ -276,6 +277,20 @@ public class Scaffold extends Module {
     private final BoolSetting polarHideSwingOnClient =
             boolSetting("Hide Swing On Client", true, polarDependency);
 
+    /*
+     * LB AutoBlock 组（polar 配置：Enabled=true、Always=true、SlotResetDelay=0、DoNotUseBelowCount=5）
+     */
+
+    /** 持续手持方块：换进来后不立刻换回，等 Slot Reset Delay 到期再还（LB AutoBlock.Always）。 */
+    private final BoolSetting polarHoldBlockAlways =
+            boolSetting("Hold Block Always", true, polarDependency);
+    /** 最后一次使用后多少刻才换回原槽位（LB AutoBlock.SlotResetDelay）。 */
+    private final IntSetting polarSlotResetDelay =
+            intSetting("Slot Reset Delay", 0, 0, 40, 1, polarDependency);
+    /** 剩余数量不超过该值的堆不再拿去用（LB AutoBlock.DoNotUseBelowCount）。 */
+    private final IntSetting polarDoNotUseBelowCount =
+            intSetting("Do Not Use Below Count", 5, 0, 64, 1, polarDependency);
+
     private final BoolSetting swingHand = boolSetting("Swing Hand", true);
     private final BoolSetting render = boolSetting("Render", true);
     private final BoolSetting fade = boolSetting("Fade", true, render::getValue);
@@ -329,6 +344,8 @@ public class Scaffold extends Module {
     private boolean polarOnRightSide;
     /** 本刻是否真的放上了方块（边缘动作的等价判据，每刻复位）。 */
     private boolean polarPlacedThisTick;
+    /** Polar 持续手持方块的换回时刻（-1 = 未持有）。 */
+    private int polarHoldResetTick = -1;
 
     private final List<RenderInfo> renderBoxes = new ArrayList<>();
 
@@ -353,6 +370,7 @@ public class Scaffold extends Module {
         emergencyPlacementActive = false;
         pearlUsePacketSent = false;
         resetLegitEdgeState();
+        resetPolarHold();
         resetPolarState();
         if (shouldSwapBack) {
             InvUtils.swapBack();
@@ -365,6 +383,7 @@ public class Scaffold extends Module {
         if (!event.isCancelled()) emergencyPlacementActive = false;
 
         resetPolarLedgeAction();
+        resetPolarHoldIfExpired();
 
         if (placeDelayCounter > 0) placeDelayCounter--;
 
@@ -1033,7 +1052,11 @@ public class Scaffold extends Module {
     private boolean placeOn(BlockHitResult hit, boolean renderPlacement) {
         if (!canUseBlockResult()) return false;
 
-        swap();
+        boolean holdAlways = polarDependency.check() && polarHoldBlockAlways.getValue();
+        // 手里已经是可用方块就不再换手：InvSwitch 重复 swap 会把刚换进来的方块换回背包。
+        if (!(holdAlways && isValidStack(mc.player.getInventory().getSelectedItem()))) {
+            swap();
+        }
 
         InteractionHand hand = blockResult.getHand();
         InteractionResult result = mc.gameMode.useItemOn(mc.player, hand, hit);
@@ -1052,8 +1075,38 @@ public class Scaffold extends Module {
             }
         }
 
-        swapBack();
+        if (holdAlways) {
+            // LB AutoBlock.Always：换进来的方块先留着，Slot Reset Delay 刻内没有再放置才换回。
+            polarHoldResetTick = mc.player.tickCount + Math.max(0, polarSlotResetDelay.getValue());
+        } else {
+            swapBack();
+        }
+
         return placed;
+    }
+
+    /** 到点就把持续手持的方块换回原槽位（LB AutoBlock 的 SlotResetDelay 到期）。 */
+    private void resetPolarHoldIfExpired() {
+        if (polarHoldResetTick >= 0 && mc.player != null && mc.player.tickCount >= polarHoldResetTick) {
+            resetPolarHold();
+        }
+    }
+
+    /**
+     * 立即归还持续手持的方块。这里直接按 Swap Mode 换回，不经过 {@link #swapBack()}——
+     * 后者依赖当刻的 {@code blockResult}，而归还时机在 tick 开头，结果可能已经翻篇。
+     */
+    private void resetPolarHold() {
+        if (polarHoldResetTick < 0) return;
+
+        switch (swapMode.getValue()) {
+            case Silent -> InvUtils.swapBack();
+            case InvSwitch -> InvUtils.invSwapBack();
+            default -> {
+            }
+        }
+
+        polarHoldResetTick = -1;
     }
 
     /**
@@ -1252,7 +1305,15 @@ public class Scaffold extends Module {
         if (isValidStack(offhandStack)) {
             return new FindItemResult(40, offhandStack.getCount(), offhandStack.getMaxStackSize());
         }
-        return swapMode.is(SwapMode.InvSwitch) ? InvUtils.find(this::isValidStack) : InvUtils.findInHotbar(this::isValidStack);
+
+        Predicate<ItemStack> predicate = this::isValidStack;
+        if (polarDependency.check() && polarDoNotUseBelowCount.getValue() > 0) {
+            // LB AutoBlock.DoNotUseBelowCount：快用尽的堆不拿去搭（留作他用）。
+            int minimum = polarDoNotUseBelowCount.getValue();
+            predicate = stack -> isValidStack(stack) && stack.getCount() > minimum;
+        }
+
+        return swapMode.is(SwapMode.InvSwitch) ? InvUtils.find(predicate) : InvUtils.findInHotbar(predicate);
     }
 
     private boolean canUseBlockResult() {
