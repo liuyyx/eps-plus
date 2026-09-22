@@ -329,6 +329,8 @@ public class Scaffold extends Module {
     private int polarLedgeSneakTicks;
     /** Polar 强制潜行的剩余刻数，跨刻保留（LB 的 forceSneak）。 */
     private int polarForceSneak;
+    /** 直行搭桥时的左右侧交替状态（LB GodBridge 的 isOnRightSide），决定 ±45° 往哪边偏。 */
+    private boolean polarOnRightSide;
     /** 本刻是否真的放上了方块（边缘动作的等价判据，每刻复位）。 */
     private boolean polarPlacedThisTick;
     /** 上一拍是否真的放上了方块；tick 开头顺延，供边缘动作判定使用。 */
@@ -372,11 +374,6 @@ public class Scaffold extends Module {
 
     /** 本刻的 Polar 放置目标（每刻算一次，放置与边缘动作共用同一结果）。 */
     private PolarTarget polarTarget;
-    /**
-     * 上一刻选中的目标，用于粘滞（见 {@link #findPolarTarget}）：
-     * 否则"挑最接近当前托管角的面"会在几个候选面之间反复翻，视线每放一块甩一次。
-     */
-    private PolarTarget polarStickyTarget;
 
     private final List<RenderInfo> renderBoxes = new ArrayList<>();
 
@@ -621,39 +618,53 @@ public class Scaffold extends Module {
     }
 
     /**
-     * Polar 的转向目标。
+     * Polar 的转向目标 = LB {@code ScaffoldGodBridgeTechnique.getRotations}。
      *
-     * <p><b>搜到目标就朝它看。</b>{@link #findPolarTarget} 给出的 {@code rotation} 是用
-     * <b>真实眼睛</b>算到目标面中心的（见该方法的注释），因此只要转向到位，
-     * {@link #polarCrosshairHit()} 就必然压在那一面上，{@link #polarPlace()} 的命中闸门才可能通过。
-     * LB 的 {@code getRotationForNoInput} 也是这条路（{@code Rotation.lookingAt(facePoint)}）。</p>
+     * <p><b>有输入：视线锁死在移动方向 ± 45°（直行按左右侧交替 isOnRightSide）、俯仰 75.7；
+     * 斜向直接取移动方向、俯仰 75.6；无输入：取搜出来的目标面轴向 + 45°、俯仰 75。</b>
+     * 这才是神桥：视线是**固定几何**，不跟目标走 —— 靠这个固定角度去卡方块边缘，
+     * 边走边跳边搭。跟目标走的那套（{@code target?.rotation}）是 LB 里
+     * {@code ScaffoldTechnique} 的默认实现，属于 Normal 技术，做出来就是普通 snap 搭路。</p>
      *
-     * <p>LB 的 {@code getRotationForStraightInput/DiagonalInput} 那套"移动方向 ±45°、俯仰 75.7/75.6"
-     * 定角<b>不能照搬</b>：那组常量是为 LB 自己的移动/渲染体系（托管角会渲染给玩家看、
-     * movementCorrection 让走位与视线一致）调出来的；在本客户端里视线只是发包伪装，
-     * 俯仰 75.7° 从眼睛出发的射线在水平 0.5 格处已降到 y≈62.85，够不到相邻方块的任何面 ——
-     * 闸门永远不通过，表现就是"一格都放不下去"。</p>
-     *
-     * <p>只在没有目标时（前方还没踏空、或手里没有方块）才退到那套定角，避免转向停住。</p>
+     * <p>目标仍然由 {@link #findPolarTarget} 独立搜出来，射线必须正好压在它上面才会放置
+     * （LB {@code doesCrosshairTargetMatchRequirements}）；搜不到就这一拍不放，
+     * 靠下一拍位置变化重新对上。挑面用的"最接近当前托管角"里，当前托管角正是这里的定角，
+     * 所以两者是同一套几何，不会互相打架。</p>
      *
      * <p>关于 LB 源码里的 {@code +180}：{@code getMovementDirectionOfInput} 前进时返回的就是
-     * 移动方向本身（已对照源码逐分支核算，与 {@link #rawInputYaw} 完全等价），所以
-     * {@code +180} 是货真价实的"朝向移动方向的反面"。LB 之所以能这么写，是因为它的托管角
-     * 会渲染给玩家、且 movementCorrection 会把走位扭到托管角上；本客户端两者都没有，
-     * 照搬就会变成"看着前方却往身后搭"。</p>
+     * 移动方向本身（已逐分支核算，与 {@link #rawInputYaw} 完全等价），所以 {@code +180}
+     * 是货真价实的"朝向移动方向反面"。LB 敢这么写，前提是它的托管角会渲染给玩家看、
+     * 且 MovementCorrection 默认 SILENT 把走位扭到托管角上；本客户端两者都没有，
+     * 照搬会变成"看着前方却往身后搭"，因此这里用移动方向本身作为基准。</p>
      */
     private Rot2f getPolarRotation() {
-        PolarTarget target = polarTarget;
-        if (target != null) {
-            return target.rotation();
+        if (forwardInput == 0.0f && strafeInput == 0.0f) {
+            PolarTarget target = polarTarget;
+            if (target == null) {
+                return rotation != null ? rotation : new Rot2f(mc.player.getYRot(), mc.player.getXRot());
+            }
+
+            float axis = Mth.floor(target.rotation().getYaw() / 90.0f) * 90.0f;
+            return new Rot2f(Mth.wrapDegrees(axis + 45.0f), 75.0f);
         }
 
-        // 没有目标时**保持当前朝向**，绝不退回 LB 的"移动方向 ±45°"定角。
-        // 目标会因为放置冷却、脚下还没踏空、上一拍刚放上等原因时有时无；
-        // 两个相差 45° 以上的角度之间来回切，就是"视线猛地甩出去、再甩回来"——
-        // 每放一块甩一次。LB 敢用定角，是因为它的托管角**始终**等于定角（不跟目标走），
-        // 我们这条路径是跟目标走的，再混入定角就只剩震荡。
-        return rotation != null ? rotation : new Rot2f(mc.player.getYRot(), mc.player.getXRot());
+        float movingYaw = Mth.wrapDegrees(Math.round(rawInputYaw / 45.0f) * 45.0f);
+
+        if (movingYaw % 90.0f != 0.0f) {
+            return new Rot2f(movingYaw, 75.6f);
+        }
+
+        if (mc.player.onGround()) {
+            polarOnRightSide = Mth.floor(mc.player.getX() + Math.cos(Math.toRadians(movingYaw)) * 0.5) != Mth.floor(mc.player.getX())
+                    || Mth.floor(mc.player.getZ() + Math.sin(Math.toRadians(movingYaw)) * 0.5) != Mth.floor(mc.player.getZ());
+
+            BlockPos ahead = BlockPos.containing(mc.player.position().relative(Direction.fromYRot(movingYaw), 0.6));
+            boolean leaningOffBlock = mc.level.getBlockState(mc.player.blockPosition().below()).isAir();
+            boolean aheadIsAir = mc.level.getBlockState(ahead.below()).isAir();
+            if (leaningOffBlock && aheadIsAir) polarOnRightSide = !polarOnRightSide;
+        }
+
+        return new Rot2f(Mth.wrapDegrees(movingYaw + (polarOnRightSide ? 45.0f : -45.0f)), 75.7f);
     }
 
 
@@ -688,16 +699,6 @@ public class Scaffold extends Module {
 
         // 与 polarCrosshairHit() 的 RaytraceUtils.raytrace 起点严格相同（插值 partialTick 的眼睛）。
         Vec3 realEye = mc.player.getEyePosition(mc.getDeltaTracker().getGameTimeDeltaPartialTick(true));
-
-        // 目标粘滞：上一刻的目标只要仍然成立就沿用，角度按**当前**眼睛重算。
-        // 不粘滞的话，"挑最接近当前托管角的面"会在几个候选面之间反复翻，
-        // 视线随之每放一块甩一次。
-        PolarTarget sticky = polarStickyTarget;
-        if (sticky != null && polarTargetStillUsable(sticky, realEye, predictedPos)) {
-            return new PolarTarget(sticky.interacted(), sticky.placed(), sticky.direction(),
-                    sticky.point(), sticky.minY(), RotationUtils.calculate(realEye, sticky.point()));
-        }
-        polarStickyTarget = null;
 
         BlockPos targetPos = polarTargetedPosition(predictedPos);
         if (isPolarSolid(targetPos)) return null;
@@ -749,32 +750,10 @@ public class Scaffold extends Module {
                 }
             }
 
-            if (best != null) {
-                polarStickyTarget = best;
-                return best;
-            }
+            if (best != null) return best;
         }
 
         return null;
-    }
-
-    /**
-     * 粘滞目标是否仍然成立：那一格还没被填上、点击的面还在、放置格没被玩家占住、
-     * 面仍然朝向玩家且在 4.5 格可达范围内。
-     */
-    private boolean polarTargetStillUsable(PolarTarget t, Vec3 eye, Vec3 predictedPos) {
-        if (isPolarSolid(t.placed())) return false;
-        if (polarBlockedByPlayer(t.placed(), predictedPos)) return false;
-        if (mc.level.getBlockState(t.interacted()).canBeReplaced()) return false;
-
-        Vec3 toFace = eye.subtract(t.point());
-        double length = toFace.length();
-        if (length > 4.5) return false;
-
-        Direction d = t.direction();
-        double facing = (toFace.x * d.getStepX() + toFace.y * d.getStepY() + toFace.z * d.getStepZ())
-                / Math.max(1.0E-4, length);
-        return facing >= 0.0;
     }
 
     /** LB {@code PlayerLocationOnPlacement}：放置格与玩家（预测位置）的碰撞箱相交时不可选。 */
@@ -1124,7 +1103,7 @@ public class Scaffold extends Module {
     private void resetPolarState() {
         polarClickAccumulator = 0.0;
         polarForceSneak = 0;
-        polarStickyTarget = null;
+        polarOnRightSide = false;
         resetPolarLedgeAction();
     }
 
