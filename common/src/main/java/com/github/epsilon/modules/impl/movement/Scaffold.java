@@ -777,12 +777,14 @@ public class Scaffold extends Module {
         if (dir == null) return pos;
 
         double feetY = mc.player.getY();
+        // 支撑格必须与 polarTargetedPosition 的 BlockPos.containing(predictedPos).below() 落在同一层：
+        // 后者给的是 floor(feetY) - 1，所以采样高度要取 floor(feetY) - 0.5。
+        // 直接用 feetY - 0.5 在跳跃中（feetY 的小数部分 > 0.5）会偏高一层，探到的"踏空格"是错的。
+        double supportY = Math.floor(feetY) - 0.5;
 
         for (int step = 1; step <= 8; step++) {
             Vec3 probe = pos.add(dir.x * step * 0.25, 0.0, dir.z * step * 0.25);
-            // 与 polarTargetedPosition 的 BlockPos.containing(predictedPos).below() 同层：
-            // predictedPos.y 取 feetY，below() 得到 floor(feetY - 0.5) 那一层，这里必须一致。
-            BlockPos support = BlockPos.containing(probe.x, feetY - 0.5, probe.z);
+            BlockPos support = BlockPos.containing(probe.x, supportY, probe.z);
             if (!isPolarSolid(support)) {
                 return new Vec3(support.getX() + 0.5, feetY, support.getZ() + 0.5);
             }
