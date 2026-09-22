@@ -317,8 +317,8 @@ public class Scaffold extends Module {
     /** 放置冷却剩余刻数；>0 时不放置。见 {@link #placeDelay}。 */
     private int placeDelayCounter = 0;
 
-    /** Polar 诊断输出（默认关闭）。排查放置闸门时临时打开。 */
-    private static final boolean POLAR_DEBUG = false;
+    /** Polar 诊断输出。排查放置特征/边缘动作时打开（会逐次放置打一行）。 */
+    private static final boolean POLAR_DEBUG = true;
 
     /** Polar 假点击节奏累加器：每刻按 CPS 累加，满 1 发一次点击。 */
     private double polarClickAccumulator;
@@ -648,7 +648,11 @@ public class Scaffold extends Module {
             return new Rot2f(Mth.wrapDegrees(axis + 45.0f), 75.0f);
         }
 
-        float movingYaw = Mth.wrapDegrees(Math.round(rawInputYaw / 45.0f) * 45.0f);
+        // LB 原文是 getMovementDirectionOfInput(rawInput) + 180 —— 这个 +180 是**必须**的：
+        // 神桥的视线朝"移动方向的斜后方"，桥往身后铺，服务端看到的玩家是斜着的。
+        // 少了它视线就朝正前方偏 45°，那里没有可点的面，按住 W 时一格都放不下去
+        // （只有松开 W 走"朝目标"分支才会放）。
+        float movingYaw = Mth.wrapDegrees(Math.round((rawInputYaw + 180.0f) / 45.0f) * 45.0f);
 
         if (movingYaw % 90.0f != 0.0f) {
             return new Rot2f(movingYaw, 75.6f);
@@ -761,6 +765,19 @@ public class Scaffold extends Module {
         AABB playerBox = mc.player.getDimensions(mc.player.getPose())
                 .makeBoundingBox(predictedPos.x, predictedPos.y, predictedPos.z);
         return playerBox.intersects(new AABB(cell));
+    }
+
+    /**
+     * 从眼睛朝某格中心的俯仰角。用于诊断：把"发包角的 pitch"和"真正看着放置处的 pitch"
+     * 放在一行里对比 —— 两者差得越多，服务端看到的就是"没在看自己放的地方"。
+     */
+    private double polarPitchTo(BlockPos pos) {
+        Vec3 eye = mc.player.getEyePosition();
+        Vec3 target = Vec3.atCenterOf(pos);
+        double dx = target.x - eye.x;
+        double dy = target.y - eye.y;
+        double dz = target.z - eye.z;
+        return -Math.toDegrees(Math.atan2(dy, Math.sqrt(dx * dx + dz * dz)));
     }
 
     /** LB {@code ModuleScaffold.getTargetedPosition}（SameY = Off）：预测位置脚下一格。 */
@@ -1211,6 +1228,23 @@ public class Scaffold extends Module {
             // 冷却 = 基准 + 随机量，每次放置重新掷一次
             placeDelayCounter = placeDelay.getValue()
                     + (placeDelayRandom.getValue() > 0 ? placeRandom.nextInt(placeDelayRandom.getValue() + 1) : 0);
+
+            if (POLAR_DEBUG) {
+                // 发包角就是服务端看到的角，反作弊的 scaffold 检查全部基于它；
+                // 同时记下放置格相对玩家的位置（dy / 距离），用于判断"像 scaffold 的放置"从哪来。
+                Rot2f rot = RotationManager.INSTANCE.getRotation();
+                BlockPos placedPos = hit.getBlockPos().relative(hit.getDirection());
+                BlockPos pb = mc.player.blockPosition();
+                Constants.LOGGER.info(String.format(
+                        "[ScaffoldPolar] PLACE face=%s interacted=%s placed=%s rot=%.1f/%.1f player=%s dy=%d dist=%.2f pitchToFace=%.1f onGround=%s air=%d delay=%d",
+                        hit.getDirection(), hit.getBlockPos().toShortString(), placedPos.toShortString(),
+                        rot.getYaw(), rot.getPitch(), pb.toShortString(),
+                        placedPos.getY() - pb.getY(),
+                        mc.player.position().distanceTo(Vec3.atCenterOf(placedPos)),
+                        polarPitchTo(placedPos),
+                        mc.player.onGround(), airTicks, placeDelayCounter));
+            }
+
             swing(hand);
 
             if (renderPlacement && render.getValue()) {
