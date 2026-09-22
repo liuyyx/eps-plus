@@ -310,8 +310,6 @@ public class Scaffold extends Module {
     private boolean emergencyPlacementActive;
     private boolean pearlUsePacketSent;
 
-    /** 边缘判定的阈值（玩家距离所在方块边界的距离）。 */
-    private static final double EDGE_THRESHOLD = 0.15;
     private final Random placeRandom = new Random();
 
     /** 放置冷却剩余刻数；>0 时不放置。见 {@link #placeDelay}。 */
@@ -760,6 +758,46 @@ public class Scaffold extends Module {
         return null;
     }
 
+    /**
+     * 照搬 LB {@code Player.wouldBeCloseToFallOff}：把碰撞箱下移
+     * {@code fallDistance - maxUpStep} 后若"没有碰撞"，说明这个位置站不住（要掉下去）。
+     */
+    private boolean wouldBeCloseToFallOff(Vec3 pos) {
+        AABB box = mc.player.getDimensions(mc.player.getPose())
+                .makeBoundingBox(pos.x, pos.y, pos.z)
+                .move(0.0, mc.player.fallDistance - mc.player.maxUpStep(), 0.0);
+        return mc.level.noCollision(mc.player, box);
+    }
+
+    /**
+     * 照搬 LB {@code LocalPlayer.isCloseToEdge}：判断"下一 tick 会不会走到边缘外"。
+     *
+     * <p>LB 用 {@code SimulatedPlayer} 真跑一 tick 取下一 tick 的速度；这里用当前水平速度作为
+     * 等价物（LB 在速度足够大时也只用速度方向），速度不足时退到输入方向。
+     * 判据主体就是 LB 那一行的两次 {@code wouldBeCloseToFallOff}。</p>
+     *
+     * <p>不能沿用原先 {@link #isOnEdge} 的"腾空即 true"：那会把跳跃搭桥的每一刻都当成在边缘，
+     * 边缘动作（潜行/跳跃/停手）于是每刻触发。</p>
+     */
+    private boolean isCloseToEdge() {
+        Vec3 pos = mc.player.position();
+        Vec3 vel = mc.player.getDeltaMovement();
+
+        Vec3 direction;
+        if (vel.x * vel.x + vel.z * vel.z > 0.003 * 0.003) {
+            direction = new Vec3(vel.x, 0.0, vel.z).normalize();
+        } else {
+            float yaw = (forwardInput != 0.0f || strafeInput != 0.0f) ? rawInputYaw : mc.player.getYRot();
+            direction = Vec3.directionFromRotation(0.0f, yaw);
+        }
+
+        // LB 里这里还有一次 findEdgeCollision(from, to) 的短线段探测；那套遍历碰撞箱的实现
+        // 成本很高，而它只是让判定更敏感。少它只会让"边缘"判得更宽松（潜行更少），
+        // 不会漏掉真正要掉下去的情形 —— 下面两次 wouldBeCloseToFallOff 是 LB 判据的主体。
+        Vec3 playerPosInTwoTicks = pos.add(vel.x, 0.0, vel.z);
+        return wouldBeCloseToFallOff(pos) || wouldBeCloseToFallOff(playerPosInTwoTicks);
+    }
+
     /** LB {@code PlayerLocationOnPlacement}：放置格与玩家（预测位置）的碰撞箱相交时不可选。 */
     private boolean polarBlockedByPlayer(BlockPos cell, Vec3 predictedPos) {
         AABB playerBox = mc.player.getDimensions(mc.player.getPose())
@@ -1018,7 +1056,7 @@ public class Scaffold extends Module {
      * 方块少于 ForceSneakBelowCount 强制潜行；勾了 Jump 但能跳两格高时改走别的动作。</p>
      */
     private void updatePolarLedgeAction() {
-        boolean edge = isOnEdge();
+        boolean edge = isCloseToEdge();
         int blocks = getBlockCount();
         boolean crosshairOnTarget = polarCrosshairMatchesTarget();
         boolean rotationReady = rotation != null
@@ -1131,31 +1169,6 @@ public class Scaffold extends Module {
      */
     private void handleLegit() {
         handlePolar();
-    }
-
-    /**
-     * 边缘检测：脚下为可替换方块，或玩家位于方块边缘阈值内且相邻方块下方可替换。
-     */
-    private boolean isOnEdge() {
-        if (!mc.player.onGround()) return true;
-
-        int playerX = Mth.floor(mc.player.getX());
-        int playerY = Mth.floor(mc.player.getY());
-        int playerZ = Mth.floor(mc.player.getZ());
-
-        if (mc.level.getBlockState(new BlockPos(playerX, playerY - 1, playerZ)).canBeReplaced()) return true;
-
-        double xOff = mc.player.getX() - playerX;
-        double zOff = mc.player.getZ() - playerZ;
-        if (xOff < EDGE_THRESHOLD || xOff > 1.0 - EDGE_THRESHOLD
-                || zOff < EDGE_THRESHOLD || zOff > 1.0 - EDGE_THRESHOLD) {
-            int checkX = playerX + (xOff < EDGE_THRESHOLD ? -1 : (xOff > 1.0 - EDGE_THRESHOLD ? 1 : 0));
-            int checkZ = playerZ + (zOff < EDGE_THRESHOLD ? -1 : (zOff > 1.0 - EDGE_THRESHOLD ? 1 : 0));
-            if (checkX != playerX || checkZ != playerZ) {
-                if (mc.level.getBlockState(new BlockPos(checkX, playerY - 1, checkZ)).canBeReplaced()) return true;
-            }
-        }
-        return false;
     }
 
     private void place() {
