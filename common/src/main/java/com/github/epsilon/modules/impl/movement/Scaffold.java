@@ -317,8 +317,8 @@ public class Scaffold extends Module {
     /** 放置冷却剩余刻数；>0 时不放置。见 {@link #placeDelay}。 */
     private int placeDelayCounter = 0;
 
-    /** 临时诊断开关：定位边缘动作为何不触发，定位完改回 false 或删除相关代码。 */
-    private static final boolean POLAR_DEBUG = true;
+    /** Polar 诊断输出（默认关闭）。排查放置闸门时临时打开。 */
+    private static final boolean POLAR_DEBUG = false;
 
     /** Polar 假点击节奏累加器：每刻按 CPS 累加，满 1 发一次点击。 */
     private double polarClickAccumulator;
@@ -360,8 +360,6 @@ public class Scaffold extends Module {
     private static final List<BlockPos> POLAR_OFFSETS = polarOffsets();
     /** 每刻复用的候选排序结果（避免每刻新建列表）。 */
     private static final List<BlockPos> POLAR_CANDIDATES = new ArrayList<>(18);
-    /** LB {@code BootstrapBackoff} 默认值：预测位置从边缘往回退多少格。 */
-    private static final double POLAR_BOOTSTRAP_BACKOFF = 0.2;
 
     private static List<BlockPos> polarOffsets() {
         List<BlockPos> offsets = new ArrayList<>(18);
@@ -622,40 +620,33 @@ public class Scaffold extends Module {
     /**
      * Polar 的转向目标。
      *
-     * <p><b>有目标方块时，直接朝"要放上去的那一面"</b>（{@link RotationUtils#calculate(BlockPos, Direction)}）。
-     * 这是搭桥真正需要的几何：视线落在即将放的那一块上，射线才打得到、放置才跟得上。
-     * 之前这里用的是 LB 的"移动方向 ±45°"定角（{@code ScaffoldGodBridgeTechnique.getRotations}）——
-     * 那套要配合 LB 自己的移动方式才成立；正常往前搭时视线那一侧没有要放的方块，
-     * 实测一秒只放 1~2 个方块、桥面出现缺口（反馈的"非常垃圾"）。</p>
+     * <p><b>搜到目标就朝它看。</b>{@link #findPolarTarget} 给出的 {@code rotation} 是用
+     * <b>真实眼睛</b>算到目标面中心的（见该方法的注释），因此只要转向到位，
+     * {@link #polarCrosshairHit()} 就必然压在那一面上，{@link #polarPlace()} 的命中闸门才可能通过。
+     * LB 的 {@code getRotationForNoInput} 也是这条路（{@code Rotation.lookingAt(facePoint)}）。</p>
      *
-     * <p>找不到目标方块时退到 LB 的移动方向定角，保证不会因为没有目标就停止转向；
-     * 两者不再逐刻切换（那会让目标角来回跳上百十度）。</p>
-     */
-    /**
-     * Polar 的转向目标 = LB {@code ScaffoldGodBridgeTechnique.getRotations}。
+     * <p>LB 的 {@code getRotationForStraightInput/DiagonalInput} 那套"移动方向 ±45°、俯仰 75.7/75.6"
+     * 定角<b>不能照搬</b>：那组常量是为 LB 自己的移动/渲染体系（托管角会渲染给玩家看、
+     * movementCorrection 让走位与视线一致）调出来的；在本客户端里视线只是发包伪装，
+     * 俯仰 75.7° 从眼睛出发的射线在水平 0.5 格处已降到 y≈62.85，够不到相邻方块的任何面 ——
+     * 闸门永远不通过，表现就是"一格都放不下去"。</p>
      *
-     * <p>有输入：移动方向 ± 45°（直行按左右侧交替 isOnRightSide，斜向直接取移动方向），
-     * 俯仰 75.7 / 75.6；无输入：以搜出来的目标面朝向取轴 + 45°，俯仰 75。</p>
+     * <p>只在没有目标时（前方还没踏空、或手里没有方块）才退到那套定角，避免转向停住。</p>
      *
-     * <p><b>瞄准不参与找目标</b>（LB 也一样）：目标由 {@link #findPolarTarget} 独立搜出来，
-     * 射线必须正好压在它上面才会放置（LB doesCrosshairTargetMatchRequirements）。
-     * 之前把瞄准改成"朝射线命中的那一面"是自洽闭环 —— 一直瞄着脚下那格的顶面，
-     * 而它对应的放置格正是玩家自己站的格子，结果一格都放不下去。</p>
-     *
-     * <p>关于 LB 源码里的 {@code +180}：那句是为"按 S 倒着走"的用法写的（他们的
-     * {@code getMovementDirectionOfInput} 以朝向前进为基准）。Epsilon 的 {@link #rawInputYaw}
-     * 已经是移动方向本身，正常前进时再 +180 会把视线甩到身后 ——
-     * 表现就是"桥搭在身后、前方缺格、人掉下去"。</p>
+     * <p>关于 LB 源码里的 {@code +180}：{@code getMovementDirectionOfInput} 前进时返回的就是
+     * 移动方向本身（已对照源码逐分支核算，与 {@link #rawInputYaw} 完全等价），所以
+     * {@code +180} 是货真价实的"朝向移动方向的反面"。LB 之所以能这么写，是因为它的托管角
+     * 会渲染给玩家、且 movementCorrection 会把走位扭到托管角上；本客户端两者都没有，
+     * 照搬就会变成"看着前方却往身后搭"。</p>
      */
     private Rot2f getPolarRotation() {
-        if (forwardInput == 0.0f && strafeInput == 0.0f) {
-            PolarTarget target = polarTarget;
-            if (target == null) {
-                return rotation != null ? rotation : new Rot2f(mc.player.getYRot(), mc.player.getXRot());
-            }
+        PolarTarget target = polarTarget;
+        if (target != null) {
+            return target.rotation();
+        }
 
-            float axis = Mth.floor(target.rotation().getYaw() / 90.0f) * 90.0f;
-            return new Rot2f(Mth.wrapDegrees(axis + 45.0f), 75.0f);
+        if (forwardInput == 0.0f && strafeInput == 0.0f) {
+            return rotation != null ? rotation : new Rot2f(mc.player.getYRot(), mc.player.getXRot());
         }
 
         float movingYaw = Mth.wrapDegrees(Math.round(rawInputYaw / 45.0f) * 45.0f);
@@ -717,7 +708,12 @@ public class Scaffold extends Module {
             return cell.distToCenterSqr(predictedPos.x, predictedPos.y, predictedPos.z);
         }));
 
-        Vec3 eye = predictedPos.add(0.0, mc.player.getEyeHeight(mc.player.getPose()), 0.0);
+        // 面的"朝向玩家"检查用预测位置的眼睛（LB 的 PlayerLocationOnPlacement = predictedPos），
+        Vec3 searchEye = predictedPos.add(0.0, mc.player.getEyeHeight(mc.player.getPose()), 0.0);
+        // 但朝目标的角度必须用**真实眼睛**算：真正放出去的那条射线是从玩家当前眼睛出发的
+        // （LB getCrosshairTarget = traceFromPlayer(rotation)），拿 predictedPos 算角度会让
+        // 目标离玩家越远偏差越大，polarPlace() 的命中闸门就永远过不去 —— 一格都放不出来。
+        Vec3 realEye = mc.player.getEyePosition();
 
         for (BlockPos offset : POLAR_CANDIDATES) {
             BlockPos cell = targetPos.offset(offset);
@@ -735,13 +731,13 @@ public class Scaffold extends Module {
                 if (mc.level.getBlockState(interacted).canBeReplaced()) continue;
 
                 Vec3 point = polarFaceCenter(interacted, direction);
-                Vec3 toFace = eye.subtract(point);
+                Vec3 toFace = searchEye.subtract(point);
                 double length = Math.max(1.0E-4, toFace.length());
                 double facing = (toFace.x * direction.getStepX() + toFace.y * direction.getStepY()
                         + toFace.z * direction.getStepZ()) / length;
                 if (facing < 0.0) continue;
 
-                Rot2f rotation = RotationUtils.calculate(eye, point);
+                Rot2f rotation = RotationUtils.calculate(realEye, point);
                 double delta = polarDeltaLength(RotationManager.INSTANCE.getRotation(), rotation);
 
                 if (delta < bestDelta) {
@@ -763,37 +759,36 @@ public class Scaffold extends Module {
     }
 
     /**
-     * LB {@code ScaffoldMovementPrediction.getPredictedPlacementPos}：
-     * 沿移动方向走到"脚下支撑即将消失"的那一点，再朝玩家回退 {@link #POLAR_BOOTSTRAP_BACKOFF}
-     * （LB BootstrapBackoff 默认 0.2）。这是"方块落在下一格"而不是补脚下窟窿的关键 ——
-     * 只补脚下就会一直漏前方，人必掉。
+     * LB {@code ScaffoldMovementPrediction.getPredictedPlacementPos}：预测"下一步要补的那一格"。
+     *
+     * <p>沿移动方向以 0.25 格为步长探测，取第一个脚下没有支撑的格子，返回它的中心。
+     * 该点交给 {@link #polarTargetedPosition} 取 below() 后正好落在那一格上，
+     * 于是 {@link #findPolarTarget} 搜的是"前方踏空的格子"而不是玩家脚下的实心格。</p>
+     *
+     * <p><b>曾经的写法是在"已在边缘"时直接返回玩家当前位置</b>（{@code if (isOnEdge()) return pos;}），
+     * 于是放置格退化成玩家自己站的那一格；那一格是实心的，{@link #findPolarTarget} 第一句
+     * {@link #isPolarSolid} 就返回 null —— 而 {@link #isOnEdge} 在**腾空时恒为 true**，
+     * 也就是说跳跃搭桥与贴边行走（搭桥的绝大多数时刻）**一格都放不下去**。
+     * 观测到的"一秒只放一两个方块"即由此而来。</p>
      */
     private Vec3 predictPolarPlacementPos() {
         Vec3 pos = mc.player.position();
-        if (isOnEdge()) return pos;
-
         Vec3 dir = polarMovementDirection();
         if (dir == null) return pos;
 
         double feetY = mc.player.getY();
-        Vec3 fallOff = null;
 
         for (int step = 1; step <= 8; step++) {
             Vec3 probe = pos.add(dir.x * step * 0.25, 0.0, dir.z * step * 0.25);
-            if (!isPolarSolid(BlockPos.containing(probe.x, feetY - 0.1, probe.z))) {
-                fallOff = pos.add(dir.x * (step - 1) * 0.25, 0.0, dir.z * (step - 1) * 0.25);
-                break;
+            // 与 polarTargetedPosition 的 BlockPos.containing(predictedPos).below() 同层：
+            // predictedPos.y 取 feetY，below() 得到 floor(feetY - 0.5) 那一层，这里必须一致。
+            BlockPos support = BlockPos.containing(probe.x, feetY - 0.5, probe.z);
+            if (!isPolarSolid(support)) {
+                return new Vec3(support.getX() + 0.5, feetY, support.getZ() + 0.5);
             }
         }
 
-        if (fallOff == null) return pos;
-
-        Vec3 toPlayer = pos.subtract(fallOff);
-        double length = Math.sqrt(toPlayer.x * toPlayer.x + toPlayer.z * toPlayer.z);
-        if (length < 1.0E-4) return fallOff;
-
-        double back = POLAR_BOOTSTRAP_BACKOFF / length;
-        return fallOff.add(toPlayer.x * back, 0.0, toPlayer.z * back);
+        return pos;
     }
 
     /** 移动方向：有输入取输入方向，无输入退到速度方向（LB 用 optimalLine.direction）。 */
