@@ -713,7 +713,9 @@ public class Scaffold extends Module {
         // 但朝目标的角度必须用**真实眼睛**算：真正放出去的那条射线是从玩家当前眼睛出发的
         // （LB getCrosshairTarget = traceFromPlayer(rotation)），拿 predictedPos 算角度会让
         // 目标离玩家越远偏差越大，polarPlace() 的命中闸门就永远过不去 —— 一格都放不出来。
-        Vec3 realEye = mc.player.getEyePosition();
+        // 且必须与 polarCrosshairHit() 里 RaytraceUtils.raytrace 的起点**逐字节一致**：
+        // 它用的是插值 partialTick 的眼睛位置，不是 getEyePosition(1.0f)。
+        Vec3 realEye = mc.player.getEyePosition(mc.getDeltaTracker().getGameTimeDeltaPartialTick(true));
 
         for (BlockPos offset : POLAR_CANDIDATES) {
             BlockPos cell = targetPos.offset(offset);
