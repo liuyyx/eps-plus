@@ -329,8 +329,6 @@ public class Scaffold extends Module {
     private int polarLedgeSneakTicks;
     /** Polar 强制潜行的剩余刻数，跨刻保留（LB 的 forceSneak）。 */
     private int polarForceSneak;
-    /** Polar 直行搭桥时的左右侧交替状态（LB GodBridge 的 isOnRightSide）。 */
-    private boolean polarOnRightSide;
     /** 本刻是否真的放上了方块（边缘动作的等价判据，每刻复位）。 */
     private boolean polarPlacedThisTick;
     /** 上一拍是否真的放上了方块；tick 开头顺延，供边缘动作判定使用。 */
@@ -374,6 +372,11 @@ public class Scaffold extends Module {
 
     /** 本刻的 Polar 放置目标（每刻算一次，放置与边缘动作共用同一结果）。 */
     private PolarTarget polarTarget;
+    /**
+     * 上一刻选中的目标，用于粘滞（见 {@link #findPolarTarget}）：
+     * 否则"挑最接近当前托管角的面"会在几个候选面之间反复翻，视线每放一块甩一次。
+     */
+    private PolarTarget polarStickyTarget;
 
     private final List<RenderInfo> renderBoxes = new ArrayList<>();
 
@@ -645,27 +648,12 @@ public class Scaffold extends Module {
             return target.rotation();
         }
 
-        if (forwardInput == 0.0f && strafeInput == 0.0f) {
-            return rotation != null ? rotation : new Rot2f(mc.player.getYRot(), mc.player.getXRot());
-        }
-
-        float movingYaw = Mth.wrapDegrees(Math.round(rawInputYaw / 45.0f) * 45.0f);
-
-        if (movingYaw % 90.0f != 0.0f) {
-            return new Rot2f(movingYaw, 75.6f);
-        }
-
-        if (mc.player.onGround()) {
-            polarOnRightSide = Mth.floor(mc.player.getX() + Math.cos(Math.toRadians(movingYaw)) * 0.5) != Mth.floor(mc.player.getX())
-                    || Mth.floor(mc.player.getZ() + Math.sin(Math.toRadians(movingYaw)) * 0.5) != Mth.floor(mc.player.getZ());
-
-            BlockPos ahead = BlockPos.containing(mc.player.position().relative(Direction.fromYRot(movingYaw), 0.6));
-            boolean leaningOffBlock = mc.level.getBlockState(mc.player.blockPosition().below()).isAir();
-            boolean aheadIsAir = mc.level.getBlockState(ahead.below()).isAir();
-            if (leaningOffBlock && aheadIsAir) polarOnRightSide = !polarOnRightSide;
-        }
-
-        return new Rot2f(Mth.wrapDegrees(movingYaw + (polarOnRightSide ? 45.0f : -45.0f)), 75.7f);
+        // 没有目标时**保持当前朝向**，绝不退回 LB 的"移动方向 ±45°"定角。
+        // 目标会因为放置冷却、脚下还没踏空、上一拍刚放上等原因时有时无；
+        // 两个相差 45° 以上的角度之间来回切，就是"视线猛地甩出去、再甩回来"——
+        // 每放一块甩一次。LB 敢用定角，是因为它的托管角**始终**等于定角（不跟目标走），
+        // 我们这条路径是跟目标走的，再混入定角就只剩震荡。
+        return rotation != null ? rotation : new Rot2f(mc.player.getYRot(), mc.player.getXRot());
     }
 
 
@@ -698,6 +686,19 @@ public class Scaffold extends Module {
     private PolarTarget findPolarTarget(Vec3 predictedPos) {
         if (nullCheck() || predictedPos == null) return null;
 
+        // 与 polarCrosshairHit() 的 RaytraceUtils.raytrace 起点严格相同（插值 partialTick 的眼睛）。
+        Vec3 realEye = mc.player.getEyePosition(mc.getDeltaTracker().getGameTimeDeltaPartialTick(true));
+
+        // 目标粘滞：上一刻的目标只要仍然成立就沿用，角度按**当前**眼睛重算。
+        // 不粘滞的话，"挑最接近当前托管角的面"会在几个候选面之间反复翻，
+        // 视线随之每放一块甩一次。
+        PolarTarget sticky = polarStickyTarget;
+        if (sticky != null && polarTargetStillUsable(sticky, realEye, predictedPos)) {
+            return new PolarTarget(sticky.interacted(), sticky.placed(), sticky.direction(),
+                    sticky.point(), sticky.minY(), RotationUtils.calculate(realEye, sticky.point()));
+        }
+        polarStickyTarget = null;
+
         BlockPos targetPos = polarTargetedPosition(predictedPos);
         if (isPolarSolid(targetPos)) return null;
 
@@ -708,14 +709,8 @@ public class Scaffold extends Module {
             return cell.distToCenterSqr(predictedPos.x, predictedPos.y, predictedPos.z);
         }));
 
-        // 面的"朝向玩家"检查用预测位置的眼睛（LB 的 PlayerLocationOnPlacement = predictedPos），
+        // 面的"朝向玩家"检查用预测位置的眼睛（LB 的 PlayerLocationOnPlacement = predictedPos）
         Vec3 searchEye = predictedPos.add(0.0, mc.player.getEyeHeight(mc.player.getPose()), 0.0);
-        // 但朝目标的角度必须用**真实眼睛**算：真正放出去的那条射线是从玩家当前眼睛出发的
-        // （LB getCrosshairTarget = traceFromPlayer(rotation)），拿 predictedPos 算角度会让
-        // 目标离玩家越远偏差越大，polarPlace() 的命中闸门就永远过不去 —— 一格都放不出来。
-        // 且必须与 polarCrosshairHit() 里 RaytraceUtils.raytrace 的起点**逐字节一致**：
-        // 它用的是插值 partialTick 的眼睛位置，不是 getEyePosition(1.0f)。
-        Vec3 realEye = mc.player.getEyePosition(mc.getDeltaTracker().getGameTimeDeltaPartialTick(true));
 
         for (BlockPos offset : POLAR_CANDIDATES) {
             BlockPos cell = targetPos.offset(offset);
@@ -724,6 +719,11 @@ public class Scaffold extends Module {
             BlockState state = mc.level.getBlockState(cell);
             boolean replaceExisting = !state.isAir() && state.getFluidState().isEmpty();
             if (replaceExisting && !state.canBeReplaced()) continue;
+
+            // LB PlayerLocationOnPlacement：方块落下去不能与玩家身体相交。
+            // 少了这一条就会选中"自己脚下格的顶面"：射线确实命中、闸门也放行，
+            // 但方块根本放不进去（那一格被玩家占着），于是每刻反复朝下看、反复空放。
+            if (polarBlockedByPlayer(cell, predictedPos)) continue;
 
             PolarTarget best = null;
             double bestDelta = Double.MAX_VALUE;
@@ -749,10 +749,39 @@ public class Scaffold extends Module {
                 }
             }
 
-            if (best != null) return best;
+            if (best != null) {
+                polarStickyTarget = best;
+                return best;
+            }
         }
 
         return null;
+    }
+
+    /**
+     * 粘滞目标是否仍然成立：那一格还没被填上、点击的面还在、放置格没被玩家占住、
+     * 面仍然朝向玩家且在 4.5 格可达范围内。
+     */
+    private boolean polarTargetStillUsable(PolarTarget t, Vec3 eye, Vec3 predictedPos) {
+        if (isPolarSolid(t.placed())) return false;
+        if (polarBlockedByPlayer(t.placed(), predictedPos)) return false;
+        if (mc.level.getBlockState(t.interacted()).canBeReplaced()) return false;
+
+        Vec3 toFace = eye.subtract(t.point());
+        double length = toFace.length();
+        if (length > 4.5) return false;
+
+        Direction d = t.direction();
+        double facing = (toFace.x * d.getStepX() + toFace.y * d.getStepY() + toFace.z * d.getStepZ())
+                / Math.max(1.0E-4, length);
+        return facing >= 0.0;
+    }
+
+    /** LB {@code PlayerLocationOnPlacement}：放置格与玩家（预测位置）的碰撞箱相交时不可选。 */
+    private boolean polarBlockedByPlayer(BlockPos cell, Vec3 predictedPos) {
+        AABB playerBox = mc.player.getDimensions(mc.player.getPose())
+                .makeBoundingBox(predictedPos.x, predictedPos.y, predictedPos.z);
+        return playerBox.intersects(new AABB(cell));
     }
 
     /** LB {@code ModuleScaffold.getTargetedPosition}（SameY = Off）：预测位置脚下一格。 */
@@ -1095,7 +1124,7 @@ public class Scaffold extends Module {
     private void resetPolarState() {
         polarClickAccumulator = 0.0;
         polarForceSneak = 0;
-        polarOnRightSide = false;
+        polarStickyTarget = null;
         resetPolarLedgeAction();
     }
 
