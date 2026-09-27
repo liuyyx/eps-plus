@@ -328,6 +328,17 @@ public class RotationUtils {
     }
 
     /**
+     * 本机鼠标灵敏度网格步长（与 {@link #applySensitivityPatch} 用的量化步长同一个式子）。
+     * 任何抖动/量化都以它为最小单位，抖动幅度取整 1 步。
+     *
+     * @return 一步的度数
+     */
+    public static double mouseQuantum() {
+        float mouseSensitivity = (float) (mc.options.sensitivity().get() * 0.6F + 0.2F);
+        return mouseSensitivity * mouseSensitivity * mouseSensitivity * 8.0F * 0.15D;
+    }
+
+    /**
      * 将旋转角调整到最接近玩家当前角度的等价值。
      *
      * @param rotation 旋转角

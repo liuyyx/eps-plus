@@ -70,6 +70,12 @@ import java.util.function.Supplier;
  * 移植自 RavenBS-Plus-Plus（1.8.9）的 telly 脚本 {@code BSLegitTellyFix}，行为逐函数对齐。
  * 脚本宿主 API 已换成 26.2 原版 + Epsilon 公共 API：发包由 {@link SendPositionEvent}
  * 承载，输入注入由 {@link KeyboardInputEvent} 承载，方块名走 1.13+ 注册名。
+ *
+ * <p>⚠️ <b>这是「脚本 Telly」</b>（模拟人手，理论可绕任何反作弊）—— 设计上<b>必须驱动玩家视角</b>
+ * （{@code player.setYRot/setXRot}），<b>不要套用「静默旋转铁律」</b>。
+ * 同名但完全不同的另一个实现是 <b>Scaffold 内的算法 Telly</b>
+ * （{@code leader-lite/Scaffold.java} 的 {@code isLegitTellyMode} 分支 / Epsilon 侧
+ * {@code movement/scaffold/**}）：自动搭桥、静默旋转、只能绕 GrimAC。两者不可混淆。
  */
 public class Telly extends Module {
 
@@ -100,11 +106,15 @@ public class Telly extends Module {
      *   <li><b>实测最优</b>：用户实测 46.5 时不会掉（44 会掉），这是最终采用它的直接依据。
      *   <li><b>躲机器特征</b>：45 是整度数，吸附后 {@code BEGIN yaw} 会变成 -315.00 / -495.00
      *       这类精确值，真人做不到 —— 实测那样会被 Intave 报 {@code acting computer-like}。
-     *       46.5 是「像手抖停在的角度」。
-     *   <li><b>避开象限零点</b>：45° 恰好是 {@code calculateTravelDirection} 里
-     *       {@code rawX = sin - cos} 的零点（分界），浮点抖动会让 travelX/travelZ 两侧跳。
-     *       注意 44°（rawX ≈ -0.024）与 46.5°（rawX ≈ +0.037）落在分界<b>两侧</b>，
-     *       桥的走向轴不同 —— 这正是两者实测表现不同的原因。
+     *       46.5 是「像手抖停在的角度」。<b>这是 46.5 目前唯一仍然成立的理由。</b>
+     *   <li><b>（原第 3 条理由已作废）</b>原文写「45° 是 {@code rawX = sin - cos} 的零点（分界），
+     *       浮点抖动会让 travelX/travelZ 两侧跳」—— <b>这是错的</b>：零点在 {@code 45°+k·180°}，
+     *       而分支分界（{@code |rawX| == |rawZ|}）在 <b>{@code 0°/90°/180°/270°}</b>，两者差 45°。
+     *       实测：滑块 42~48 及其 {@code +k·90} 网格点无一落在分界上，且
+     *       44° / 45° / 46.5° / 48° 输出<b>完全相同</b>（axis=Z, sign=-1）。
+     *       正确结论是：46.5 相对 45 <b>在 travelXZ（桥走向轴）上既无优势也无风险</b>；
+     *       但改 baseYaw 会整体平移 21 帧 {@code YAW_CURVE} 的绝对角，每次 raycast 与候选块的
+     *       落点都会变 —— <b>行为会变，必须实测</b>。不要写成"零风险"。
      * </ol>
      * 激活判据是 45°±2°，滑块范围 42~48 都还在容差内。
      */
@@ -171,6 +181,13 @@ public class Telly extends Module {
     private float scriptedRotationYaw = 0.0f;
     private float scriptedRotationPitch = 0.0f;
 
+    /**
+     * ⚠️ 源客户端环境的<b>硬编码</b>灵敏度网格（对应灵敏度 0.5）。
+     *
+     * <p>本机灵敏度 0.3562555 ⇒ 真实网格 <b>0.0850°</b>，用 0.034 量化会落在错格点上
+     * （见 AGENTS.md「量化网格必须用客户端实际灵敏度」）。{@link com.github.epsilon.utils.rotation.RotationUtils}
+     * 已提供同一式子的实时值 {@code RotationUtils.mouseQuantum()}，应改用它，别再用这个常量。
+     */
     private static final double SENSITIVITY_QUANTUM = 0.03404715;
     private static final int[] YAW_NUDGE_PATTERN = {0, 1, -1, 2, -2};
     private int rotationStepCounter = 0;
@@ -207,6 +224,9 @@ public class Telly extends Module {
      */
     private static final int SETUP_INERTIA_TICKS = 6;
     private long lastActivationDiagnosticsAt = 0L;
+    /** 提示文案里的按键显示名缓存（每次 {@link #armAutomation()} 失效重取）。 */
+    private String promptKeySneak = null;
+    private String promptKeyUse = null;
     /** 屏幕底部单行显示的激活诊断文本；null = 不显示。 */
     private String activationDiagnosticsLine = null;
 
@@ -231,15 +251,21 @@ public class Telly extends Module {
     private float runDiagTargetPitch = 0f;
     private float runDiagTargetYaw = 0f;
     private int runDiagPhase = 0;
-    /** 最后一次站在地面时的脚部 Y（方块坐标）；空中放置以此为目标基准。 */
-    private int lastGroundFeetY = Integer.MIN_VALUE;
 
     /*
      * ===== telly（塔里）的机制 —— 动这几条曲线之前必须先读懂 =====
      *
      * Java 版没法像基岩版那样"往前伸着手搭"，所以 telly 全程是「按住 S 后退 + 有节奏地补方块」
-     * （普通蹲起搭是按住 S 并规律地按 Shift；telly 多一步：交替 A+S，因为 A+S 的合成速度比
-     * 只按 S 快，能把桥更快铺出去）。
+     * （普通蹲起搭是按住 S 并规律地按 Shift；telly 多一步：交替 A+S）。
+     *
+     * ⚠️ 曾写「A+S 的合成速度比只按 S 快」—— <b>这是错的</b>。1.8.9 的
+     * {@code EntityLivingBase.moveRelative} 里有
+     * {@code f = sqrt(strafe²+forward²); if (f < 1.0F) f = 1.0F; strafe /= f; forward /= f;}
+     * 的归一化；26.2 的 {@code KeyboardInput.tick()} 里是
+     * {@code new Vec2(strafe, forward).normalized()}（字节码已核），
+     * <b>走路状态下两端斜向都不提速</b>（只有潜行——输入先 ×0.3、长度 &lt;1 不被归一化——才有 +41%）。
+     * A+S 的真正作用是<b>方向</b>：yaw=46.5° 时 (-1,-1) 合成 ≈ (0.026,-0.999)（沿桥轴），
+     * 而 (-1,0) ≈ (0.725,-0.688)（斜 45°，会走出桥外）。<b>别删，但理由是方向，不是速度。</b>
      *
      * 完整的 telly 是三拍动作：
      *   ① 先转头，边转头边起跳；
@@ -257,7 +283,8 @@ public class Telly extends Module {
      *
      * ⚠️⚠️ 踩过的坑（每个都让实测报废过一轮）：
      *   ① 把走位方向锁死在 baseYaw（订阅 StrafeEvent.setYaw），理由是我算出"21 帧矢量和的净方向
-     *      斜 36.9°，跟摆会漂"。结果占 13/21 帧的 strafe=0 相位全变成恒定斜 45° 前进，角色笔直
+     *      斜 36.9°，跟摆会漂"。（⚠️ 36.9° 的计算口径已不可考，另有重算得 ~10°；
+     *      下面这条结论"走位必须跟随视角"不依赖于这个数字，是实测 placedOk 105/137→5~34 得出的。）结果占 13/21 帧的 strafe=0 相位全变成恒定斜 45° 前进，角色笔直
      *      斜着飞出去，placedOk 从 105/137 崩到 5~34。**走位跟随视角是设计，不是 bug。**
      *   ② 把视角改写成只驱动模型（setYBodyRot/setYHeadRot），想"视角摆会让走位歪"。这直接把相机
      *      锁死了 —— 而"视角在摆"正是这个脚本的核心观感。**视角必须由 player.setYRot 驱动。**
@@ -418,7 +445,7 @@ public class Telly extends Module {
                 boolean setupJump = setupTick >= SETUP_INERTIA_TICKS;
                 applyMovement(-1.0f, -1.0f, setupJump, false);
                 applyUse(true);
-                dbg("setup t=" + setupTick
+                dbg(() -> "setup t=" + setupTick
                         + " jump=" + setupJump
                         + " pos=" + (mc.player == null ? "null" : fmtPos(mc.player))
                         + " vH=" + (mc.player == null ? "-" : String.format(Locale.ROOT, "%.3f", mc.player.getDeltaMovement().horizontal().length()))
@@ -463,6 +490,9 @@ public class Telly extends Module {
         // 就会踩到桥外（用户实测：掉下去是「跑歪了」，不是纵向冲太快）。
         // 保险②：纵向不能冲过头 —— 玩家不能站到"还没铺好的区域"上。
         // 两种情况本 tick 都站定等桥/姿态对齐，旋转与放置照常。
+        // ⛔ 这里**保持脚本原版**（越界容差 1）。曾把容差收到 0 想防"退进未铺区"，
+        // 结果是停步频率大增、移动变成走走停停 ⇒ **被反作弊判定**，已整体回退。
+        // 详见 AGENTS.md「不要用「停步」当护栏」。
         if (isPlayerOffLane(mc.player) || isPlayerAheadOfBridge(mc.player)) {
             applyMovement(0.0f, 0.0f, false, false);
         } else {
@@ -615,7 +645,7 @@ public class Telly extends Module {
         if (player.isShiftKeyDown() && atEdge) {
             if (activatePromptAt == 0L) {
                 activatePromptAt = clientTime();
-                dbg("ARM sneak-start pos=" + fmtPos(player)
+                dbg(() -> "ARM sneak-start pos=" + fmtPos(player)
                         + " yaw=" + String.format(Locale.ROOT, "%.2f", player.getYRot())
                         + " pitch=" + String.format(Locale.ROOT, "%.2f", player.getXRot())
                         + " onGround=" + player.onGround());
@@ -880,7 +910,14 @@ public class Telly extends Module {
     }
 
     private boolean drawActivatePrompt(TextRenderer renderer) {
-        String text = "Activate?";
+        // 文案与 updateActivationPrompt 的实际条件一致：
+        // 蹲着（Hold <sneak>）→ 就绪后再加上右键（<sneak> + <use>）。
+        // 只显示 "Activate?" 用户无从得知要按哪两个键。
+        if (promptKeySneak == null) promptKeySneak = keyDisplay("sneak");
+        if (promptKeyUse == null) promptKeyUse = rightMouseDisplay();
+        String text = activationPromptReady()
+                ? (promptKeySneak + " + " + promptKeyUse)
+                : ("Hold " + promptKeySneak);
         int alpha = (int) (promptAlpha * 255.0f);
         if (alpha < 16) alpha = 16;
         int color = (alpha << 24) | promptFadeRgb;
@@ -1145,8 +1182,18 @@ public class Telly extends Module {
                     || changedState.isAir()
                     || changedState.canBeReplaced();
             if (running && becamePassable && isStraightTellyTarget(changed)) {
-                dbg("SERVER-SWALLOW at=" + java.util.Arrays.toString(changed)
+                // 服务端回发「放置位仍是空气」= 那次放置被服务端静默拒绝。
+                // 打上距离与当时的 support/face，用于区分「距离/命中点不合规」还是「时序」。
+                LocalPlayer lp = mc.player;
+                String eyeDist = lp == null ? "-" : String.format(Locale.ROOT, "%.3f",
+                        getEyes(lp).distanceTo(Vec3.atCenterOf(new BlockPos(changed[0], changed[1], changed[2]))));
+                dbg(() -> "SERVER-SWALLOW at=" + java.util.Arrays.toString(changed)
                         + " name=" + blockNameAt(changed[0], changed[1], changed[2])
+                        + " lastPlaced=" + java.util.Arrays.toString(lastPlacedPos)
+                        + " lastSupport=" + java.util.Arrays.toString(lastSupportPos)
+                        + " lastFace=" + lastSupportFace
+                        + " reach=" + String.format(Locale.ROOT, "%.3f", reach())
+                        + " eyeDist=" + eyeDist
                         + " tick=" + currentClientTick);
             }
         }
@@ -1166,7 +1213,12 @@ public class Telly extends Module {
         cyclePhase = 19;
         rotationActive = false;
         activationMovementHeld = false;
-        printStatus("&eArmed. Sneak looking down, wait for green, hold rmb and release sneak");
+        // ⚠️ 文案必须与实际触发条件一致：**按住**潜行蹲稳 → 提示变绿后**再按住**右键。
+        // 不是「松开潜行」（那是脚本原版的写法，本移植已改），别再写 release。
+        promptKeySneak = null;
+        promptKeyUse = null;
+        printStatus("&eArmed. Hold " + keyDisplay("sneak")
+                + " at the edge looking down; when green hold " + rightMouseDisplay());
     }
 
     private void beginAutomation() {
@@ -1178,7 +1230,7 @@ public class Telly extends Module {
         if (!isActivationYawAligned(player.getYRot())) return;
 
         disableSafeWalkForRun();
-        dbg("BEGIN yaw=" + String.format(Locale.ROOT, "%.2f", player.getYRot())
+        dbg(() -> "BEGIN yaw=" + String.format(Locale.ROOT, "%.2f", player.getYRot())
                 + " pitch=" + String.format(Locale.ROOT, "%.2f", player.getXRot())
                 + " pos=" + fmtPos(player)
                 + " v=" + String.format(Locale.ROOT, "%.3f,%.3f,%.3f",
@@ -1226,23 +1278,28 @@ public class Telly extends Module {
         stopAutomation(turnOffButton, callerHint());
     }
 
-    /** 调用者提示：用栈帧给出"谁按停的"（方法名 + 行号），免去给每个调用点加参数。 */
+    /**
+     * 调用者提示：给出"谁按停的"（方法名 + 行号），免去给每个调用点加参数。
+     *
+     * <p>用 {@link StackWalker} 而非 {@code Thread.currentThread().getStackTrace()}：
+     * 后者每次都要填充并返回<b>完整</b>栈数组；这里只取前 8 帧就够。
+     */
     private static String callerHint() {
-        for (StackTraceElement frame : Thread.currentThread().getStackTrace()) {
-            if (frame.getClassName().contains("Telly")
-                    && !frame.getMethodName().startsWith("stopAutomation")
-                    && !frame.getMethodName().equals("callerHint")) {
-                return frame.getMethodName() + ":" + frame.getLineNumber();
-            }
-        }
-        return "unknown";
+        return StackWalker.getInstance().walk(frames -> frames
+                .limit(8)
+                .filter(f -> f.getClassName().contains("Telly"))
+                .filter(f -> !f.getMethodName().startsWith("stopAutomation"))
+                .filter(f -> !f.getMethodName().equals("callerHint"))
+                .map(f -> f.getMethodName() + ":" + f.getLineNumber())
+                .findFirst()
+                .orElse("unknown"));
     }
 
     /** 便于定位"跑几秒就自己停"：把停止原因、相位、位置、累计放置数一并写进日志。 */
     private void stopAutomation(boolean turnOffButton, String reason) {
         if (running) {
             LocalPlayer p = mc.player;
-            dbg("STOP reason=" + reason
+            dbg(() -> "STOP reason=" + reason
                     + " phase=" + cyclePhase
                     + " setupTick=" + setupTick
                     + " tick=" + currentClientTick
@@ -1303,7 +1360,7 @@ public class Telly extends Module {
         activatePromptAt = 0L;
         promptBrokeAt = 0L;
         if (turnOffButton) {
-            printStatus("&eStopped. Sneak looking down to arm again");
+            printStatus("&eStopped. Hold " + keyDisplay("sneak") + " looking down to arm again");
         }
     }
 
@@ -1567,10 +1624,12 @@ public class Telly extends Module {
         if (desiredLaneVelocity < -0.16) desiredLaneVelocity = -0.16;
         double velocityCorrection = desiredLaneVelocity - laneVelocity;
 
-        // 导数按「稳定朝向」算：走位方向确实随 YAW_CURVE 摆动（见曲线处的机制说明），
-        // 但摆动是周期对称的；用瞬时相机角会把 sin/cos 一起带进抖动，算出的修正量方向不稳，
-        // 横向误差就一点点累积起来（实测：每格只偏一丁点，走几十格后明显跑偏）。
-        double radians = Math.toRadians(baseYaw);
+        // 必须用瞬时视角，不能用固定 baseYaw：yawLaneDerivative 是「桥前进方向对视角 yaw 的
+        // 解析导数」，它的语义要求 sin/cos 来自当前视角（转动视角是驱动桥前进的唯一手段）。
+        // 脚本把视角推到 baseYaw+91.68=136.7°，真实导数 cos(136.7°)=-0.729，与 cos(45°)=+0.707
+        // 符号相反；固定 baseYaw 会让半个周期朝反方向推，另一半周期权限顶到 ±2.25° 钳位后饱和。
+        // 1.8.9 原版即此写法（BSLegitTellyFix.java:1080 player.getYaw()），本移植曾改错。
+        double radians = Math.toRadians(player.getYRot());
         double sin = Math.sin(radians);
         double cos = Math.cos(radians);
         double yawLaneDerivative = travelX != 0
@@ -1999,7 +2058,7 @@ public class Telly extends Module {
         long now = clientTime();
         if (now - lastPlacementFailLogAt >= 250L) {
             lastPlacementFailLogAt = now;
-            dbg("PLACE-FAIL[" + reason + "]"
+            dbg(() -> "PLACE-FAIL[" + reason + "]"
                     + " target=" + (placedPos == null ? "-" : java.util.Arrays.toString(placedPos))
                     + " support=" + (supportPos == null ? "-" : java.util.Arrays.toString(supportPos))
                     + " face=" + face
@@ -2076,7 +2135,7 @@ public class Telly extends Module {
         forceSuppressTick = currentClientTick;
         mc.player.swing(InteractionHand.MAIN_HAND);
         // 落点日志：写进 latest.log（不走聊天栏），用于定位"某一格放错/叠高"。
-        dbg("placed at=" + java.util.Arrays.toString(placedPos)
+        dbg(() -> "placed at=" + java.util.Arrays.toString(placedPos)
                 + " support=" + java.util.Arrays.toString(supportPos)
                 + " face=" + face
                 + " pY=" + String.format(Locale.ROOT, "%.2f", player.getY())
@@ -2998,14 +3057,18 @@ public class Telly extends Module {
         return new Vec3(eyes.x + lookVec.x * t, targetY + 0.5, eyes.z + lookVec.z * t);
     }
 
+    /**
+     * 「光标」朝向 —— <b>必须与 {@link #isPlacementLookAligned} 验证时用的角同一套</b>。
+     *
+     * <p>⚠️ 这里曾用 {@code mc.gameRenderer.mainCamera()}（<b>跨 tick 插值的相机角</b>），
+     * 而候选的验证走 {@code rayCast(player.getYRot(), player.getXRot())}（脚本角）——
+     * 同一 tick 内两个角不一致 ⇒ 候选与验证系统性错位 ⇒ 大量
+     * {@code PLACE-FAIL[look-misaligned]}（实测 2026-09-27：23 次掉落里有 10 次，
+     * 其前一条就是它）⇒ 该放的方块没放上 ⇒ 玩家下落时脚下是空的 ⇒ <b>掉</b>。
+     *
+     * <p>现与脚本原版 / 1.8.9 宿主（Myau 用 {@code player.rotationYaw/rotationPitch}）一致。
+     */
     private Vec3 getCursorLookVec(LocalPlayer player) {
-        try {
-            var camera = mc.gameRenderer.mainCamera();
-            if (camera != null) {
-                return getLookVec(camera.yRot(), camera.xRot());
-            }
-        } catch (Exception ignored) {
-        }
         return getLookVec(player.getYRot(), player.getXRot());
     }
 
@@ -3121,19 +3184,30 @@ public class Telly extends Module {
         return isStraightAscendingContext(player) && targetY == currentY + 1;
     }
 
+    /**
+     * 目标 Y 的基准 —— <b>与脚本原版一致</b>。
+     *
+     * <p>默认跟随<b>实时</b> {@code pos.y}；只有「离地且垂直速度落在 (-0.12, 0]」这个
+     * 顶点附近的窗口才用 {@code max(pos.y, 上一 tick 的 y)} 防抖。
+     *
+     * <p>⚠️ 这里曾被改成「空中锁死最后一次落地高度 {@code lastGroundFeetY}」，
+     * 已被实测证伪（2026-09-27，`26.2-Epsilon/logs/latest.log`）：
+     * telly 连续起跳，{@code onGround} 只占约 24%，缓存几乎不更新 ——
+     * 日志里 {@code curY} 与 {@code feetY-1} 有 <b>83%</b> 的时刻不一致（偏差 -5~+2）。
+     * 于是 {@code isStrictOneBelowPlayer} 的 {@code targetY == currentY} 主判据失效，
+     * 目标 Y 实际由 {@code strictY}/{@code prevY} 两个实时量决定 → 桥面 y 一路
+     * 103→104→…→109 阶梯爬升（实测 placed y 序列），玩家被迫跟着爬，最终掉下去。
+     */
     private double getStableBelowReferenceY(LocalPlayer player) {
         Vec3 pos = player.position();
-        if (player.onGround()) {
-            lastGroundFeetY = floor(pos.y);
-            return pos.y;
+        double referenceY = pos.y;
+        if (!player.onGround()) {
+            Vec3 motion = player.getDeltaMovement();
+            if (motion.y > -0.12 && motion.y <= 0.0) {
+                referenceY = Math.max(referenceY, lastPosition(player).y);
+            }
         }
-        // 空中：用「最后一次触地的高度」当参考，绝不跟随身体浮沉。
-        // telly 全程在跳，若用实时 position().y，目标 Y 会随跳跃上下漂移，
-        // 桥面就会时高时低、叠格错位（实测 placed Y 在 -56/-55/-54/-60/-59 之间乱跳）。
-        if (lastGroundFeetY != Integer.MIN_VALUE) {
-            return lastGroundFeetY;
-        }
-        return pos.y;
+        return referenceY;
     }
 
     private int getStrictBelowTargetY(LocalPlayer player) {
@@ -3154,13 +3228,11 @@ public class Telly extends Module {
         return floor(lastPosition(player).y) - 1;
     }
 
+    /** 脚本原版：mode==1 且「正在上升」时，允许把目标叠到 currentY + 1（1.8.9 行为）。 */
     private boolean isStraightAscendingContext(LocalPlayer player) {
-        // 原实现把「此刻正在上升」（跳跃时 motion.y > 0）当成「在往上走」，于是放行把方块
-        // 叠到 curY + 1 —— 而 UP 面（face=1）的评分惩罚是 0，一旦可用必被选中。
-        // telly 全程起跳，这个判定几乎恒为真，结果每格都在往上叠、桥面起伏接不上
-        // （实测 placed Y 在 -56/-55/-54/-60 之间乱跳，而 curY 已稳定在 -56）。
-        // 真需要抬升时，玩家会落到更高一层并触发 onGround，基准 lastGroundFeetY 自然跟新。
-        return false;
+        if (getConditionModeCheck(player) != 1) return false;
+        Vec3 motion = player.getDeltaMovement();
+        return motion.y > 0.0 || player.position().y > lastPosition(player).y + 1.0E-4;
     }
 
     private boolean isSupportAvailable(int x, int y, int z) {
@@ -3292,9 +3364,21 @@ public class Telly extends Module {
                 || block instanceof BedBlock;
     }
 
+    /**
+     * 交互距离 —— 走 26.2 的 <b>attribute</b>（{@code block_interaction_range}），不要硬编码。
+     *
+     * <p>⚠️ 1.8.9 的 reach 是客户端常量（4.5 / 创造 5.0），26.2 起它是 attribute，
+     * <b>服务器可以改</b>。硬编码的后果：一旦服务器把它调小，本模块会算出服务端不接受的候选，
+     * 而服务端 {@code ServerGamePacketListenerImpl.handleUseItemOn} 的<b>第一道</b>校验就是
+     * {@code if (!player.isWithinBlockInteractionRange(blockPos, 1.0)) return;} —— <b>静默丢弃</b>，
+     * 本地却已经走了预测（看着像放上了）。表现就是日志里的
+     * {@code SERVER-SWALLOW ... name=air}（服务器回发的放置位仍是空气）⇒ 该格没接上 ⇒ <b>掉</b>。
+     *
+     * <p>用 attribute 还会自动覆盖创造模式（attribute 自己会变），不必再分叉。
+     */
     private double reach() {
         LocalPlayer player = mc.player;
-        return player != null && player.isCreative() ? 5.0 : 4.5;
+        return player == null ? 4.5 : player.blockInteractionRange();
     }
 
     private int placementTick(LocalPlayer player) {
@@ -3511,6 +3595,40 @@ public class Telly extends Module {
         };
     }
 
+    /**
+     * 激活手势里那个「右键」的显示名。
+     *
+     * <p>⚠️ 这里**不能**用 {@code mc.options.keyUse.getTranslatedKeyMessage()}：
+     * 触发条件检测的是 {@link #physicalRightMouseDown()}（物理鼠标右键），
+     * 而不是 {@code keyUse} 的绑定状态 —— 后者会被本模块自己
+     * {@code setPressed("use", …)} 抑制掉（写后即读恒 false）。
+     * 若玩家把 {@code keyUse} 改绑到别的键，用它显示就会**误导**。
+     */
+    private String rightMouseDisplay() {
+        try {
+            return InputConstants.Type.MOUSE
+                    .getOrCreate(GLFW.GLFW_MOUSE_BUTTON_RIGHT)
+                    .getDisplayName().getString();
+        } catch (Exception ignored) {
+            return "RMB";
+        }
+    }
+
+    /**
+     * 按键的显示名（走玩家实际绑定），供提示文案使用。
+     *
+     * <p>提示里必须写清要按哪两个键；取不到时退回内部键名。
+     */
+    private String keyDisplay(String key) {
+        KeyMapping binding = mapping(key);
+        if (binding == null) return key;
+        try {
+            return binding.getTranslatedKeyMessage().getString();
+        } catch (Exception ignored) {
+            return key;
+        }
+    }
+
     private void setPressed(String key, boolean state) {
         KeyMapping mapping = mapping(key);
         if (mapping != null) mapping.setDown(state);
@@ -3550,6 +3668,13 @@ public class Telly extends Module {
      * 玩家是否已越过最后一个已放置方块（即站在尚未铺好的区域上）。
      * 桥的推进方向由 travelX/travelZ 决定，沿该方向超出 1 格即视为冲过头。
      */
+    /**
+     * 玩家是否已越过最后一个已放置方块（即站在尚未铺好的区域上）。
+     * 桥的推进方向由 travelX/travelZ 决定，沿该方向超出 1 格即视为冲过头。
+     *
+     * <p>⚠️ 容差**保持脚本原值 1**，不要收紧 —— 收紧会让停步变频繁，
+     * 移动呈"走走停停"从而被反作弊判定（2026-09-27 实测）。见 AGENTS.md。
+     */
     private boolean isPlayerAheadOfBridge(LocalPlayer player) {
         if (player == null || lastPlacedPos == null) return false;
         Vec3 pos = player.position();
@@ -3570,6 +3695,19 @@ public class Telly extends Module {
     private void dbg(String message) {
         if (debugLog.getValue()) {
             System.out.println("[Telly] " + message);
+        }
+    }
+
+    /**
+     * 惰性诊断：{@code debugLog} 关闭时<b>不构造字符串</b>。
+     *
+     * <p>诊断串里常含 {@code String.format} 与 {@code getDeltaMovement()} 这类调用；
+     * 若写成字面拼接，参数会在进入本方法前就求值 —— 关掉开关也照样分配。
+     * 热路径上的诊断一律走这个重载。
+     */
+    private void dbg(Supplier<String> message) {
+        if (debugLog.getValue()) {
+            System.out.println("[Telly] " + message.get());
         }
     }
 

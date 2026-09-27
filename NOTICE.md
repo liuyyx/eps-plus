@@ -100,16 +100,23 @@ The telly bridging algorithm - edge detection, the 21 frame rotation script,
 block candidate search and placement strategy - was ported from this project's
 telly script to Epsilon's Minecraft 26.2 module, rotation and event systems.
 
-## Leader-Lite
+## LiquidBounce
 
-- Repository: [woshijiejue/Leader-Lite](https://github.com/woshijiejue/Leader-Lite)
-- Target: Minecraft 1.8.9 (Forge)
-- Author: [@woshijiejue](https://github.com/woshijiejue)
-- Used in Epsilon: the `Legit` mode of the `Scaffold` module.
+- Repository: [CCBlueX/LiquidBounce](https://github.com/CCBlueX/LiquidBounce)
+- Reference revision: `2d94475` (LiquidBounce nextgen 0.40.1)
+- License: GNU General Public License v3.0
+- Used in Epsilon: the `Polar` God Bridge variant of the `Scaffold` module, and
+  the `Derp` module.
 
-The sneak-rise bridging algorithm - edge state machine, rotation rate limiting
-and the placement gate - was ported from this project's Legit mode to Epsilon's
-Minecraft 26.2 module, rotation and event systems.
+The GodBridge scaffolding pipeline - the aiming/rotation stack (`Rotation`,
+`RotationTarget`, `RotationManager`, `RotationsValueGroup`, the `AngleSmooth`
+processors), block placement target finding, the simulated player and movement
+planner, the clicking scheduler with all of its click patterns, and the
+GodBridge technique including its ledge and eagle features - was ported line by
+line from this project's `utils/aiming`, `utils/block/targetfinding`,
+`utils/clicking`, `utils/entity`, `utils/movement`, `utils/raytracing` and
+`features/module/modules/world/scaffold` packages to Epsilon's Minecraft 26.2
+module, setting, rotation and event systems.
 
 ## OpenVape4.21
 

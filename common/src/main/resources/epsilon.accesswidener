@@ -118,3 +118,13 @@ accessible field net/minecraft/client/gui/screens/social/SocialInteractionsScree
 accessible field net/minecraft/client/gui/components/ImageButton sprites Lnet/minecraft/client/gui/components/WidgetSprites;
 accessible class net/minecraft/client/gui/screens/debug/GameModeSwitcherScreen$GameModeIcon
 accessible class net/minecraft/client/gui/Font$PreparedTextBuilder
+
+# Scaffold 神桥 Polar 变体（LiquidBounce 移植）所需
+accessible field net/minecraft/client/Minecraft missTime I
+accessible field net/minecraft/world/entity/LivingEntity attackStrengthTicker I
+accessible field net/minecraft/world/entity/EntityFluidInteraction trackerByFluid Ljava/util/Map;
+accessible method net/minecraft/world/entity/LivingEntity getJumpPower ()F
+accessible field net/minecraft/world/entity/Entity fluidInteraction Lnet/minecraft/world/entity/EntityFluidInteraction;
+mutable field net/minecraft/world/entity/EntityFluidInteraction trackerByFluid Ljava/util/Map;
+accessible field net/minecraft/world/entity/LivingEntity noJumpDelay I
+mutable field net/minecraft/world/entity/LivingEntity noJumpDelay I

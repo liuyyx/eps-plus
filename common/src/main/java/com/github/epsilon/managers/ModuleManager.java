@@ -96,6 +96,7 @@ public class ModuleManager {
         addModule(NoRotate.INSTANCE);
         addModule(PacketEat.INSTANCE);
         addModule(PlayerAlarms.INSTANCE);
+        addModule(ServerGuard.INSTANCE);
         addModule(SoundFX.INSTANCE);
         addModule(Stealer.INSTANCE);
         addModule(Timer.INSTANCE);
@@ -141,6 +142,7 @@ public class ModuleManager {
         addModule(Chams.INSTANCE);
         addModule(CrystalChams.INSTANCE);
         addModule(CustomSky.INSTANCE);
+        addModule(Derp.INSTANCE);
         addModule(ESP2D.INSTANCE);
         addModule(Filter.INSTANCE);
         addModule(FreeCamera.INSTANCE);

@@ -1947,9 +1947,8 @@
         "mode": {
           "_value": "模式",
           "tellybridge": "Telly桥",
-          "godbridge": "神桥",
-          "legit": "蹲起搭"
-        },
+          "godbridge": "神桥"
+                  },
         "swap mode": {
           "_value": "切换模式",
           "none": "无",
@@ -1977,35 +1976,91 @@
         "telly ticks": "Telly刻数",
         "place delay": "放置延迟",
         "place delay random": "放置随机延迟",
-        "emergency placement": "坠落强制放置",
         "god bridge variant": {
           "_value": "神桥变体",
           "classic": "经典",
           "polar": "Polar"
         },
-        "ledge jump": "边缘跳跃",
-        "ledge sneak": "边缘潜行",
-        "ledge stop input": "边缘停手",
-        "ledge step back": "边缘后退",
+        "god bridge": {
+          "_value": "神桥"
+        },
+        "modes jump": "边缘跳跃",
+        "modes sneak": "边缘潜行",
+        "modes stop input": "边缘停手",
+        "modes step back": "边缘后退",
         "force sneak below count": "强制潜行方块数",
         "sneak time min": "潜行刻数最小",
         "sneak time max": "潜行刻数最大",
-        "fake click": "假点击",
-        "fake click min cps": "假点击最低CPS",
-        "fake click max cps": "假点击最高CPS",
-        "fake click failed only": "假点击仅失败时",
-        "rotation smooth": {
-          "_value": "转向平滑",
+        "rotation timing": {
+          "_value": "转向时机",
+          "normal": "普通",
+          "ontick": "放置刻",
+          "onticksnap": "放置刻(保持)"
+        },
+        "consider inventory": "考虑背包",
+        "delay min": "延迟最小",
+        "delay max": "延迟最大",
+        "debug log": "诊断日志",
+        "sneak while bridging": "搭桥时潜行",
+        "ledge": "边缘动作",
+        "min dist": "最小距离",
+        "swing": {
+          "_value": "挥手",
+          "donothide": "不隐藏",
+          "hideforboth": "双端都隐藏",
+          "hideforclient": "仅隐藏本地",
+          "hideforserver": "仅隐藏服务端"
+        },
+        "fake click": {
+          "_value": "假点击"
+        },
+        "simulate placement attempts": "模拟放置尝试",
+        "click cps min": "点击CPS最小",
+        "click cps max": "点击CPS最大",
+        "click technique": {
+          "_value": "点击模式",
+          "stabilized": "稳定",
+          "efficient": "高效",
+          "spamming": "连点",
+          "double_click": "双击",
+          "drag": "拖动",
+          "butterfly": "蝶式",
+          "normal_distribution": "正态分布"
+        },
+        "failed attempts only": "仅失败时",
+        "rotation": {
+          "_value": "转向"
+        },
+        "angle smooth": {
+          "_value": "角度平滑",
           "linear": "线性",
           "sigmoid": "Sigmoid"
         },
-        "sigmoid horizontal speed min": "Sigmoid 水平速度最小",
-        "sigmoid horizontal speed max": "Sigmoid 水平速度最大",
-        "sigmoid vertical speed min": "Sigmoid 垂直速度最小",
-        "sigmoid vertical speed max": "Sigmoid 垂直速度最大",
-        "sigmoid steepness": "Sigmoid 陡度",
-        "sigmoid midpoint": "Sigmoid 中点",
-        "hide swing on client": "隐藏本地挥手",
+        "horizontal turn speed min": "水平转速最小",
+        "horizontal turn speed max": "水平转速最大",
+        "vertical turn speed min": "垂直转速最小",
+        "vertical turn speed max": "垂直转速最大",
+        "steepness": "陡度",
+        "midpoint": "中点",
+        "reset threshold": "重置阈值",
+        "ticks until reset": "重置刻数",
+        "movement correction": {
+          "_value": "移动修正",
+          "off": "关闭",
+          "strict": "严格",
+          "silent": "静默",
+          "change_look": "改变视角"
+        },
+        "eagle": {
+          "_value": "Eagle"
+        },
+        "eagle enabled": "启用 Eagle",
+        "blocks to eagle min": "Eagle 方块数最小",
+        "blocks to eagle max": "Eagle 方块数最大",
+        "edge distance min": "边缘距离最小",
+        "edge distance max": "边缘距离最大",
+        "only on ground": "仅在地面",
+        "emergency placement": "坠落强制放置",
         "swing hand": "挥手",
         "render": "渲染",
         "fade": "变淡",
@@ -2194,6 +2249,32 @@
         "speed": "速度",
         "color": "颜色",
         "background color (local)": "背景颜色（Local）"
+      },
+      "derp": {
+        "_value": "抽搐",
+        "yaw": {
+          "_value": "水平角",
+          "static": "静止",
+          "offset": "偏移",
+          "random": "随机",
+          "jitter": "抖动",
+          "spin": "旋转"
+        },
+        "yaw value": "水平角值",
+        "yaw offset": "水平角偏移",
+        "forward ticks": "正向刻数",
+        "backward ticks": "反向刻数",
+        "spin speed": "旋转速度",
+        "pitch": {
+          "_value": "俯仰角",
+          "static": "静止",
+          "offset": "偏移",
+          "random": "随机"
+        },
+        "pitch value": "俯仰角值",
+        "pitch offset": "俯仰角偏移",
+        "safe pitch": "安全俯仰角",
+        "not during sprint": "疾跑时暂停"
       },
       "esp 2d": {
         "_value": "2D 透视",
@@ -2848,6 +2929,21 @@
         "quartz": "石英",
         "water": "水",
         "lava": "岩浆"
+      },
+      "server guard": {
+        "_value": "反作弊检测",
+        "swallow block": "吞方块警告",
+        "swallow attack": "吞刀警告",
+        "rubberband warning": "回弹警告",
+        "rubberband range": "回弹判定范围",
+        "bot warning": "假人警告",
+        "tab list check": "校验 Tab 列表",
+        "bot range": "检测范围",
+        "alert cooldown": "警报冷却",
+        "flash": "边缘闪烁警告",
+        "flash duration": "闪烁时长",
+        "flash thickness": "边缘光晕厚度",
+        "flash color": "警告颜色"
       }
     },
     "elements": {

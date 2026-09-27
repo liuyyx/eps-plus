@@ -30,6 +30,8 @@
     "MixinDeltaTrackerTimer",
     "MixinDynamicUniforms",
     "MixinEnchantTableRenderer",
+    "MixinEntityFluidInteraction",
+    "MixinEntityFluidInteractionTracker",
     "MixinEntity",
     "MixinEntityHitboxDebugRenderer",
     "MixinEntityRenderDispatcher",

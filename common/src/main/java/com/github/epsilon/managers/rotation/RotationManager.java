@@ -70,6 +70,50 @@ public abstract class RotationManager {
         onRotationsSet();
     }
 
+    /**
+     * 直通式托管旋转：把 {@code rotations} 直接作为本刻的托管角与发包角提交，
+     * **不经过** {@link #smooth()}（即不做 {@code RotationUtils.smooth} 的限速、
+     * 灵敏度网格量化与抖动分支）。
+     *
+     * <p>为 Scaffold 神桥 Polar 变体而加：该路径自己按 LiquidBounce 的
+     * {@code RotationManager.update()} 逐刻算出托管角，并要求"算出来是什么就发什么"，
+     * 不能再被本类的平滑管线二次加工（LB 的 {@code currentRotation} 同样不经平滑）。</p>
+     *
+     * <p>{@code smoothed = true} 是关键：{@link #onPlayerTick} 里
+     * {@code if (hasActiveRotation()) smooth();} 会无条件调用 {@code smooth()}，
+     * 而 {@code smooth()} 只在 {@code !smoothed} 时才重算 {@code rotations}；
+     * 置位后本刻的直通角度不会被它覆写。</p>
+     *
+     * <p>优先级门与 {@link #setRotations} 同源：直通路径不代表可以无视托管顺序，
+     * 否则 {@code Derp} 这类 {@code Priority.Lowest} 模块会硬覆盖 {@code KillAura} 的瞄准角。</p>
+     *
+     * @param rotations 本刻要落地并发包的角度
+     * @param priority  托管优先级
+     */
+    public void setRotationsDirect(Rot2f rotations, Priority priority) {
+        if (rotations == null) return;
+
+        if (this.active && priority.priority < this.priority) {
+            return;
+        }
+
+        this.targetRotations = rotations;
+        this.rotations = rotations;
+        this.lastRotations = rotations;
+        this.rotationSpeed = 0.0;
+        this.raytrace = null;
+        this.priority = priority.priority;
+        this.active = true;
+        this.smoothed = true;
+
+        updateHitResult();
+        if (shouldModifyCrosshair()) {
+            mc.pick(1.0f);
+        }
+
+        onRotationsSet();
+    }
+
     protected void onRotationsSet() {
     }
 

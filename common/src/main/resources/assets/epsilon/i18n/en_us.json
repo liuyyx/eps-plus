@@ -1947,9 +1947,8 @@
         "mode": {
           "_value": "Mode",
           "tellybridge": "Telly Bridge",
-          "godbridge": "God Bridge",
-          "legit": "Legit"
-        },
+          "godbridge": "God Bridge"
+                  },
         "swap mode": {
           "_value": "Swap Mode",
           "none": "None",
@@ -1977,35 +1976,91 @@
         "telly ticks": "Telly Ticks",
         "place delay": "Place Delay",
         "place delay random": "Place Delay Random",
-        "emergency placement": "Emergency Placement",
         "god bridge variant": {
           "_value": "God Bridge Variant",
           "classic": "Classic",
           "polar": "Polar"
         },
-        "ledge jump": "Ledge Jump",
-        "ledge sneak": "Ledge Sneak",
-        "ledge stop input": "Ledge Stop Input",
-        "ledge step back": "Ledge Step Back",
+        "god bridge": {
+          "_value": "God Bridge"
+        },
+        "modes jump": "Ledge Jump",
+        "modes sneak": "Ledge Sneak",
+        "modes stop input": "Ledge Stop Input",
+        "modes step back": "Ledge Step Back",
         "force sneak below count": "Force Sneak Below Count",
         "sneak time min": "Sneak Time Min",
         "sneak time max": "Sneak Time Max",
-        "fake click": "Fake Click",
-        "fake click min cps": "Fake Click Min CPS",
-        "fake click max cps": "Fake Click Max CPS",
-        "fake click failed only": "Fake Click Failed Only",
-        "rotation smooth": {
-          "_value": "Rotation Smooth",
+        "rotation timing": {
+          "_value": "Rotation Timing",
+          "normal": "Normal",
+          "ontick": "On Tick",
+          "onticksnap": "On Tick Snap"
+        },
+        "consider inventory": "Consider Inventory",
+        "delay min": "Delay Min",
+        "delay max": "Delay Max",
+        "debug log": "Debug Log",
+        "sneak while bridging": "Sneak While Bridging",
+        "ledge": "Ledge",
+        "min dist": "Min Dist",
+        "swing": {
+          "_value": "Swing",
+          "donothide": "Do Not Hide",
+          "hideforboth": "Hide For Both",
+          "hideforclient": "Hide For Client",
+          "hideforserver": "Hide For Server"
+        },
+        "fake click": {
+          "_value": "Fake Click"
+        },
+        "simulate placement attempts": "Simulate Placement Attempts",
+        "click cps min": "Click CPS Min",
+        "click cps max": "Click CPS Max",
+        "click technique": {
+          "_value": "Click Technique",
+          "stabilized": "Stabilized",
+          "efficient": "Efficient",
+          "spamming": "Spamming",
+          "double_click": "Double Click",
+          "drag": "Drag",
+          "butterfly": "Butterfly",
+          "normal_distribution": "Normal Distribution"
+        },
+        "failed attempts only": "Failed Attempts Only",
+        "rotation": {
+          "_value": "Rotation"
+        },
+        "angle smooth": {
+          "_value": "Angle Smooth",
           "linear": "Linear",
           "sigmoid": "Sigmoid"
         },
-        "sigmoid horizontal speed min": "Sigmoid Horizontal Speed Min",
-        "sigmoid horizontal speed max": "Sigmoid Horizontal Speed Max",
-        "sigmoid vertical speed min": "Sigmoid Vertical Speed Min",
-        "sigmoid vertical speed max": "Sigmoid Vertical Speed Max",
-        "sigmoid steepness": "Sigmoid Steepness",
-        "sigmoid midpoint": "Sigmoid Midpoint",
-        "hide swing on client": "Hide Swing On Client",
+        "horizontal turn speed min": "Horizontal Turn Speed Min",
+        "horizontal turn speed max": "Horizontal Turn Speed Max",
+        "vertical turn speed min": "Vertical Turn Speed Min",
+        "vertical turn speed max": "Vertical Turn Speed Max",
+        "steepness": "Steepness",
+        "midpoint": "Midpoint",
+        "reset threshold": "Reset Threshold",
+        "ticks until reset": "Ticks Until Reset",
+        "movement correction": {
+          "_value": "Movement Correction",
+          "off": "Off",
+          "strict": "Strict",
+          "silent": "Silent",
+          "change_look": "Change Look"
+        },
+        "eagle": {
+          "_value": "Eagle"
+        },
+        "eagle enabled": "Eagle Enabled",
+        "blocks to eagle min": "Blocks To Eagle Min",
+        "blocks to eagle max": "Blocks To Eagle Max",
+        "edge distance min": "Edge Distance Min",
+        "edge distance max": "Edge Distance Max",
+        "only on ground": "Only On Ground",
+        "emergency placement": "Emergency Placement",
         "swing hand": "Swing Hand",
         "render": "Render",
         "fade": "Fade",
@@ -2194,6 +2249,32 @@
         "speed": "Speed",
         "color": "Color",
         "background color (local)": "Background Color (Local)"
+      },
+      "derp": {
+        "_value": "Derp",
+        "yaw": {
+          "_value": "Yaw",
+          "static": "Static",
+          "offset": "Offset",
+          "random": "Random",
+          "jitter": "Jitter",
+          "spin": "Spin"
+        },
+        "yaw value": "Yaw Value",
+        "yaw offset": "Yaw Offset",
+        "forward ticks": "Forward Ticks",
+        "backward ticks": "Backward Ticks",
+        "spin speed": "Spin Speed",
+        "pitch": {
+          "_value": "Pitch",
+          "static": "Static",
+          "offset": "Offset",
+          "random": "Random"
+        },
+        "pitch value": "Pitch Value",
+        "pitch offset": "Pitch Offset",
+        "safe pitch": "Safe Pitch",
+        "not during sprint": "Not During Sprint"
       },
       "esp 2d": {
         "_value": "ESP 2D",
@@ -2848,6 +2929,21 @@
         "quartz": "Quartz",
         "water": "Water",
         "lava": "Lava"
+      },
+      "server guard": {
+        "_value": "Anti Cheat Detect",
+        "swallow block": "Swallow Block Alert",
+        "swallow attack": "Swallow Attack Alert",
+        "rubberband warning": "Rubberband Alert",
+        "rubberband range": "Rubberband Range",
+        "bot warning": "Bot Warning",
+        "tab list check": "Tab List Check",
+        "bot range": "Detect Range",
+        "alert cooldown": "Alert Cooldown",
+        "flash": "Edge Glow",
+        "flash duration": "Flash Duration",
+        "flash thickness": "Edge Glow Thickness",
+        "flash color": "Flash Color"
       }
     },
     "elements": {
