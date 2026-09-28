@@ -168,11 +168,56 @@ public final class SettingSectionRenderer {
     // --- 高度 ---
 
     private float nodeHeight(Node node) {
+        if (!hasVisibleContent(node)) {
+            // 分组里的控件被依赖全部隐藏时整块消失（不占高度、不画卡片），
+            // 否则会留下一张只有标题和计数、内容为空的盒子。
+            return 0.0f;
+        }
         if (!node.hasHeader()) {
             return elementsHeight(node);
         }
         float contentHeight = DropdownTheme.GROUP_INSET + elementsHeight(node);
         return DropdownTheme.GROUP_HEADER_HEIGHT + DropdownTheme.SETTING_GAP + contentHeight * expandProgress(node);
+    }
+
+    /**
+     * 该节点（含嵌套子分组）是否至少有一个可见控件。
+     * <p>
+     * 依赖是动态的（切模式会变），所以这个判定必须在绘制期现算 —— 在 {@code buildNode}
+     * 构建期过滤会变成快照，切回来就不对了。
+     */
+    private static boolean hasVisibleContent(Node node) {
+        for (Element element : node.elements) {
+            switch (element) {
+                case WidgetElement widgetElement -> {
+                    if (widgetElement.widget().isVisible()) {
+                        return true;
+                    }
+                }
+                case ChildElement childElement -> {
+                    if (hasVisibleContent(childElement.node())) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    /** 分组卡片右上角计数：只数可见控件。 */
+    private static int visibleSettingCount(Node node) {
+        int count = 0;
+        for (Element element : node.elements) {
+            switch (element) {
+                case WidgetElement widgetElement -> {
+                    if (widgetElement.widget().isVisible()) {
+                        count++;
+                    }
+                }
+                case ChildElement childElement -> count += visibleSettingCount(childElement.node());
+            }
+        }
+        return count;
     }
 
     private float elementsHeight(Node node) {
@@ -196,6 +241,9 @@ public final class SettingSectionRenderer {
     private void drawNode(UiTree.Scope scope, UiTextMetrics textMetrics, int mouseX, int mouseY,
                           Node node, int depth, float x, float y, float width,
                           float hitOffsetX, float hitOffsetY) {
+        if (!hasVisibleContent(node)) {
+            return;
+        }
         if (!node.hasHeader()) {
             drawElements(scope, textMetrics, mouseX, mouseY, node, depth, x, y, width, hitOffsetX, hitOffsetY);
             return;
@@ -227,7 +275,7 @@ public final class SettingSectionRenderer {
         scope.text(label, cardBounds.x() + DropdownTheme.SETTING_PADDING_X, labelY,
                 DropdownTheme.GROUP_HEADER_TEXT_SCALE, DropdownTheme.groupText());
 
-        String countLabel = Integer.toString(node.totalSettingCount());
+        String countLabel = Integer.toString(visibleSettingCount(node));
         float countWidth = textMetrics.textWidth(countLabel, DropdownTheme.GROUP_COUNT_TEXT_SCALE)
                 + DropdownTheme.GROUP_COUNT_CHIP_PADDING * 2.0f;
         float countX = cardBounds.x() + cardBounds.width() - DropdownTheme.SETTING_PADDING_X - countWidth - 12.0f;
@@ -285,6 +333,9 @@ public final class SettingSectionRenderer {
 
     private boolean clickNode(Node node, int depth, float x, float y, float width,
                               double mouseX, double mouseY, int button) {
+        if (!hasVisibleContent(node)) {
+            return false;
+        }
         if (!node.hasHeader()) {
             return clickElements(node, depth, x, y, width, mouseX, mouseY, button);
         }
@@ -495,10 +546,6 @@ public final class SettingSectionRenderer {
 
         private void toggleCollapsed() {
             model.toggleCollapsed();
-        }
-
-        private int totalSettingCount() {
-            return model.totalSettingCount();
         }
     }
 

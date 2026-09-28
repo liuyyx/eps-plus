@@ -127,3 +127,25 @@ module, setting, rotation and event systems.
 The AI rotation mode - feeding a combat regression model's per-tick yaw/pitch
 deltas into the rotation pipeline - was ported from this project to Epsilon's
 Minecraft 26.2 module and rotation systems.
+
+## OpenOpal
+
+- Repository: [ZSZ7/OpenOpal](https://github.com/ZSZ7/OpenOpal)
+- Reference revision: `0411550`
+- Target: Minecraft 1.21.10 (Fabric, Yarn mappings)
+- License: GNU General Public License v3.0
+- Used in Epsilon: the `Heypixel` and `Hypixel` modes of the `Scaffold`
+  module (the Uitems bridge), together with the helpers they depend on -
+  `SkipTickUtility`, `RaytracedRotation`, `RaycastUtility`,
+  `RotationUtility`, the rotation model/handler set
+  (`IRotationModel`, `EnumRotationModel`, the six models,
+  `RotationHelper`, `RotationMouseHandler`, `ClientRotationHandler`),
+  `SlotHelper` and the SkipTick self-rescue facilities.
+
+The original code has been modified and adapted for Epsilon's Minecraft 26.2
+module, setting and event systems: Yarn names were translated to Mojang names,
+`ModuleMode` was replaced by plain classes holding a `Scaffold` reference,
+the settings view (`ScaffoldSettings`) is a thin getter layer over the
+module's own settings, and the mouse-delta landing path was replaced by
+`RotationManager.setRotationsDirect` (Epsilon has no mouse-injection channel
+and silent rotation must not move the player's view).

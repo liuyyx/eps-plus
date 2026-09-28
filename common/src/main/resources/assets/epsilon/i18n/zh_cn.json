@@ -1947,7 +1947,9 @@
         "mode": {
           "_value": "模式",
           "tellybridge": "Telly桥",
-          "godbridge": "神桥"
+          "godbridge": "神桥",
+          "heypixel": "Heypixel",
+          "hypixel": "Hypixel"
                   },
         "swap mode": {
           "_value": "切换模式",
@@ -2060,6 +2062,22 @@
         "edge distance min": "边缘距离最小",
         "edge distance max": "边缘距离最大",
         "only on ground": "仅在地面",
+        "uitems": {
+          "_value": "Uitems"
+        },
+        "uitems telly": "Uitems Telly",
+        "uitems telly ticks": "Uitems Telly刻数",
+        "uitems rotation speed": "Uitems 旋转速度",
+        "uitems rotation back speed": "Uitems 回转速度",
+        "duplicate rot place": "重复旋转放置",
+        "override raycast": "覆盖射线追踪",
+        "interact before place": "放置前交互",
+        "safewalk": "安全行走",
+        "self rescue mode": {
+          "_value": "自救模式",
+          "disabled": "关闭",
+          "skiptick": "跳刻"
+        },
         "emergency placement": "坠落强制放置",
         "swing hand": "挥手",
         "render": "渲染",

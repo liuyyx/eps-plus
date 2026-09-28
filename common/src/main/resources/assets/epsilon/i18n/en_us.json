@@ -1947,7 +1947,9 @@
         "mode": {
           "_value": "Mode",
           "tellybridge": "Telly Bridge",
-          "godbridge": "God Bridge"
+          "godbridge": "God Bridge",
+          "heypixel": "Heypixel",
+          "hypixel": "Hypixel"
                   },
         "swap mode": {
           "_value": "Swap Mode",
@@ -2060,6 +2062,22 @@
         "edge distance min": "Edge Distance Min",
         "edge distance max": "Edge Distance Max",
         "only on ground": "Only On Ground",
+        "uitems": {
+          "_value": "Uitems"
+        },
+        "uitems telly": "Uitems Telly",
+        "uitems telly ticks": "Uitems Telly Ticks",
+        "uitems rotation speed": "Uitems Rotation Speed",
+        "uitems rotation back speed": "Uitems Rotation Back Speed",
+        "duplicate rot place": "Duplicate Rot Place",
+        "override raycast": "Override raycast",
+        "interact before place": "Interact before place",
+        "safewalk": "SafeWalk",
+        "self rescue mode": {
+          "_value": "Self rescue mode",
+          "disabled": "Disabled",
+          "skiptick": "SkipTick"
+        },
         "emergency placement": "Emergency Placement",
         "swing hand": "Swing Hand",
         "render": "Render",

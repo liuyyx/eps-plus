@@ -8,16 +8,25 @@ import com.github.epsilon.events.bus.listeners.ConsumerListener;
 import com.github.epsilon.events.impl.ClientTickEvent;
 import com.github.epsilon.events.impl.KeyboardInputEvent;
 import com.github.epsilon.events.impl.PacketEvent;
+import com.github.epsilon.events.impl.PlaceBlockEvent;
 import com.github.epsilon.events.impl.PlayerTickEvent;
 import com.github.epsilon.events.impl.Render3DEvent;
+import com.github.epsilon.events.impl.SendPositionEvent;
 import com.github.epsilon.graphics.schedulers.render3d.Render3DScheduler;
 import com.github.epsilon.managers.NotificationManager;
 import com.github.epsilon.managers.rotation.RotationManager;
 import com.github.epsilon.modules.Category;
 import com.github.epsilon.modules.Module;
+import com.github.epsilon.modules.impl.movement.scaffold.HeypixelScaffold;
+import com.github.epsilon.modules.impl.movement.scaffold.HypixelScaffold;
 import com.github.epsilon.modules.impl.movement.scaffold.ScaffoldPolarCoordinator;
+import com.github.epsilon.modules.impl.movement.scaffold.ScaffoldSettings;
 import com.github.epsilon.modules.impl.movement.scaffold.clicking.Clicker;
 import com.github.epsilon.modules.impl.movement.scaffold.rotation.MovementCorrection;
+import com.github.epsilon.modules.impl.movement.scaffold.rotation.RotationHelper;
+import com.github.epsilon.modules.impl.movement.scaffold.rotation.RotationProperty;
+import com.github.epsilon.modules.impl.movement.scaffold.rotation.model.impl.InstantRotationModel;
+import com.github.epsilon.modules.impl.movement.scaffold.slot.SlotHelper;
 import com.github.epsilon.modules.impl.movement.scaffold.util.EntityUtils;
 import com.github.epsilon.settings.Setting;
 import com.github.epsilon.settings.SettingGroup;
@@ -26,6 +35,8 @@ import com.github.epsilon.utils.math.MathUtils;
 import com.github.epsilon.utils.player.FallingPlayer;
 import com.github.epsilon.utils.player.FindItemResult;
 import com.github.epsilon.utils.player.InvUtils;
+import com.github.epsilon.utils.player.RotationUtility;
+import com.github.epsilon.utils.player.SkipTickUtility;
 import com.github.epsilon.utils.render.animation.Easing;
 import com.github.epsilon.utils.rotation.RaytraceUtils;
 import com.github.epsilon.utils.rotation.Rot2f;
@@ -96,11 +107,20 @@ public class Scaffold extends Module {
                     }
                 }
         ));
+        // OpenPal 由 mod 启动阶段调用 SlotHelper.setInstance()；本仓库的模块单例就是启动点。
+        SlotHelper.setInstance();
     }
 
     private enum Mode {
         TellyBridge,
-        GodBridge
+        GodBridge,
+        /**
+         * OpenPal 的 Uitems 搭路（见 {@code scaffold/HeypixelScaffold}）。
+         * 与 {@link #GodBridge} 的 Polar 变体并列，两者互不影响。
+         */
+        Heypixel,
+        /** OpenPal 的 Uitems 搭路（Hypixel 变体，见 {@code scaffold/HypixelScaffold}）。 */
+        Hypixel
     }
 
     private enum RotationMode {
@@ -206,7 +226,12 @@ public class Scaffold extends Module {
     private final EnumSetting<Mode> mode = enumSetting("Mode", Mode.TellyBridge);
     private final EnumSetting<SwapMode> swapMode = enumSetting("Swap Mode", SwapMode.Normal);
     private final BoolSetting swapBack = boolSetting("Swap Back", true, () -> swapMode.is(SwapMode.Normal));
-    private final BoolSetting snap = boolSetting("Snap", false, () -> mode.is(Mode.GodBridge));
+    /**
+     * 神桥 Classic 的准星吸附。OpenPal 侧同一个 {@code Snap} 也服务 Uitems 两个模式
+     * （依赖 {@code uitemsDependency && !Uitems Telly}，见 §5.1），故这里并上一条 or 条件。
+     * 该设置不属于 {@code Uitems} 分组：{@code GodBridge(Classic)} 下它仍要显示在通用设置里。
+     */
+    private final BoolSetting snap = boolSetting("Snap", false, () -> mode.is(Mode.GodBridge) || (isUitemsMode() && !this.uitemsTelly.getValue()));
     private final BoolSetting degrees45 = boolSetting("45 Degrees", false);
     private final EnumSetting<RotationMode> rotationMode = enumSetting("Rotation Mode", RotationMode.Static);
     private final EnumSetting<RaytraceMode> raytrace = enumSetting("Raytrace Mode", RaytraceMode.Normal);
@@ -333,6 +358,88 @@ public class Scaffold extends Module {
     public final DoubleSetting polarEdgeDistanceMax = doubleSetting("Edge Distance Max", 0.05, 0.01, 1.3, 0.01, polarDependency).group(sgEagle);
     public final BoolSetting polarOnlyOnGround = boolSetting("Only On Ground", true, polarDependency).group(sgEagle);
 
+    /*
+     * ===== Uitems 搭路（OpenPal 的 HeypixelScaffold / HypixelScaffold，逐段照抄）=====
+     * 显示名一律照 OpenPal 的 ScaffoldSettings 字面量；分组见 §5.2：非 Uitems 模式下
+     * 这一组所有子项都不可见，靠 SettingSectionRenderer.hasVisibleContent 让整张卡片消失。
+     *
+     * ⚠ 三处显示名**必须**加 "Uitems " 前缀（Telly Ticks / Rotation Speed / Rotation Back Speed）：
+     * 本模块的配置文件 `~/.epsilon/configs/<cfg>/epsilon/Scaffold.json` 以**显示名**为键
+     * （见 ConfigManager.saveModuleToDisk 的 settingsObj.add(setting.getName(), …)），
+     * 而同名的 Classic 设置（TellyBridge 的 Telly Ticks、通用 Rotation Speed / Rotation Back Speed）
+     * 已经占用了这三个键 —— 不加前缀会与它们**互相覆盖**（改一个模式会连带改另一个模式）。
+     */
+
+    private final Setting.Dependency heypixelDependency = () -> mode.is(Mode.Heypixel);
+    private final Setting.Dependency uitemsDependency = () -> mode.is(Mode.Heypixel) || mode.is(Mode.Hypixel);
+
+    private final SettingGroup sgUitems = settingGroup("Uitems");
+
+    /** OpenPal {@code uitemsTelly}（Hypixel 恒开，故只在 Heypixel 下有效）。 */
+    public final BoolSetting uitemsTelly = boolSetting("Uitems Telly", true, heypixelDependency).group(sgUitems);
+    /** OpenPal {@code tellyTick}。 */
+    public final IntSetting uitemsTellyTicks = intSetting("Uitems Telly Ticks", 5, 0, 10, 1, heypixelDependency).group(sgUitems);
+    /** OpenPal {@code rotateSpeed}。 */
+    public final IntSetting uitemsRotationSpeed = intSetting("Uitems Rotation Speed", 180, 10, 180, 10, uitemsDependency).group(sgUitems);
+    /** OpenPal {@code rotateBackSpeed}。 */
+    public final IntSetting uitemsRotationBackSpeed = intSetting("Uitems Rotation Back Speed", 180, 10, 180, 10, uitemsDependency).group(sgUitems);
+    /** OpenPal {@code duplicateRotPlace}。 */
+    public final BoolSetting uitemsDuplicateRotPlace = boolSetting("Duplicate Rot Place", false, uitemsDependency).group(sgUitems);
+    /** OpenPal {@code overrideRaycast}。 */
+    public final BoolSetting uitemsOverrideRaycast = boolSetting("Override raycast", true, uitemsDependency).group(sgUitems);
+    /** OpenPal {@code interactBeforePlace}。 */
+    public final BoolSetting uitemsInteractBeforePlace = boolSetting("Interact before place", false, uitemsDependency).group(sgUitems);
+    /** OpenPal {@code safeWalk}。 */
+    public final BoolSetting uitemsSafeWalk = boolSetting("SafeWalk", true, uitemsDependency).group(sgUitems);
+    /** OpenPal {@code selfRescueMode}。 */
+    public final EnumSetting<ScaffoldSettings.SelfRescueMode> uitemsSelfRescueMode =
+            enumSetting("Self rescue mode", ScaffoldSettings.SelfRescueMode.Disabled, uitemsDependency).group(sgUitems);
+
+    /**
+     * OpenPal 的 {@code RotationProperty}（Uitems 设置清单里没有"旋转模型"下拉框，见
+     * {@link RotationProperty} 注释）；只用于 {@link ScaffoldSettings#isRotationModel}。
+     */
+    public final RotationProperty rotationProperty = new RotationProperty(InstantRotationModel.INSTANCE);
+
+    /** OpenPal {@code ModuleMode} 注册表在本仓库的替代：两个引擎实例 + 当前生效者。 */
+    private final HeypixelScaffold heypixelScaffold = new HeypixelScaffold(this);
+    private final HypixelScaffold hypixelScaffold = new HypixelScaffold(this);
+
+    /** {@code module.getSettings()} 的对应物（§2 映射表）。 */
+    private final ScaffoldSettings scaffoldSettings = new ScaffoldSettings(this);
+
+    public ScaffoldSettings getScaffoldSettings() {
+        return scaffoldSettings;
+    }
+
+    public boolean isUitemsMode() {
+        return mode.is(Mode.Heypixel) || mode.is(Mode.Hypixel);
+    }
+
+    public boolean isHeypixelMode() {
+        return mode.is(Mode.Heypixel);
+    }
+
+    public boolean isHypixelMode() {
+        return mode.is(Mode.Hypixel);
+    }
+
+    public HeypixelScaffold getActiveUitemsMode() {
+        return mode.is(Mode.Hypixel) ? hypixelScaffold : heypixelScaffold;
+    }
+
+    /** §4.9：{@code SlotHelper.Silence} 由既有的 {@code Swap Mode} 派生。 */
+    public ScaffoldSettings.SwitchMode getUitemsSwitchMode() {
+        if (swapMode.is(SwapMode.Silent)) return ScaffoldSettings.SwitchMode.HOTBAR;
+        if (swapMode.is(SwapMode.InvSwitch)) return ScaffoldSettings.SwitchMode.FULL;
+        return ScaffoldSettings.SwitchMode.NORMAL;
+    }
+
+    /** OpenPal {@code ScaffoldSettings.isSnap()}（见 {@link #snap} 的共用说明）。 */
+    public boolean uitemsSnap() {
+        return snap.getValue();
+    }
+
     private final BoolSetting swingHand = boolSetting("Swing Hand", true);
     private final BoolSetting render = boolSetting("Render", true);
     private final BoolSetting fade = boolSetting("Fade", true, render::getValue);
@@ -362,6 +469,20 @@ public class Scaffold extends Module {
     /** 放置冷却剩余刻数；>0 时不放置。见 {@link #placeDelay}。 */
     private int placeDelayCounter = 0;
 
+    /*
+     * ===== OpenPal ScaffoldModule 的 SkipTick 自救设施（§4.16）=====
+     * 只搬两个 Uitems 模式会调用到的部分；OpenPal 的通用搜索/放置流水线不搬。
+     */
+
+    private boolean skipTickRecoveryActive;
+    private boolean skipTickRecoveryFailed;
+    private int skipTickRecoveryCandidateTicks;
+    private BlockPos skipTickRecoveryBlockPos;
+    private Direction skipTickRecoveryFace;
+
+    /** 上一次生效的 Uitems 模式，用于驱动两个引擎的 {@code onEnable/onDisable}。 */
+    private Mode lastUitemsMode;
+
     private final List<RenderInfo> renderBoxes = new ArrayList<>();
 
     @Override
@@ -375,6 +496,7 @@ public class Scaffold extends Module {
         shouldSwapBack = false;
         emergencyPlacementActive = false;
         pearlUsePacketSent = false;
+        lastUitemsMode = null;
         // LB ModuleScaffold.onEnabled()（404–412）
         ScaffoldPolarCoordinator.INSTANCE.onEnabled();
     }
@@ -389,6 +511,44 @@ public class Scaffold extends Module {
         if (shouldSwapBack) {
             InvUtils.swapBack();
             shouldSwapBack = false;
+        }
+
+        // Uitems：OpenPal 的 ModuleMode 框架会在模块关闭时调模式的 onDisable()。
+        // [适配] 模式的 onDisable() 走 handler.rotate(...)+reverse() 让托管角平滑回到玩家视角，
+        //        但本仓库的推进只在 Uitems 分流里调用（模块已关，不会再跑）⇒ 必须显式 reset() 释放，
+        //        否则 RotationManager 永久 active、准星与 MovementFix 停在旧角（见 RotationMouseHandler 注释）。
+        final HeypixelScaffold engine = getUitemsMode(lastUitemsMode);
+        if (engine != null) {
+            engine.onDisable();
+            RotationHelper.getHandler().reset();
+        }
+        lastUitemsMode = null;
+    }
+
+    private HeypixelScaffold getUitemsMode(Mode mode) {
+        if (mode == Mode.Heypixel) return heypixelScaffold;
+        if (mode == Mode.Hypixel) return hypixelScaffold;
+        return null;
+    }
+
+    /**
+     * OpenPal 的 {@code ModuleMode} 框架在模式切换时调旧模式的 {@code onDisable()}、新模式的
+     * {@code onEnable()}；本仓库没有该框架，改为每刻比对 {@link #lastUitemsMode} 现算。
+     */
+    private void syncUitemsModeLifecycle() {
+        final Mode current = mode.getValue();
+        if (lastUitemsMode == current) return;
+
+        final HeypixelScaffold previous = getUitemsMode(lastUitemsMode);
+        if (previous != null) {
+            previous.onDisable();
+            RotationHelper.getHandler().reset();
+        }
+        lastUitemsMode = current;
+
+        final HeypixelScaffold next = getUitemsMode(current);
+        if (next != null) {
+            next.onEnable();
         }
     }
 
@@ -455,6 +615,8 @@ public class Scaffold extends Module {
         // （见 util/EntityUtils.tickGroundState）。
         EntityUtils.tickGroundState(mc.player);
 
+        syncUitemsModeLifecycle();
+
         if (isPolarActive()) {
             // Polar 走 LiquidBounce 的 GodBridge 链路：本刻的转向目标、转向落地与放置
             // 全部由协调层按 LB 的顺序完成（rotationUpdate → RotationManager.update → tickHandler）。
@@ -462,6 +624,20 @@ public class Scaffold extends Module {
             blockResult = findBlockResult();
             if (blockResult.found() && handleEmergencyPlacement(event)) return;
             ScaffoldPolarCoordinator.INSTANCE.tickPolar();
+            return;
+        }
+
+        if (isUitemsMode()) {
+            // OpenPal 的每刻顺序：ScaffoldModule.onPreGameTick（换槽 + 自救武装）→ 模式的
+            // onPreTick（下转向目标）→ RotationMouseHandler 推进托管角。
+            // [适配] OpenPal 的两个旋转订阅点在本仓库合并为一次分流里的两次调用，
+            //        顺序与 OpenPal 的 PreGameTick 派发顺序一致（见 RotationMouseHandler 注释）。
+            SlotHelper.getInstance().tick();
+            armSkipTickRecovery();
+            updateSkipTickRecoveryGroundState();
+            RotationHelper.getHandler().onPreTick();
+            getActiveUitemsMode().onPreTick(event);
+            RotationHelper.getHandler().onMouseUpdate();
             return;
         }
 
@@ -554,6 +730,11 @@ public class Scaffold extends Module {
 
     @EventHandler(priority = EventPriority.HIGHEST)
     private void onMoveInput(KeyboardInputEvent event) {
+        if (isUitemsMode()) {
+            getActiveUitemsMode().onMoveInput(event);
+            return;
+        }
+
         forwardInput = event.getForward();
         strafeInput = event.getStrafe();
         inputYaw = Mth.wrapDegrees(Math.round((mc.player.getYRot() + (float) Math.toDegrees(Math.atan2(-strafeInput, forwardInput))) / 45.0F) * 45.0F);
@@ -562,6 +743,41 @@ public class Scaffold extends Module {
         if (mode.is(Mode.TellyBridge) && mc.player.onGround() && !mc.options.keyJump.isDown() && mc.player.isMoving()) {
             event.setJump(true);
         }
+    }
+
+    /**
+     * OpenPal {@code HeypixelScaffold.onPreMovementPacket}（{@code @Subscribe(priority = 3)}）的转发。
+     *
+     * <p>优先级必须低于 {@code RotationManager.onSendPosition}（{@link EventPriority#LOWEST} = -200）：
+     * 模式侧的 {@code packetRotation} 是刻意的两刻包伪装，晚于托管角写入才会真正落到出站包上。</p>
+     */
+    @EventHandler(priority = -300)
+    private void onUitemsSendPosition(SendPositionEvent event) {
+        if (isUitemsMode()) {
+            getActiveUitemsMode().onPreMovementPacket(event);
+        }
+    }
+
+    /**
+     * OpenPal {@code ClientWorldMixin.hookSkipTicks} 的等价物：消耗一次跳刻即取消
+     * {@code PlayerTickEvent.Pre}，{@code MixinLocalPlayer} 随即取消 {@code LocalPlayer.tick()}。
+     *
+     * <p>[适配·必须] 计划里写的是 {@link EventPriority#HIGHEST}，但 Epsilon 的 EventBus 一旦看到
+     * {@code isCancelled()} 就**中断后续派发**（见 {@code EventBus.post}），HIGHEST 会先于
+     * {@code Scaffold.onPlayerTick}（默认 MEDIUM）执行 ⇒ Uitems 的每刻逻辑（含
+     * {@code handleSkipTickRecovery} 自身）整段不会跑，自救循环直接失效。
+     * OpenPal 里这两件事分处两个事件（模块逻辑在 {@code PreGameTickEvent}，跳刻在实体 tick），
+     * 所以这里取 LOWEST：模块逻辑先跑完，再取消本刻实体 tick。</p>
+     */
+    @EventHandler(priority = EventPriority.LOWEST)
+    private void onUitemsSkipTick(PlayerTickEvent.Pre event) {
+        if (SkipTickUtility.consumeSkipTick()) event.cancel();
+    }
+
+    /** OpenPal 的渲染分工在模块侧：模式类不做渲染，放置成功由模块补渲染盒。 */
+    @EventHandler
+    private void onUitemsBlockPlaced(PlaceBlockEvent event) {
+        if (isUitemsMode()) addPlacedRenderBox(event.getBlockPos());
     }
 
     @EventHandler
@@ -1008,6 +1224,282 @@ public class Scaffold extends Module {
 
     public boolean isEmergencyPlacementActive() {
         return isEnabled() && emergencyPlacementActive;
+    }
+
+    // ===== 以下为 OpenPal ScaffoldModule 的 SkipTick 自救设施（§4.16，逐行照抄）=====
+
+    private static final Direction[] DIRECTIONS = Direction.values();
+
+    /** OpenPal {@code ScaffoldModule.isSolidAndNonInteractive}。 */
+    private boolean isSolidAndNonInteractive(final BlockState state, final BlockPos pos) {
+        return mc.level != null
+                && !state.getCollisionShape(mc.level, pos).isEmpty()
+                && state.getMenuProvider(mc.level, pos) == null;
+    }
+
+    /**
+     * OpenPal {@code ScaffoldModule.getPlaceableBlock()}。
+     * [适配] OpenPal 用 {@code realStackSizeMap}（未搬运的通用流水线的堆叠计数缓存）与
+     * {@code InventoryUtility.isGoodBlock}；本仓库改用既有的 {@link #isValidStack}（同一套方块白/黑名单）。
+     */
+    private int getPlaceableBlock() {
+        for (int i = 0; i < 9; i++) {
+            final ItemStack itemStack = mc.player.getInventory().getItem(i);
+            if (isValidStack(itemStack)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /** OpenPal {@code ScaffoldModule.updateSkipTickRecoveryGroundState}。 */
+    private void updateSkipTickRecoveryGroundState() {
+        final Stuck stuckModule = Stuck.INSTANCE;
+        if (!stuckModule.isEnabled() && !this.skipTickRecoveryActive) {
+            return;
+        }
+
+        boolean groundBelow = mc.player.onGround();
+        if (!groundBelow) {
+            for (double offset = 0.01; offset <= 1.5; offset += 0.5) {
+                if (!mc.level.getBlockState(BlockPos.containing(mc.player.getX(), mc.player.getY() - offset, mc.player.getZ())).isAir()) {
+                    groundBelow = true;
+                    break;
+                }
+            }
+        }
+
+        if (groundBelow) {
+            if (stuckModule.isEnabled()) {
+                stuckModule.setEnabled(false);
+            }
+            this.skipTickRecoveryActive = false;
+            SkipTickUtility.reset();
+            this.skipTickRecoveryFailed = false;
+        }
+    }
+
+    /** OpenPal {@code ScaffoldModule.findRecoveryBlock}。 */
+    private BlockPos findRecoveryBlock() {
+        if (mc.player == null || mc.level == null) return null;
+
+        BlockPos playerPos = mc.player.blockPosition();
+        for (int y = 0; y >= -3; y--) {
+            for (int x = -2; x <= 2; x++) {
+                for (int z = -2; z <= 2; z++) {
+                    BlockPos target = playerPos.offset(x, y, z);
+                    if (mc.level.getBlockState(target).canBeReplaced()) {
+                        for (Direction dir : DIRECTIONS) {
+                            BlockPos neighbor = target.relative(dir);
+                            if (!mc.level.getBlockState(neighbor).isAir() && !mc.level.getBlockState(neighbor).canBeReplaced()) {
+                                return target;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    /** OpenPal {@code ScaffoldModule.findReadySkipTickRecoveryTarget}。 */
+    private SkipTickRecoveryTarget findReadySkipTickRecoveryTarget() {
+        if (mc.player == null || mc.level == null) {
+            return null;
+        }
+
+        final Rot2f currentRotation = getCurrentClientRotation();
+        if (currentRotation == null) {
+            return null;
+        }
+
+        final Vec3 eyePos = mc.player.getEyePosition();
+        final BlockPos playerPos = mc.player.blockPosition();
+        SkipTickRecoveryTarget bestTarget = null;
+
+        for (int y = 0; y >= -3; y--) {
+            for (int x = -2; x <= 2; x++) {
+                for (int z = -2; z <= 2; z++) {
+                    final BlockPos targetPos = playerPos.offset(x, y, z);
+                    if (!mc.level.getBlockState(targetPos).canBeReplaced()) {
+                        continue;
+                    }
+
+                    for (Direction direction : DIRECTIONS) {
+                        final BlockPos supportPos = targetPos.relative(direction);
+                        if (!isSolidAndNonInteractive(mc.level.getBlockState(supportPos), supportPos)) {
+                            continue;
+                        }
+
+                        final Direction face = direction.getOpposite();
+                        final Rot2f rotation = RotationUtility.getRotationFromBlock(supportPos, face);
+                        final float rotationDifference = RotationUtility.getRotationDifference(currentRotation, rotation);
+                        if (rotationDifference > 16.0F) {
+                            continue;
+                        }
+
+                        final Vec3 supportCenter = new Vec3(
+                                supportPos.getX() + 0.5D,
+                                supportPos.getY() + 0.5D,
+                                supportPos.getZ() + 0.5D
+                        );
+                        final double dx = eyePos.x - supportCenter.x;
+                        final double dy = eyePos.y - supportCenter.y;
+                        final double dz = eyePos.z - supportCenter.z;
+                        final double distanceSq = dx * dx + dy * dy + dz * dz;
+                        if (distanceSq > 4.85D * 4.85D) {
+                            continue;
+                        }
+
+                        if (bestTarget == null
+                                || distanceSq < bestTarget.distanceSq
+                                || (Math.abs(distanceSq - bestTarget.distanceSq) < 1.0E-4D
+                                && rotationDifference < bestTarget.rotationDifference)) {
+                            bestTarget = new SkipTickRecoveryTarget(targetPos, supportPos, face, rotation, rotationDifference, distanceSq);
+                        }
+                    }
+                }
+            }
+        }
+
+        return bestTarget;
+    }
+
+    /** OpenPal {@code ScaffoldModule.getCurrentClientRotation}。 */
+    private Rot2f getCurrentClientRotation() {
+        if (mc.player == null) {
+            return null;
+        }
+        return RotationHelper.getClientHandler().getRotation();
+    }
+
+    /** OpenPal {@code ScaffoldModule.isFallingIntoVoid}。 */
+    private boolean isFallingIntoVoid() {
+        if (mc.player == null || mc.level == null) return false;
+        if (mc.player.getY() < -5) return true;
+
+        BlockPos pos = mc.player.blockPosition();
+        for (int y = (int) mc.player.getY(); y > -64; y--) {
+            if (!mc.level.getBlockState(new BlockPos(pos.getX(), y, pos.getZ())).isAir()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** OpenPal {@code ScaffoldModule.shouldTriggerSkipTickRecovery}。 */
+    private boolean shouldTriggerSkipTickRecovery() {
+        if (mc.player == null || mc.level == null || this.skipTickRecoveryActive || this.skipTickRecoveryFailed) {
+            return false;
+        }
+
+        if (getScaffoldSettings().getSelfRescueMode() != ScaffoldSettings.SelfRescueMode.SkipTick) {
+            return false;
+        }
+
+        if (isUitemsMode()) {
+            // OpenPal: getActiveMode() instanceof HeypixelScaffold → shouldSuppressSkipTickRecoveryTrigger()
+            if (getActiveUitemsMode().shouldSuppressSkipTickRecoveryTrigger()) {
+                return false;
+            }
+        }
+
+        final boolean overVoid = isFallingIntoVoid();
+        final boolean fallingFast = mc.player.getDeltaMovement().y < -0.35D;
+        final boolean hardFall = mc.player.fallDistance > 2.0F;
+        if (!overVoid && !fallingFast && !hardFall) {
+            return false;
+        }
+        return getPlaceableBlock() != -1 || mc.player.getMainHandItem().getItem() instanceof BlockItem;
+    }
+
+    /** OpenPal {@code ScaffoldModule.tryArmSkipTickRecovery}（§4.3 接线里叫 {@code armSkipTickRecovery}）。 */
+    private void armSkipTickRecovery() {
+        if (!shouldTriggerSkipTickRecovery()) {
+            this.skipTickRecoveryCandidateTicks = 0;
+            this.skipTickRecoveryBlockPos = null;
+            this.skipTickRecoveryFace = null;
+            return;
+        }
+
+        if (mode.is(Mode.Heypixel) && getScaffoldSettings().isTelly() && mc.player != null && !mc.player.onGround() && mc.player.getDeltaMovement().y > -0.16D) {
+            this.skipTickRecoveryCandidateTicks = 0;
+            this.skipTickRecoveryBlockPos = null;
+            this.skipTickRecoveryFace = null;
+            return;
+        }
+
+        if (findRecoveryBlock() == null) {
+            this.skipTickRecoveryCandidateTicks = 0;
+            this.skipTickRecoveryBlockPos = null;
+            this.skipTickRecoveryFace = null;
+            return;
+        }
+
+        final SkipTickRecoveryTarget recoveryTarget = findReadySkipTickRecoveryTarget();
+        if (recoveryTarget == null) {
+            this.skipTickRecoveryCandidateTicks = 0;
+            this.skipTickRecoveryBlockPos = null;
+            this.skipTickRecoveryFace = null;
+            return;
+        }
+
+        this.skipTickRecoveryBlockPos = recoveryTarget.supportPos();
+        this.skipTickRecoveryFace = recoveryTarget.face();
+
+        this.skipTickRecoveryCandidateTicks = Math.min(this.skipTickRecoveryCandidateTicks + 1, 2);
+        if (this.skipTickRecoveryCandidateTicks < 2) {
+            return;
+        }
+
+        if (this.skipTickRecoveryActive) {
+            return;
+        }
+
+        this.skipTickRecoveryActive = true;
+        this.skipTickRecoveryCandidateTicks = 0;
+        SkipTickUtility.reset();
+        SkipTickUtility.addSkipTicks(12);
+
+        final Stuck stuckModule = Stuck.INSTANCE;
+        if (stuckModule.isEnabled()) {
+            stuckModule.setEnabled(false);
+        }
+    }
+
+    public BlockPos getSkipTickRecoveryBlockPos() {
+        return skipTickRecoveryBlockPos;
+    }
+
+    public Direction getSkipTickRecoveryFace() {
+        return skipTickRecoveryFace;
+    }
+
+    public boolean isSkipTickRecoveryActive() {
+        return skipTickRecoveryActive;
+    }
+
+    public void setSkipTickRecoveryActive(final boolean skipTickRecoveryActive) {
+        this.skipTickRecoveryActive = skipTickRecoveryActive;
+        if (!skipTickRecoveryActive) {
+            SkipTickUtility.reset();
+        }
+        this.skipTickRecoveryCandidateTicks = 0;
+        this.skipTickRecoveryBlockPos = null;
+        this.skipTickRecoveryFace = null;
+    }
+
+    public void markSkipTickRecoveryFailed() {
+        this.skipTickRecoveryFailed = true;
+        this.skipTickRecoveryActive = false;
+        SkipTickUtility.reset();
+        this.skipTickRecoveryCandidateTicks = 0;
+        this.skipTickRecoveryBlockPos = null;
+        this.skipTickRecoveryFace = null;
+    }
+
+    private record SkipTickRecoveryTarget(BlockPos targetPos, BlockPos supportPos, Direction face, Rot2f rotation,
+                                          float rotationDifference, double distanceSq) {
     }
 
 
