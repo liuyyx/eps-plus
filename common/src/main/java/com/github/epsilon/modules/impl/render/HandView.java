@@ -104,7 +104,19 @@ public class HandView extends Module {
     }
 
     private boolean isBlockableWeapon(ItemStack itemStack) {
-        return !itemStack.isEmpty() && itemStack.is(ItemTags.WEAPON_ENCHANTABLE);
+        // 只给「右键没有原版使用动作」的武器套假格挡姿势（1.7/1.8 式举剑格挡）。
+        //
+        // 26.2 起 #minecraft:enchantable/weapon ⊃ sharp_weapon ⊃ melee_weapon = #swords + #spears，
+        // 长矛进了 WEAPON_ENCHANTABLE，而长矛的右键是 kinetic 蓄力（ItemUseAnimation.SPEAR、
+        // 由 KINETIC_WEAPON 组件决定）而非格挡。若判成可格挡，会连环出三个错：
+        //   1) MixinItemInHandRenderer.redirectGetUseAnimation 把 SPEAR 顶成 NONE，
+        //      原版 case SPEAR（SpearAnimations.firstPersonUse）整段不执行；
+        //   2) 转而套 applyBlockingTransform —— 第一人称手持长矛变成格挡姿势；
+        //   3) MixinAvatarRenderer 把第三人称 rightArmPose 强设为 ArmPose.BLOCK。
+        // 蓄力动画于是整段消失。判定「有真实使用动作就不伪装格挡」可从根上排掉这一类。
+        return !itemStack.isEmpty()
+                && itemStack.is(ItemTags.WEAPON_ENCHANTABLE)
+                && itemStack.getUseAnimation() == ItemUseAnimation.NONE;
     }
 
     private boolean isOffhandBlocking() {
