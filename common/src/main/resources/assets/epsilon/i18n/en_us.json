@@ -1027,6 +1027,8 @@
         },
         "ai yaw multiplier": "AI Yaw Multiplier",
         "ai pitch multiplier": "AI Pitch Multiplier",
+        "ai max yaw step": "AI Max Yaw Step",
+        "ai max pitch step": "AI Max Pitch Step",
         "polar yaw acceleration min": "Polar Yaw Acceleration Min",
         "polar yaw acceleration max": "Polar Yaw Acceleration Max",
         "polar pitch acceleration min": "Polar Pitch Acceleration Min",
@@ -1805,6 +1807,23 @@
       },
       "dolphin": "Dolphin",
       "auto sprint": "Auto Sprint",
+      "auto build": {
+        "_value": "Auto Build",
+        "trigger": {
+          "_value": "Trigger",
+          "right_click": "Right Click",
+          "middle_click": "Middle Click"
+        },
+        "rotate speed": "Rotate Speed",
+        "auto switch": "Auto Switch",
+        "allow killaura": "Allow KillAura",
+        "allow scaffold": "Allow Scaffold",
+        "speed build": "Speed Build",
+        "through wall": "Through Wall",
+        "silent aim": "Silent Aim",
+        "perfect": "Perfect",
+        "debug": "Debug"
+      },
       "blink": {
         "_value": "Blink",
         "tick": "Tick",
@@ -1949,8 +1968,38 @@
           "tellybridge": "Telly Bridge",
           "godbridge": "God Bridge",
           "heypixel": "Heypixel",
-          "hypixel": "Hypixel"
+          "hypixel": "Hypixel",
+          "elowen": "Elowen"
                   },
+        "elowen": {
+          "_value": "Elowen"
+        },
+        "elowen mode": {
+          "_value": "Elowen Mode",
+          "normal": "Normal",
+          "snap": "Snap",
+          "tellybridge": "Telly Bridge",
+          "keepy": "Keep Y"
+        },
+        "elowen rotation mode": {
+          "_value": "Elowen Rotation Mode",
+          "linear": "Linear",
+          "aca": "ACA",
+          "none": "None",
+          "curve": "Curve",
+          "heypixel": "Heypixel"
+        },
+        "elowen eagle": "Elowen Eagle",
+        "elowen sneak": "Elowen Sneak",
+        "elowen jump sprint": "Elowen Jump Sprint",
+        "elowen rotation speed": "Elowen Rotation Speed",
+        "elowen back rotation speed": "Elowen Back Rotation Speed",
+        "elowen place delay": "Elowen Place Delay",
+        "elowen swing": "Elowen Swing",
+        "elowen packet order n": "Elowen Packet Order N",
+        "elowen block count": "Elowen Block Count",
+        "elowen hud y": "Elowen HUD Y",
+        "elowen sideway rotation": "Elowen Sideway Rotation",
         "swap mode": {
           "_value": "Swap Mode",
           "none": "None",
@@ -2947,6 +2996,32 @@
         "quartz": "Quartz",
         "water": "Water",
         "lava": "Lava"
+      },
+      "ysm model": {
+        "_value": "YSM Model",
+        "model": {
+          "_value": "Model",
+          "auto": "Auto",
+          "alice": "Alice",
+          "boqijiang": "Boqijiang",
+          "toyotaae86": "Toyota AE86",
+          "yatuoya": "Yatuoya",
+          "custom": "Custom"
+        },
+        "custom path": "Custom Path",
+        "scale": "Scale",
+        "animation": {
+          "_value": "Animation",
+          "vanilla": "Vanilla Animation",
+          "openysm": "OpenYSM Animation"
+        },
+        "bone filter": "Bone Filter",
+        "character only": "Character Only",
+        "show item": "Show Item",
+        "item scale": "Item Scale",
+        "flip left walk": "Flip Left Walk",
+        "flip right walk": "Flip Right Walk",
+        "flip other anim": "Flip Other Anim"
       },
       "server guard": {
         "_value": "Anti Cheat Detect",

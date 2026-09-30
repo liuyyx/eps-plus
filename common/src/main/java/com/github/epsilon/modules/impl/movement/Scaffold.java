@@ -10,8 +10,10 @@ import com.github.epsilon.events.impl.KeyboardInputEvent;
 import com.github.epsilon.events.impl.PacketEvent;
 import com.github.epsilon.events.impl.PlaceBlockEvent;
 import com.github.epsilon.events.impl.PlayerTickEvent;
+import com.github.epsilon.events.impl.Render2DEvent;
 import com.github.epsilon.events.impl.Render3DEvent;
 import com.github.epsilon.events.impl.SendPositionEvent;
+import com.github.epsilon.events.impl.StartUseItemEvent;
 import com.github.epsilon.graphics.schedulers.render3d.Render3DScheduler;
 import com.github.epsilon.managers.NotificationManager;
 import com.github.epsilon.managers.rotation.RotationManager;
@@ -22,6 +24,9 @@ import com.github.epsilon.modules.impl.movement.scaffold.HypixelScaffold;
 import com.github.epsilon.modules.impl.movement.scaffold.ScaffoldPolarCoordinator;
 import com.github.epsilon.modules.impl.movement.scaffold.ScaffoldSettings;
 import com.github.epsilon.modules.impl.movement.scaffold.clicking.Clicker;
+import com.github.epsilon.modules.impl.movement.scaffold.elowen.ElowenPlaceMode;
+import com.github.epsilon.modules.impl.movement.scaffold.elowen.ElowenRotationMode;
+import com.github.epsilon.modules.impl.movement.scaffold.elowen.ElowenScaffold;
 import com.github.epsilon.modules.impl.movement.scaffold.rotation.MovementCorrection;
 import com.github.epsilon.modules.impl.movement.scaffold.rotation.RotationHelper;
 import com.github.epsilon.modules.impl.movement.scaffold.rotation.RotationProperty;
@@ -73,6 +78,16 @@ public class Scaffold extends Module {
         super("Scaffold", Category.MOVEMENT);
         EventBus.INSTANCE.subscribe(new ConsumerListener<>(Render3DEvent.class,
                 event -> {
+                    // Elowen 的 onRenderWorld：只画当前放置目标（elowen 用 B 字段，AABB 外扩 0.002）。
+                    if (isElowenMode()) {
+                        BlockPos elowenTarget = elowenScaffold.getRenderBlock();
+                        if (render.getValue() && elowenTarget != null) {
+                            AABB elowenBox = new AABB(elowenTarget).inflate(0.002);
+                            Render3DScheduler.INSTANCE.addFilledBox(elowenBox, sideColor.getValue());
+                            Render3DScheduler.INSTANCE.addOutlineBox(elowenBox, lineColor.getValue());
+                        }
+                    }
+
                     if (!render.getValue() || renderBoxes.isEmpty()) return;
 
                     long time = System.currentTimeMillis();
@@ -120,7 +135,13 @@ public class Scaffold extends Module {
          */
         Heypixel,
         /** OpenPal 的 Uitems 搭路（Hypixel 变体，见 {@code scaffold/HypixelScaffold}）。 */
-        Hypixel
+        Hypixel,
+        /**
+         * Elowen 的 Scaffold（见 {@code scaffold/elowen/ElowenScaffold}，逐行移植自
+         * {@code com.elowen.o.Y.Z.Scaffold}）：4 个放置模式 × 5 个旋转模式，
+         * 全部走静默托管角（不写玩家真实视角）。
+         */
+        Elowen
     }
 
     private enum RotationMode {
@@ -440,6 +461,78 @@ public class Scaffold extends Module {
         return snap.getValue();
     }
 
+    /*
+     * ===== Elowen 搭路（elowen 的 Scaffold，逐行移植）=====
+     * 显示名一律加 "Elowen " 前缀：配置文件以显示名为键，本模块已有同名设置
+     * （Rotation Speed / Rotation Back Speed / Place Delay / Swing …），不加前缀会互相覆盖。
+     */
+
+    private final Setting.Dependency elowenDependency = () -> mode.is(Mode.Elowen);
+
+    private final SettingGroup sgElowen = settingGroup("Elowen");
+
+    /** 原 {@code Scaffold.o}（"Mode"）。 */
+    public final EnumSetting<ElowenPlaceMode> elowenPlaceMode =
+            enumSetting("Elowen Mode", ElowenPlaceMode.Normal, elowenDependency).group(sgElowen);
+    /** 原 {@code Scaffold.P}（"Rotation Mode"）。 */
+    public final EnumSetting<ElowenRotationMode> elowenRotationMode =
+            enumSetting("Elowen Rotation Mode", ElowenRotationMode.Linear, elowenDependency).group(sgElowen);
+
+    /** 原 {@code lambda$new$0}：Eagle 只在 Normal / Snap 两个放置模式下可见。 */
+    private final Setting.Dependency elowenEagleDependency = () -> isElowenMode()
+            && (elowenPlaceMode.is(ElowenPlaceMode.Normal) || elowenPlaceMode.is(ElowenPlaceMode.Snap));
+    /** 原 {@code lambda$new$2}：Jump Sprint 只在 Normal 下可见。 */
+    private final Setting.Dependency elowenNormalDependency = () -> isElowenMode() && elowenPlaceMode.is(ElowenPlaceMode.Normal);
+    /** 原 {@code lambda$new$4}：Back Rotation Speed（Sideway Rotation 同集合）。 */
+    private final Setting.Dependency elowenBackSpeedDependency = () -> isElowenMode()
+            && (elowenPlaceMode.is(ElowenPlaceMode.Normal)
+            || elowenPlaceMode.is(ElowenPlaceMode.TellyBridge)
+            || elowenPlaceMode.is(ElowenPlaceMode.KeepY));
+    /** 原 {@code lambda$new$3}：Rotation Speed 与 Heypixel 旋转模式互斥。 */
+    private final Setting.Dependency elowenRotationSpeedDependency = () -> isElowenMode()
+            && !elowenRotationMode.is(ElowenRotationMode.Heypixel)
+            && (elowenPlaceMode.is(ElowenPlaceMode.Normal)
+            || elowenPlaceMode.is(ElowenPlaceMode.TellyBridge)
+            || elowenPlaceMode.is(ElowenPlaceMode.KeepY)
+            || elowenRotationMode.is(ElowenRotationMode.Curve));
+
+    /** 原 {@code Scaffold.f}（"Eagle"）。 */
+    public final BoolSetting elowenEagle = boolSetting("Elowen Eagle", false, elowenEagleDependency).group(sgElowen);
+    /** 原 {@code Scaffold.aB}（"Sneak"）：搭桥中每 21 刻强制一次潜行。 */
+    public final BoolSetting elowenSneak = boolSetting("Elowen Sneak", true, elowenDependency).group(sgElowen);
+    /** 原 {@code Scaffold.i}（"Jump Sprint"）。 */
+    public final BoolSetting elowenJumpSprint = boolSetting("Elowen Jump Sprint", false, elowenNormalDependency).group(sgElowen);
+    /** 原 {@code Scaffold.a5}（"Rotation Speed"，原 float 50/30..180 ⇒ 本仓库 IntSetting）。 */
+    public final IntSetting elowenRotationSpeed = intSetting("Elowen Rotation Speed", 50, 30, 180, 1, elowenRotationSpeedDependency).group(sgElowen);
+    /** 原 {@code Scaffold.y}（"Back Rotation Speed"）。 */
+    public final IntSetting elowenBackRotationSpeed = intSetting("Elowen Back Rotation Speed", 180, 30, 180, 1, elowenBackSpeedDependency).group(sgElowen);
+    /** 原 {@code Scaffold.r}（"Place Delay (Ticks)"，0..2）。 */
+    public final IntSetting elowenPlaceDelay = intSetting("Elowen Place Delay", 0, 0, 2, 1, elowenDependency).group(sgElowen);
+    /** 原 {@code Scaffold.p}（"Swing"）。 */
+    public final BoolSetting elowenSwing = boolSetting("Elowen Swing", false, elowenDependency).group(sgElowen);
+    /** 原 {@code Scaffold.l}（"Packet Order N"）：放置前先发一次 {@code useItem}。 */
+    public final BoolSetting elowenPacketOrderN = boolSetting("Elowen Packet Order N", false, elowenDependency).group(sgElowen);
+    /** 原 {@code Scaffold.K}（"Block Count"）。 */
+    public final BoolSetting elowenBlockCount = boolSetting("Elowen Block Count", true, elowenDependency).group(sgElowen);
+    /** 原 {@code Scaffold.aR}（"HUD Y"）。 */
+    public final IntSetting elowenHudY = intSetting("Elowen HUD Y", -50, -500, 500, 1,
+            () -> isElowenMode() && elowenBlockCount.getValue()).group(sgElowen);
+    /** 原 {@code Scaffold.a_}（"Sideway Rotation"）。 */
+    public final BoolSetting elowenSidewayRotation = boolSetting("Elowen Sideway Rotation", false, elowenBackSpeedDependency).group(sgElowen);
+
+    private final ElowenScaffold elowenScaffold = new ElowenScaffold(this);
+
+    /** 上一次生效的 Elowen 状态，用于驱动引擎的 {@code onEnable/onDisable}（照 {@link #syncUitemsModeLifecycle}）。 */
+    private boolean lastElowenActive;
+
+    public boolean isElowenMode() {
+        return mode.is(Mode.Elowen);
+    }
+
+    public ElowenScaffold getElowenScaffold() {
+        return elowenScaffold;
+    }
+
     private final BoolSetting swingHand = boolSetting("Swing Hand", true);
     private final BoolSetting render = boolSetting("Render", true);
     private final BoolSetting fade = boolSetting("Fade", true, render::getValue);
@@ -497,6 +590,7 @@ public class Scaffold extends Module {
         emergencyPlacementActive = false;
         pearlUsePacketSent = false;
         lastUitemsMode = null;
+        lastElowenActive = false;
         // LB ModuleScaffold.onEnabled()（404–412）
         ScaffoldPolarCoordinator.INSTANCE.onEnabled();
     }
@@ -523,12 +617,37 @@ public class Scaffold extends Module {
             RotationHelper.getHandler().reset();
         }
         lastUitemsMode = null;
+
+        // Elowen：模块关闭时释放托管角并还原按键（elowen 的 onDisable）。
+        if (lastElowenActive) {
+            elowenScaffold.onDisable();
+            lastElowenActive = false;
+        }
     }
 
     private HeypixelScaffold getUitemsMode(Mode mode) {
         if (mode == Mode.Heypixel) return heypixelScaffold;
         if (mode == Mode.Hypixel) return hypixelScaffold;
         return null;
+    }
+
+    /**
+     * Elowen 的启用/停用同步（照 {@link #syncUitemsModeLifecycle}）：
+     * 切到 {@link Mode#Elowen} 时调引擎 {@code onEnable()}，切走时调 {@code onDisable()} 并释放托管角。
+     * 必须在引擎 {@code onPreTick()} 之前执行。
+     */
+    private void syncElowenModeLifecycle() {
+        final boolean elowen = isElowenMode();
+        if (elowen == lastElowenActive) return;
+
+        if (lastElowenActive) {
+            elowenScaffold.onDisable();
+            RotationManager.INSTANCE.setActive(false);
+        }
+        lastElowenActive = elowen;
+        if (elowen) {
+            elowenScaffold.onEnable();
+        }
     }
 
     /**
@@ -616,6 +735,7 @@ public class Scaffold extends Module {
         EntityUtils.tickGroundState(mc.player);
 
         syncUitemsModeLifecycle();
+        syncElowenModeLifecycle();
 
         if (isPolarActive()) {
             // Polar 走 LiquidBounce 的 GodBridge 链路：本刻的转向目标、转向落地与放置
@@ -638,6 +758,12 @@ public class Scaffold extends Module {
             RotationHelper.getHandler().onPreTick();
             getActiveUitemsMode().onPreTick(event);
             RotationHelper.getHandler().onMouseUpdate();
+            return;
+        }
+
+        if (isElowenMode()) {
+            // elowen 的每刻顺序全在引擎里（选模式 → 找目标 → 跳刻清算 → 潜行 → 放置模式 onTick → 提交托管角）。
+            elowenScaffold.onPreTick();
             return;
         }
 
@@ -771,7 +897,7 @@ public class Scaffold extends Module {
      */
     @EventHandler(priority = EventPriority.LOWEST)
     private void onUitemsSkipTick(PlayerTickEvent.Pre event) {
-        if (SkipTickUtility.consumeSkipTick()) event.cancel();
+        if ((isUitemsMode() || isElowenMode()) && SkipTickUtility.consumeSkipTick()) event.cancel();
     }
 
     /** OpenPal 的渲染分工在模块侧：模式类不做渲染，放置成功由模块补渲染盒。 */
@@ -786,6 +912,39 @@ public class Scaffold extends Module {
             pearlUsePacketSent = false;
             NotificationManager.INSTANCE.error(this.getTranslatedName(), EpsilonTranslations.Notifications.SCAFFOLD_TOGGLE_ON_TELEPORT.getTranslatedName());
             setEnabled(false);
+        }
+    }
+
+    /**
+     * Elowen 的收包（elowen {@code Scaffold.onPacket} → 放置模式 {@code onPacket} → {@code module.E(z2)}）：
+     * 只观察自身速度包，水平速度² ≥ 1.5 时给 60 刻冷却（防坠自救的抑制条件之一）。
+     */
+    @EventHandler
+    private void onElowenPacketReceive(PacketEvent.Receive event) {
+        if (isElowenMode()) {
+            elowenScaffold.onPacketReceive(event);
+        }
+    }
+
+    /**
+     * Elowen 的右键接管（elowen {@code Scaffold.onUseItem}：{@code r2.setCancelled(true)} 后交给当前放置模式）。
+     *
+     * <p>elowen 该方法是普通订阅（无优先级声明），本仓库取 {@link EventPriority#HIGH}：
+     * 必须在原版右键处理之前取消，且晚于 Uitems/Polar 的同类接管（它们各自带模式判定，互不冲突）。</p>
+     */
+    @EventHandler(priority = EventPriority.HIGH)
+    private void onElowenUseItem(StartUseItemEvent event) {
+        if (!isElowenMode()) return;
+
+        event.cancel();
+        elowenScaffold.onUseItem(event);
+    }
+
+    /** Elowen 的 HUD（elowen {@code onRenderHUD}）：屏幕中央药丸，显示 {@code Block: N}。 */
+    @EventHandler
+    private void onElowenHud(Render2DEvent.HUD event) {
+        if (isElowenMode()) {
+            elowenScaffold.renderHud(event);
         }
     }
 
@@ -1200,7 +1359,8 @@ public class Scaffold extends Module {
         }
     }
 
-    private boolean isValidStack(ItemStack stack) {
+    /** Elowen 引擎也要用它（原 elowen {@code Scaffold.s(ItemStack)}）。 */
+    public boolean isValidStack(ItemStack stack) {
         if (stack == null || stack.isEmpty() || !(stack.getItem() instanceof BlockItem)) {
             return false;
         }

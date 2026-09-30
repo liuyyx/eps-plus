@@ -1027,6 +1027,8 @@
         },
         "ai yaw multiplier": "AI水平倍率",
         "ai pitch multiplier": "AI俯仰倍率",
+        "ai max yaw step": "AI水平步长上限",
+        "ai max pitch step": "AI俯仰步长上限",
         "polar yaw acceleration min": "Polar 水平加速度最小",
         "polar yaw acceleration max": "Polar 水平加速度最大",
         "polar pitch acceleration min": "Polar 垂直加速度最小",
@@ -1805,6 +1807,23 @@
       },
       "dolphin": "海豚",
       "auto sprint": "自动疾跑",
+      "auto build": {
+        "_value": "自动放迪克",
+        "trigger": {
+          "_value": "触发方式",
+          "right_click": "右键",
+          "middle_click": "中键"
+        },
+        "rotate speed": "旋转速度",
+        "auto switch": "自动切槽",
+        "allow killaura": "允许 KillAura",
+        "allow scaffold": "允许 Scaffold",
+        "speed build": "快速搭建",
+        "through wall": "隔墙放置",
+        "silent aim": "静默瞄准",
+        "perfect": "完美模式",
+        "debug": "调试输出"
+      },
       "blink": {
         "_value": "闪现",
         "tick": "闪现刻数",
@@ -1949,8 +1968,38 @@
           "tellybridge": "Telly桥",
           "godbridge": "神桥",
           "heypixel": "Heypixel",
-          "hypixel": "Hypixel"
+          "hypixel": "Hypixel",
+          "elowen": "Elowen"
                   },
+        "elowen": {
+          "_value": "Elowen"
+        },
+        "elowen mode": {
+          "_value": "Elowen 模式",
+          "normal": "普通",
+          "snap": "吸附",
+          "tellybridge": "Telly桥",
+          "keepy": "保持Y"
+        },
+        "elowen rotation mode": {
+          "_value": "Elowen 旋转模式",
+          "linear": "线性",
+          "aca": "ACA",
+          "none": "无",
+          "curve": "曲线",
+          "heypixel": "Heypixel"
+        },
+        "elowen eagle": "Elowen 边缘",
+        "elowen sneak": "Elowen 潜行",
+        "elowen jump sprint": "Elowen 跳跃冲刺",
+        "elowen rotation speed": "Elowen 旋转速度",
+        "elowen back rotation speed": "Elowen 回转速度",
+        "elowen place delay": "Elowen 放置延迟",
+        "elowen swing": "Elowen 挥手",
+        "elowen packet order n": "Elowen 先发包",
+        "elowen block count": "Elowen 方块计数",
+        "elowen hud y": "Elowen HUD Y",
+        "elowen sideway rotation": "Elowen 侧向旋转",
         "swap mode": {
           "_value": "切换模式",
           "none": "无",
@@ -2947,6 +2996,32 @@
         "quartz": "石英",
         "water": "水",
         "lava": "岩浆"
+      },
+      "ysm model": {
+        "_value": "改人物模型",
+        "model": {
+          "_value": "模型",
+          "auto": "自动",
+          "alice": "Alice",
+          "boqijiang": "波奇酱",
+          "toyotaae86": "Toyota AE86",
+          "yatuoya": "八重",
+          "custom": "自定义"
+        },
+        "custom path": "自定义路径",
+        "scale": "缩放",
+        "animation": {
+          "_value": "动画",
+          "vanilla": "原版动画",
+          "openysm": "OpenYSM 动画"
+        },
+        "bone filter": "骨骼过滤",
+        "character only": "仅角色",
+        "show item": "显示手持物品",
+        "item scale": "物品缩放",
+        "flip left walk": "左臂摆臂反向",
+        "flip right walk": "右臂摆臂反向",
+        "flip other anim": "其它动作反向"
       },
       "server guard": {
         "_value": "反作弊检测",
