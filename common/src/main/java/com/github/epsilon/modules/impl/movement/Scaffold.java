@@ -118,7 +118,9 @@ public class Scaffold extends Module {
                     if (!render.getValue() || renderBoxes.isEmpty()) return;
 
                     long time = System.currentTimeMillis();
-                    long fadeTime = this.fadeTime.getValue().longValue();
+                    // fadeTime 设置下界是 0 ⇒ 0 作除数会产生 NaN（Mth.clamp 对 NaN 无效），
+                    // 进而把 NaN 写进 AABB 与颜色。兜底为 1ms。
+                    long fadeTime = Math.max(1L, this.fadeTime.getValue().longValue());
 
                     renderBoxes.removeIf(box -> time - box.startTime() > fadeTime);
 

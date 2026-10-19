@@ -44,7 +44,7 @@ public class AutoHitCrystal extends Module {
                     if (!render.getValue() || renderBoxes.isEmpty()) return;
 
                     long time = System.currentTimeMillis();
-                    long fadeTime = this.fadeTime.getValue().longValue();
+                    long fadeTime = Math.max(1L, this.fadeTime.getValue().longValue());
 
                     renderBoxes.removeIf(box -> time - box.startTime() > fadeTime);
 

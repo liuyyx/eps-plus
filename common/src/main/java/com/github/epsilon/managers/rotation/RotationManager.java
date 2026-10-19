@@ -54,7 +54,10 @@ public abstract class RotationManager {
     }
 
     public void setRotations(Rot2f rotations, double rotationSpeed, Function<Rot2f, Boolean> raytrace, Priority priority) {
-        if (rotations == null) return;
+        if (rotations == null || !Float.isFinite(rotations.getYaw()) || !Float.isFinite(rotations.getPitch())) {
+            return;
+        }
+        rotations = new Rot2f(rotations.getYaw(), Mth.clamp(rotations.getPitch(), -90.0f, 90.0f));
 
         if (this.active && priority.priority < this.priority) {
             return;
@@ -91,7 +94,12 @@ public abstract class RotationManager {
      * @param priority  托管优先级
      */
     public void setRotationsDirect(Rot2f rotations, Priority priority) {
-        if (rotations == null) return;
+        // 入口统一挡掉非有限值并夹取 pitch：Mth.clamp 对 NaN 无效，NaN 一旦进入托管角会常驻
+        // （发包路径会整段跳过 setYaw/setPitch ⇒ 客户端以为转了、服务端什么都没收到）。
+        if (rotations == null || !Float.isFinite(rotations.getYaw()) || !Float.isFinite(rotations.getPitch())) {
+            return;
+        }
+        rotations = new Rot2f(rotations.getYaw(), Mth.clamp(rotations.getPitch(), -90.0f, 90.0f));
 
         if (this.active && priority.priority < this.priority) {
             return;
