@@ -766,7 +766,9 @@ public class Telly extends Module {
     // 只允许在朝外表面的下半部分激活，并排除其内侧。
     private boolean isInActivationFaceCenter(int face, Vec3 localHit) {
         if (localHit == null) return false;
-        double acrossFace = (face == 4 || face == 5) ? localHit.z : localHit.x;
+        // 沿面坐标：±Z 面用 x，±X 面用 z。原实现 ±X 面取 localHit.x（命中该面时 x 偏移恒为 0），
+        // 再经下面的反相恒为 1.0 ⇒ WEST 面激活判据数学上恒 false。
+        double acrossFace = (face == 2 || face == 3) ? localHit.x : localHit.z;
         if (face == 3 || face == 4) acrossFace = 1.0 - acrossFace;
         return acrossFace >= ACTIVATION_ACROSS_MIN && acrossFace <= ACTIVATION_ACROSS_MAX
                 && localHit.y >= ACTIVATION_HEIGHT_MIN && localHit.y <= ACTIVATION_HEIGHT_MAX;
@@ -1027,13 +1029,21 @@ public class Telly extends Module {
     }
 
     private boolean isScriptHeldKey(int keyCode) {
-        if (keyCode == keyCode("forward")) return isPressed("forward");
-        if (keyCode == keyCode("back")) return isPressed("back");
-        if (keyCode == keyCode("left")) return isPressed("left");
-        if (keyCode == keyCode("right")) return isPressed("right");
-        if (keyCode == keyCode("jump")) return isPressed("jump");
-        if (keyCode == keyCode("sprint")) return isPressed("sprint");
+        // 必须读 KeyMapping 的注入状态（脚本 setPressed 写的），不能用物理键态：
+        // GLFW 在回调前就更新了物理键态 ⇒ 刚按下的这个键永远「已按下」，接管分支不可达，
+        // 随后 isManualMovementKey 又把事件取消 ⇒ 运行中玩家完全失去键盘控制。
+        if (keyCode == keyCode("forward")) return isMappingDown("forward");
+        if (keyCode == keyCode("back")) return isMappingDown("back");
+        if (keyCode == keyCode("left")) return isMappingDown("left");
+        if (keyCode == keyCode("right")) return isMappingDown("right");
+        if (keyCode == keyCode("jump")) return isMappingDown("jump");
+        if (keyCode == keyCode("sprint")) return isMappingDown("sprint");
         return false;
+    }
+
+    private boolean isMappingDown(String key) {
+        KeyMapping mapping = mapping(key);
+        return mapping != null && mapping.isDown();
     }
 
     private boolean isManualMovementKey(int keyCode) {
@@ -1772,7 +1782,8 @@ public class Telly extends Module {
     private void autoPlaceOnDisable() {
         resetControllerState();
         restoreUseToPhysicalState();
-        setPressed("attack", false);
+        // 按物理左键恢复，而不是无条件 false（KeyMapping 是持久键态，写 false 会吞掉玩家正按住的攻击）。
+        setPressed("attack", physicalLeftMouseDown());
         BRIDGE.remove("AutoPlacePlacing");
         releaseExperimentalPlacementClaim();
     }
@@ -2305,7 +2316,9 @@ public class Telly extends Module {
         Object[] bestCandidate = null;
         double bestScore = Double.POSITIVE_INFINITY;
         for (int[] targetPos : targets) {
-            if (clientTime() >= deadlineMs) return null;
+            // 超时用 break（保留已找到的最优候选），不能用 return null 把 bestCandidate 丢掉：
+            // 8ms 预算下常在第一个目标就超时，原写法等于「有可用解却报无候选」。
+            if (clientTime() >= deadlineMs) break;
             if (!isPlacementTargetAvailable(player, targetPos)) continue;
             Object[] candidate = findPitchPlacementForTarget(player, yaw, currentPitch, targetPos, heldStack, null, -1, deadlineMs, false, true);
             if (candidate == null) continue;
@@ -3745,8 +3758,12 @@ public class Telly extends Module {
     }
 
     private static Module findModule(String name) {
+        // 模块显示名里有空格（SafeWalk 注册名是 "Safe Walk"），精确 equals 会让
+        // findModule("SafeWalk") 恒返回 null ⇒ "Disable SafeWalk" 静默失效、跑桥时被 SafeWalk 削掉后退位移。
+        String needle = name == null ? "" : name.replace(" ", "").toLowerCase(Locale.ROOT);
         for (Module module : ModuleManager.INSTANCE.getModules()) {
-            if (module.getName().equals(name)) return module;
+            String candidate = module.getName() == null ? "" : module.getName().replace(" ", "").toLowerCase(Locale.ROOT);
+            if (candidate.equals(needle)) return module;
         }
         return null;
     }

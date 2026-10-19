@@ -1275,7 +1275,9 @@ public final class RavenB4Scaffold {
                 if (isReplaceable(hit.getBlockPos().relative(hit.getDirection()))
                         && placeAt(hit, itemStack)) {
                     placedAt = System.currentTimeMillis();
-                    placed.put(pos, placedAt);
+                    // 记录真正落块的位置（pos.relative(facing)），不是支撑块 pos：
+                    // 否则高亮画在旧块上，canPlaceAgainst 也认不出这块是刚放的。
+                    placed.put(pos.relative(facing), placedAt);
                     if (fastScaffold.ticks == -1) {
                         fastScaffold.ticks = 0;
                     }
@@ -1311,9 +1313,10 @@ public final class RavenB4Scaffold {
         if (hit == null) {
             return false;
         }
-        // 放置前先落地本刻朝向（联机必需，见 place() 的说明）。
+        // 与 place() 主路径保持一致：用解算出的 facing 落块（而不是射线自身的面），
+        // 否则落块位置与 lastPlaced/placed 记录不同源，下一 tick 会贴着没放过的方块找目标。
         sendPlacementRotation(r[0], r[1]);
-        if (!placeAt(hit, itemStack)) {
+        if (!placeAtBlock(against, facing, hit.getLocation(), itemStack)) {
             return false;
         }
         lastPlaced = target;
