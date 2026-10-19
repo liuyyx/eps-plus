@@ -16,7 +16,8 @@ public class AccountManager {
 
     public void add(Account<?> account) {
         accounts.add(account);
-        ConfigManager.INSTANCE.saveNow();
+        // 账号添加可能发生在后台线程：配置快照会读 HUD 布局与 Setting 值，必须在客户端线程落盘。
+        net.minecraft.client.Minecraft.getInstance().execute(ConfigManager.INSTANCE::saveNow);
     }
 
     public boolean exists(Account<?> account) {

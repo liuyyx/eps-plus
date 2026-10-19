@@ -18,11 +18,11 @@ public class WorldTweaks extends Module {
         super("World Tweaks", Category.RENDER);
     }
 
-    public final BoolSetting fogModify = boolSetting("Fog Modify", true).rootSetting();
+    public final BoolSetting fogModify = boolSetting("Fog Modify", true);
     public final IntSetting fogStart = intSetting("Fog Start", 0, 0, 256, 1, fogModify::getValue);
     public final IntSetting fogEnd = intSetting("Fog End", 64, 10, 256, 1, fogModify::getValue);
     public final ColorSetting fogColor = colorSetting("Fog Color", new Color(0xA900FF), false, fogModify::getValue);
-    public final BoolSetting changeTime = boolSetting("Change Time", false).rootSetting();
+    public final BoolSetting changeTime = boolSetting("Change Time", false);
     public final IntSetting time = intSetting("Time", 21, 0, 23, 1, changeTime::getValue);
 
     public long getModifiedClockTime(Holder<WorldClock> clock, long original) {

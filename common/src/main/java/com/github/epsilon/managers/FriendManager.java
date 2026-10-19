@@ -2,14 +2,14 @@ package com.github.epsilon.managers;
 
 import net.minecraft.world.entity.player.Player;
 
-import java.util.HashSet;
+import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.List;
 
 public class FriendManager {
 
     public static final FriendManager INSTANCE = new FriendManager();
 
-    private final HashSet<String> friends = new HashSet<>();
+    private final java.util.Set<String> friends = new CopyOnWriteArraySet<>();
 
     private FriendManager() {
     }
