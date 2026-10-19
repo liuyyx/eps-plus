@@ -143,6 +143,7 @@ public final class ScaffoldPolarCoordinator implements RequestHandler.Provider {
 
     /** LB {@code ModuleScaffold.reset()}（417–427）。 */
     public void reset() {
+        PolarRotationManager.INSTANCE.onWorldChange();
         // LB: NoFallBlink.waitUntilGround = false;  —— Epsilon 无对应设施（不搬）
         ScaffoldMovementPlanner.reset();
         ScaffoldMovementPrediction.reset();
@@ -212,6 +213,14 @@ public final class ScaffoldPolarCoordinator implements RequestHandler.Provider {
      * 转向落地用 {@link RotationManager#setRotationsDirect} 直通（见其文档）。</p>
      */
     public void tickPolar() {
+        var level = mc.level;
+        if (level != lastLevel) {
+            // 维度/服务器切换：服务端旋转缓存与托管角全部失效，必须从头对齐。
+            lastLevel = level;
+            PolarRotationManager.INSTANCE.onWorldChange();
+            lastAppliedRotation = null;
+            currentOptimalLine = null;
+        }
         syncSettings();
 
         rotationUpdate();
@@ -240,6 +249,8 @@ public final class ScaffoldPolarCoordinator implements RequestHandler.Provider {
     private boolean lastClipLedged = false;
     /** 上一刻实际提交的落地角（用于判断是否需要抖动）。 */
     private Rot2f lastAppliedRotation;
+    /** 上一次 tick 时所在的世界；变化即视为世界切换。 */
+    private net.minecraft.client.multiplayer.ClientLevel lastLevel;
     /** 抖动符号随机源（避免 ±1 交替形成周期 2 的规律）。 */
     private final Random jitterRandom = new Random();
 
