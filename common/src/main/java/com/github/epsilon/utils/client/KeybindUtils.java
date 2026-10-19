@@ -100,7 +100,9 @@ public class KeybindUtils {
             return EpsilonTranslations.Keybind.NONE.getTranslatedName();
         }
         if (isMouseButton(keyBind)) {
-            return "Mouse " + (decodeMouseButton(keyBind) + 1);
+            // 走原版按键显示名（随语言本地化），不要硬编码英文 "Mouse N"。
+            return com.mojang.blaze3d.platform.InputConstants.Type.MOUSE.getOrCreate(decodeMouseButton(keyBind))
+                    .getDisplayName().getString();
         }
         return InputConstants.Type.KEYSYM.getOrCreate(keyBind).getDisplayName().getString();
     }

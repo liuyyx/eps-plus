@@ -46,9 +46,8 @@ public class EventBus {
                 } catch (Throwable throwable) {
                     Constants.LOGGER.error("Event listener failed for {}", event.getClass().getSimpleName(), throwable);
                 }
-                if (event instanceof Cancellable cancellable && cancellable.isCancelled()) {
-                    break;
-                }
+                // 取消不终止派发：事件只是携带一个标志，由最终消费者决定是否生效。
+                // 提前 break 会让排在后面的监听器永远看不到事件（例如 SafeWalk 需要看已被别的模块取消的输入）。
             }
         }
 
