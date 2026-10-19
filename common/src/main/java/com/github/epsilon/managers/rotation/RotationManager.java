@@ -63,6 +63,12 @@ public abstract class RotationManager {
             return;
         }
 
+        // 同刻内更高优先级的提交必须能真正落地：smooth() 被 `smoothed` 闩锁（每刻只跑一次），
+        // 否则先到者独占本刻托管角，后到的高优先级只改写了 target/priority 却没生效。
+        if (priority.priority > this.priority) {
+            this.smoothed = false;
+        }
+
         this.targetRotations = rotations;
         this.rotationSpeed = rotationSpeed;
         this.raytrace = raytrace;

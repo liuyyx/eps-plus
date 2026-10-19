@@ -96,11 +96,16 @@ public abstract class MixinMinecraft {
         }
     }
 
-    @Inject(method = "handleKeybinds", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/player/LocalPlayer;isUsingItem()Z", ordinal = 0, shift = At.Shift.BEFORE), cancellable = true)
-    private void onHandleKeybinds(CallbackInfo ci) {
+    @com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation(
+            method = "handleKeybinds",
+            at = @At(value = "INVOKE", target = "Lnet/minecraft/client/Minecraft;startUseItem()V"))
+    private void onHandleKeybindsRightClick(Minecraft instance,
+                                            com.llamalad7.mixinextras.injector.wrapoperation.Operation<Void> original) {
+        // 只拦截「使用物品」这一次调用：直接 cancel handleKeybinds 会连带干掉
+        // 攻击/挖掘、快捷栏切换、丢弃、拾取、视角切换（整段方法）。
         RightClickEvent event = EventBus.INSTANCE.post(new RightClickEvent());
-        if (event.isCancelled()) {
-            ci.cancel();
+        if (!event.isCancelled()) {
+            original.call(instance);
         }
     }
 
