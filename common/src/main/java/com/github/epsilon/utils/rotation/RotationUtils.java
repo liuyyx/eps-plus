@@ -158,7 +158,9 @@ public class RotationUtils {
     public static Rot2f calculate(final Vec3 from, final Vec3 to) {
         final Vec3 diff = to.subtract(from);
         final double distance = Math.hypot(diff.x, diff.z);
-        final float yaw = (float) Math.toDegrees(Mth.atan2(diff.z, diff.x)) - 90.0F;
+        // atan2(dz,dx)-90 的值域是 (-270,90]，西北象限会得到 -225 而非 135；
+        // 必须归一到 [-180,180)，否则所有「裸相减」的调用方会凭空多出 360°。
+        final float yaw = Mth.wrapDegrees((float) Math.toDegrees(Mth.atan2(diff.z, diff.x)) - 90.0F);
         final float pitch = (float) -Math.toDegrees(Mth.atan2(diff.y, distance));
         return new Rot2f(yaw, pitch);
     }

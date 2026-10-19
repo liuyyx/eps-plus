@@ -42,15 +42,18 @@ public class BlockUtils {
     }
 
     public static boolean isFaceVisible(BlockPos pos, Direction face) {
+        if (mc.player == null) return false;
         Vec3 eyePos = mc.player.getEyePosition();
         AABB box = new AABB(pos);
+        // 可见性 = 眼睛在该面的外侧（原实现六个比较全部取反：
+        // 把可见面判成不可见、把被方块自身挡住的面判成可见）。
         return switch (face) {
-            case NORTH -> eyePos.z > box.minZ;
-            case SOUTH -> eyePos.z < box.maxZ;
-            case EAST -> eyePos.x < box.maxX;
-            case WEST -> eyePos.x > box.minX;
-            case UP -> eyePos.y < box.maxY;
-            case DOWN -> eyePos.y > box.minY;
+            case NORTH -> eyePos.z < box.minZ;
+            case SOUTH -> eyePos.z > box.maxZ;
+            case EAST -> eyePos.x > box.maxX;
+            case WEST -> eyePos.x < box.minX;
+            case UP -> eyePos.y > box.maxY;
+            case DOWN -> eyePos.y < box.minY;
         };
     }
 

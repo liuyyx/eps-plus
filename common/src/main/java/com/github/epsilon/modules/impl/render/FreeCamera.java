@@ -65,6 +65,11 @@ public class FreeCamera extends Module {
 
     @Override
     protected void onEnable() {
+        // 配置回放（客户端启动时）与主菜单切换都会在无世界时调 onEnable ⇒ 必须先行挡掉，
+        // 否则 mc.player/mainCamera 解引用直接 NPE，且配置里开着 Free Camera 就会每次启动崩。
+        if (mc.player == null || mc.level == null) {
+            return;
+        }
         fovScale = mc.options.fovEffectScale().get();
         bobView = mc.options.bobView().get();
         if (staticView.getValue()) {
@@ -108,6 +113,10 @@ public class FreeCamera extends Module {
 
     @Override
     protected void onDisable() {
+        // onEnable 可能因无世界提前返回：此时 perspective 仍是 null，不能碰相机/选项。
+        if (perspective == null) {
+            return;
+        }
         if (reloadChunks.getValue()) {
             mc.execute(mc.levelExtractor::allChanged);
         }
@@ -129,6 +138,15 @@ public class FreeCamera extends Module {
         if (mc.player != null) {
             mc.player.noPhysics = false;
         }
+
+        // 恢复 unpress() 压下的六个移动键到物理状态：写 KeyMapping 会粘住，
+        // 退出自由相机时若仍按着 W/Shift/空格，移动/潜行/跳跃会全部失效。
+        mc.options.keyUp.setDown(com.github.epsilon.utils.client.KeybindUtils.isPressed(mc.options.keyUp));
+        mc.options.keyDown.setDown(com.github.epsilon.utils.client.KeybindUtils.isPressed(mc.options.keyDown));
+        mc.options.keyLeft.setDown(com.github.epsilon.utils.client.KeybindUtils.isPressed(mc.options.keyLeft));
+        mc.options.keyRight.setDown(com.github.epsilon.utils.client.KeybindUtils.isPressed(mc.options.keyRight));
+        mc.options.keyJump.setDown(com.github.epsilon.utils.client.KeybindUtils.isPressed(mc.options.keyJump));
+        mc.options.keyShift.setDown(com.github.epsilon.utils.client.KeybindUtils.isPressed(mc.options.keyShift));
 
         isSneaking = false;
     }
@@ -298,6 +316,8 @@ public class FreeCamera extends Module {
 
     @EventHandler
     private void onPacketReceive(PacketEvent.Receive event) {
+        // 收包在 netty 线程派发，且模块可能带着 enabled 活过退世界 ⇒ 必须判空。
+        if (nullCheck()) return;
         if (event.getPacket() instanceof ClientboundPlayerCombatKillPacket packet) {
             Entity entity = mc.level.getEntity(packet.playerId());
             if (entity == mc.player && toggleOnDeath.getValue()) {

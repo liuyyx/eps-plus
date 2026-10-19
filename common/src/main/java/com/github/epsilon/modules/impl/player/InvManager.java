@@ -241,7 +241,8 @@ public class InvManager extends Module {
                 ItemStack stack = InvHelper.getArmorStack(armorSlots[i]);
                 if (InvHelper.isArmor(stack)) {
                     if (!stack.isEmpty() && canExecuteInventoryAction() && InvHelper.getBestArmorScore(armorSlots[i]) > InvHelper.getProtection(stack)) {
-                        dropAll(4 + (4 - i));
+                        // 不能 dropAll：THROW 会把已装备的旧护甲直接丢到地上（可被清理/他人拾取），
+                        // 而下面的 shiftClick 快速移动本身就会把旧护甲换回背包。
                     }
                 }
             }

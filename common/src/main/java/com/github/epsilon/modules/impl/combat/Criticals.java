@@ -58,7 +58,6 @@ public class Criticals extends Module {
                 && event.getForward() > 0.0f) {
             event.setSprint(false);
             mc.player.setSprinting(false);
-            mc.options.keySprint.setDown(false);
         }
     }
 

@@ -59,7 +59,6 @@ public class NoSlowdown extends Module {
     }
 
     public void stop() {
-        mc.options.keyUse.setDown(false);
         mc.gameMode.releaseUsingItem(mc.player);
     }
 
@@ -82,7 +81,7 @@ public class NoSlowdown extends Module {
             if (Math.toIntExact(packets.stream().filter(packet -> packet instanceof ClientboundPingPacket).count()) > 150 && ticks > 1) {
                 NotificationManager.INSTANCE.error(this.getTranslatedName(), EpsilonTranslations.Notifications.TRANSACTION_COUNT_TOO_HIGH.getTranslatedName());
                 mc.options.keyUse.setDown(false);
-                onDisable();
+                setEnabled(false);
             }
         }
 

@@ -66,7 +66,6 @@ public class ControlElytraFlightMode extends ElytraFlightMode {
         if (elytraFly.noSprint.getValue()) {
             event.setSprint(false);
             mc.player.setSprinting(false);
-            mc.options.keySprint.setDown(false);
         }
         if (shouldJump) {
             event.setJump(true);

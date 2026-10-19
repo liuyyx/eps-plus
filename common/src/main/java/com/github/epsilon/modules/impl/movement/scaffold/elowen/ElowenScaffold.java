@@ -387,7 +387,7 @@ public final class ElowenScaffold {
             mc.options.keyJump.setDown(physicalKeyDown(mc.options.keyJump));
             mc.options.keyShift.setDown(physicalKeyDown(mc.options.keyShift));
             mc.options.keySprint.setDown(physicalKeyDown(mc.options.keySprint));
-            mc.options.keyUse.setDown(false);
+            mc.options.keyUse.setDown(mc.mouseHandler.isRightPressed());
         }
         SkipTickUtility.reset();
         placeModeHandler.onDisable();

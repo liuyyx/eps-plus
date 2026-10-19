@@ -94,7 +94,6 @@ public class AutoMLG extends Module {
 
         if ((isFalling() || mc.player.isInWater() || mc.player.isInLava()) && !mlgCompleted) {
             mc.player.setSprinting(false);
-            mc.options.keySprint.setDown(false);
         }
 
         if (pendingSwapBack && swapTimer.passedMillise(200)) {
