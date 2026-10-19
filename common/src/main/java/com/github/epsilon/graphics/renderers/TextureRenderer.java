@@ -31,6 +31,8 @@ public class TextureRenderer implements IRenderer {
     private static final int STRIDE = 56;
     private static final long BUFFER_SIZE = 16 * 1024;
     private static final long QUAD_BYTES = STRIDE * 4L;
+    /** 空闲这么多渲染帧后回收该贴图的 batch（每个 batch 持有 3 个 GPU 缓冲）。 */
+    private static final long IDLE_EVICT_FRAMES = 600L;
 
     private final Map<Object, Batch> batches = new LinkedHashMap<>();
     private boolean scissorEnabled = false;
@@ -113,6 +115,7 @@ public class TextureRenderer implements IRenderer {
     private void addRoundedTexture(Object textureKey, float x, float y, float width, float height, float rTL, float rTR, float rBR, float rBL, float u0, float v0, float u1, float v1, Color color, boolean useLinearFilter) {
         Batch batch = batches.computeIfAbsent(new TextureKey(textureKey, useLinearFilter),
                 key -> new Batch(new LuminRingBuffer(BUFFER_SIZE, GpuBuffer.USAGE_VERTEX)));
+        batch.lastUsedFrame = LuminRenderSystem.getRenderFrameId();
 
         batch.buffer.ensureCapacity(batch.currentOffset + QUAD_BYTES);
         batch.buffer.tryMap();
@@ -142,6 +145,7 @@ public class TextureRenderer implements IRenderer {
     ) {
         Batch batch = batches.computeIfAbsent(new TextureKey(textureKey, useLinearFilter),
                 key -> new Batch(new LuminRingBuffer(BUFFER_SIZE, GpuBuffer.USAGE_VERTEX)));
+        batch.lastUsedFrame = LuminRenderSystem.getRenderFrameId();
 
         batch.buffer.ensureCapacity(batch.currentOffset + QUAD_BYTES);
         batch.buffer.tryMap();
@@ -344,6 +348,16 @@ public class TextureRenderer implements IRenderer {
         }
         sharedDynamicUniforms = null;
         sharedMaxIndexCount = 0;
+
+        // 每个不同贴图一份 batch；长期不用的回收，避免显存只增不减。
+        long frame = LuminRenderSystem.getRenderFrameId();
+        batches.entrySet().removeIf(entry -> {
+            Batch batch = entry.getValue();
+            if (batch.vertexCount > 0) return false;
+            if (frame - batch.lastUsedFrame < IDLE_EVICT_FRAMES) return false;
+            batch.buffer.close();
+            return true;
+        });
     }
 
     @Override
@@ -366,6 +380,7 @@ public class TextureRenderer implements IRenderer {
         final LuminRingBuffer buffer;
         long currentOffset = 0;
         int vertexCount = 0;
+        long lastUsedFrame;
         PreparedTexture preparedTexture;
 
         private Batch(LuminRingBuffer buffer) {
