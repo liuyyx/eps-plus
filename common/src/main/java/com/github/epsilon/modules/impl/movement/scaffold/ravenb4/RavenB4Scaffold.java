@@ -11,9 +11,9 @@ import com.github.epsilon.modules.impl.movement.scaffold.ravenb4.RavenB4Scaffold
 import com.github.epsilon.utils.rotation.Priority;
 import com.github.epsilon.utils.rotation.Rot2f;
 import com.github.epsilon.utils.rotation.RotationUtils;
-import net.minecraft.client.KeyMapping;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 import net.minecraft.network.protocol.game.ServerboundSwingPacket;
 import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
@@ -286,6 +286,8 @@ public final class RavenB4Scaffold {
     private static final HashMap<BlockPos, Long> placed = new HashMap<>();
     /** 原 {@code PlayerUtils.groundTicks}（Epsilon 无全局量，本类自己维护）。 */
     private static int groundTicks;
+    /** 上一次发出放置前旋转包的 tick（每刻最多一次）。 */
+    private static int lastRotationPacketTick = -1;
 
     private static final Direction[] SIDES = {Direction.EAST, Direction.SOUTH, Direction.NORTH, Direction.WEST};
     /** {@link #placed} 的淘汰时长（ms）。 */
@@ -449,7 +451,10 @@ public final class RavenB4Scaffold {
         }
         Rot2f committed = new Rot2f(rot[0], rot[1]);
         commitRotation(committed);
-        lastSentRotation = committed;
+        // 以「真正生效的托管角」为下一 tick 的基准：setRotationsDirect 有优先级门，
+        // 被更高优先级模块（KillAura 等）拒绝时本地算出的角并没有进过网络。
+        Rot2f actual = RotationManager.INSTANCE.getRotation();
+        lastSentRotation = actual != null ? new Rot2f(actual.getYaw(), actual.getPitch()) : committed;
     }
 
     /** 原 {@code update()}。 */
@@ -485,8 +490,8 @@ public final class RavenB4Scaffold {
             startTick = mc.player.tickCount;
             startedAt = l;
             startPitch = mc.player.getXRot();
-            releaseKey(mc.options.keyAttack);
-            releaseKey(mc.options.keyUse);
+            // 不再写 mc.options.keyAttack/keyUse（KeyMapping 持久键态，写后无人复位会卡住玩家按键）。
+            // 抑制右键已由 StartUseItemEvent 取消完成。
             if (module.ravenSlowOnEnable.getValue()) {
                 multiplyMotion(0.2, true);
             }
@@ -604,6 +609,9 @@ public final class RavenB4Scaffold {
                     break;
             }
             // 参考：onPlayerRightClick(player, world, stack, against, facing, hit.hitVec)
+            // [联机必需] 放置包必须跟在旋转包之后：托管角只在 SendPositionEvent 才会搭车发出，
+            // 而那时放置包已经上网。先发一次 Rot，服务端才会用本刻瞄准角校验放置（否则吞方块）。
+            sendPlacementRotation(aimYaw, aimPitch);
             if (placeAtBlock(against, facing, hit.getLocation(), itemStack)) {
                 if (searchMode == 1 || searchMode == 2 && fastScaffold.keepY) {
                     fastScaffold.ticks = mc.player.tickCount;
@@ -1303,6 +1311,8 @@ public final class RavenB4Scaffold {
         if (hit == null) {
             return false;
         }
+        // 放置前先落地本刻朝向（联机必需，见 place() 的说明）。
+        sendPlacementRotation(r[0], r[1]);
         if (!placeAt(hit, itemStack)) {
             return false;
         }
@@ -1333,6 +1343,19 @@ public final class RavenB4Scaffold {
         }
         // 参考此处传 facing = null（任意面）。
         return raycastAnyFace(pos, aimYaw, aimPitch);
+    }
+
+    /** 每刻最多一次的放置前旋转包（对齐 ElowenScaffold.sendPlacementRotation）。 */
+    private static void sendPlacementRotation(float yaw, float pitch) {
+        if (mc.player == null || mc.getConnection() == null) {
+            return;
+        }
+        if (mc.player.tickCount == lastRotationPacketTick) {
+            return;
+        }
+        lastRotationPacketTick = mc.player.tickCount;
+        mc.getConnection().send(new ServerboundMovePlayerPacket.Rot(yaw, pitch, mc.player.onGround(),
+                mc.player.horizontalCollision));
     }
 
     /** 原 {@code holdTime()}。 */
@@ -1535,11 +1558,6 @@ public final class RavenB4Scaffold {
     /** 原 {@code PlayerUtils.setSneak(boolean)}（瞬时）。同上：只记标志，由 KeyboardInputEvent 落地。 */
     private static void setSneak(boolean sneak) {
         sneakInput = sneak;
-    }
-
-    /** 原 {@code KeyUtils.release(KeyMapping)}：松开一个按键。 */
-    private static void releaseKey(KeyMapping mapping) {
-        mapping.setDown(false);
     }
 
     /** 原 {@code PlayerUtils.syncCurrentPlayItem()}：Epsilon 侧由 {@code SlotHelper} 负责，此处空实现。 */
