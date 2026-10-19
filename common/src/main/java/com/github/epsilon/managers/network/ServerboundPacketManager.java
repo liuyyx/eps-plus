@@ -24,25 +24,39 @@ public class ServerboundPacketManager {
 
     public boolean blinking = false;
     static boolean forceFlush;
+    /** flush 重入保护：flush 发出的包会再次进入 onPacketSend。 */
+    private boolean flushing;
 
     @EventHandler
     private void onLevelUpdate(LevelUpdateEvent event) {
-        forceFlush = true;
+        // 旧会话的队列不能跨会话投递：退服时 getConnection() 可能为 null，进新世界后又会发到新连接。
+        packets.clear();
+        forceFlush = false;
         blinking = false;
     }
 
     public void flush() {
-        while (!packets.isEmpty()) {
-            try {
-                mc.getConnection().send(packets.poll());
-            } catch (Exception e) {
-                NotificationManager.INSTANCE.error("Serverbound Packet", EpsilonTranslations.Notifications.SERVERBOUND_PACKET_FLUSH_FAILED.getTranslatedName() + ": " + e.getMessage());
+        if (flushing) {
+            return;
+        }
+        flushing = true;
+        try {
+            Packet<?> packet;
+            while ((packet = packets.poll()) != null) {
+                try {
+                    mc.getConnection().send(packet);
+                } catch (Exception e) {
+                    NotificationManager.INSTANCE.error("Serverbound Packet", EpsilonTranslations.Notifications.SERVERBOUND_PACKET_FLUSH_FAILED.getTranslatedName() + ": " + e.getMessage());
+                }
             }
+        } finally {
+            flushing = false;
         }
     }
 
     public void stopBlinking() {
         blinking = false;
+        flush();
     }
 
     public void startBlinking() {
@@ -50,9 +64,12 @@ public class ServerboundPacketManager {
     }
 
     public boolean onPacketSend(Packet<?> packet) {
+        // flush 期间放行（直接发出），既不递归也不再入队（否则队列永远不空）。
+        if (flushing) return false;
+
         if (forceFlush) {
-            flush();
             forceFlush = false;
+            flush();
             return false;
         }
 

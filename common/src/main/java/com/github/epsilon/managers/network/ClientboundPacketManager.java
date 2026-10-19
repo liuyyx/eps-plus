@@ -27,7 +27,9 @@ public class ClientboundPacketManager {
 
     @EventHandler
     private void onLevelUpdate(LevelUpdateEvent event) {
-        shouldFlush = true;
+        // 旧世界的包不能投递给新会话的 listener（会在新世界创建旧实体/改血量/投递旧聊天）。
+        packets.clear();
+        shouldFlush = false;
         tracking = false;
     }
 
