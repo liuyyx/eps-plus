@@ -275,8 +275,9 @@ public class YsmModel extends Module {
                     : new YsmAnimationPlayer(raw, this.armModel.boneIndex, true);
             this.ensurePoseCapacity(this.model.bones.size());
             this.ensureArmPoseCapacity(this.armModel == null ? 0 : this.armModel.bones.size());
-            this.modelHorizontalScale = raw.properties == null ? 1.0f : raw.properties.heightScale;
-            this.modelVerticalScale = raw.properties == null ? 1.0f : raw.properties.widthScale;
+            // width_scale 控制水平轴（X/Z），height_scale 控制竖直轴（Y）；原先两者写反。
+            this.modelHorizontalScale = raw.properties == null ? 1.0f : raw.properties.widthScale;
+            this.modelVerticalScale = raw.properties == null ? 1.0f : raw.properties.heightScale;
             String defaultTexture = raw.properties == null ? null : raw.properties.defaultTexture;
             this.textureLocation = this.registerTexture(defaultTexture);
             this.failCount = 0;

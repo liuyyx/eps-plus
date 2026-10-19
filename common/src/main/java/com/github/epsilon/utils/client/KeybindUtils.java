@@ -63,6 +63,12 @@ public class KeybindUtils {
      * @return 判断结果
      */
     public static boolean isPressed(KeyMapping keyMapping) {
+        // 26.2 里鼠标类 KeyMapping 的 getValue() 是 GLFW 按钮号 0..7，必须按类型分支；
+        // 否则 isPressed(0) 会走键盘分支查 glfwGetKey(0)（GLFW_KEY_UNKNOWN）⇒ 永远 false。
+        if (keyMapping.key.getType() == com.mojang.blaze3d.platform.InputConstants.Type.MOUSE) {
+            return org.lwjgl.glfw.GLFW.glfwGetMouseButton(mc.getWindow().handle(),
+                    keyMapping.key.getValue()) == org.lwjgl.glfw.GLFW.GLFW_PRESS;
+        }
         return isPressed(getKey(keyMapping));
     }
 
