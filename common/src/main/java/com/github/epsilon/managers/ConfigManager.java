@@ -58,6 +58,9 @@ public class ConfigManager {
     private List<String> cachedConfigNames = List.of();
     private long configListCacheExpiresAt;
     private boolean configListCacheDirty = true;
+    // 读失败时抑制回写，避免把「读不到」变成「删掉」：加载失败时内存为空，任何保存都会覆盖原文件。
+    private boolean friendsLoadFailed = false;
+    private boolean accountsLoadFailed = false;
 
     private ConfigManager() {
     }
@@ -297,21 +300,24 @@ public class ConfigManager {
         if (moduleObj.has("keyBind") && moduleObj.get("keyBind").isJsonPrimitive()) {
             try {
                 module.setKeyBind(moduleObj.get("keyBind").getAsInt());
-            } catch (Exception ignored) {
+            } catch (Exception e) {
+                Constants.LOGGER.warn("模块 {} 的 keyBind 无效: {}", module.getName(), moduleObj.get("keyBind"), e);
             }
         }
 
         if (moduleObj.has("bindMode") && moduleObj.get("bindMode").isJsonPrimitive()) {
             try {
                 module.setBindMode(Module.BindMode.valueOf(moduleObj.get("bindMode").getAsString()));
-            } catch (Exception ignored) {
+            } catch (Exception e) {
+                Constants.LOGGER.warn("模块 {} 的 bindMode 无效: {}", module.getName(), moduleObj.get("bindMode"));
             }
         }
 
         if (moduleObj.has("hidden") && moduleObj.get("hidden").isJsonPrimitive()) {
             try {
                 module.setHidden(moduleObj.get("hidden").getAsBoolean());
-            } catch (Exception ignored) {
+            } catch (Exception e) {
+                Constants.LOGGER.warn("模块 {} 的 hidden 无效: {}", module.getName(), moduleObj.get("hidden"));
             }
         }
 
@@ -404,6 +410,10 @@ public class ConfigManager {
     }
 
     private synchronized void saveFriends(Path configStorageDir) throws IOException {
+        if (friendsLoadFailed) {
+            Constants.LOGGER.warn("好友文件此前读取失败，跳过本次写回以免覆盖原始数据");
+            return;
+        }
         Path friendFile = configStorageDir.resolve(FRIENDS_FILE_NAME);
         JsonArray array = new JsonArray();
         for (String name : FriendManager.INSTANCE.getFriends()) {
@@ -423,24 +433,38 @@ public class ConfigManager {
 
     private synchronized void loadFriends(Path configStorageDir) {
         Path friendFile = configStorageDir.resolve(FRIENDS_FILE_NAME);
-        if (FriendManager.INSTANCE != null) FriendManager.INSTANCE.clearFriends();
-        if (!Files.exists(friendFile)) return;
+        if (!Files.exists(friendFile)) {
+            if (FriendManager.INSTANCE != null) FriendManager.INSTANCE.clearFriends();
+            friendsLoadFailed = false;
+            return;
+        }
+        List<String> loaded = new ArrayList<>();
         try {
             String json = Files.readString(friendFile, StandardCharsets.UTF_8);
             JsonElement parsed = JsonParser.parseString(json);
             if (parsed != null && parsed.isJsonArray()) {
                 for (JsonElement el : parsed.getAsJsonArray()) {
-                    if (el.isJsonPrimitive()) {
-                        FriendManager.INSTANCE.addFriend(el.getAsString());
-                    }
+                    if (el.isJsonPrimitive()) loaded.add(el.getAsString());
                 }
             }
         } catch (Exception e) {
-            Constants.LOGGER.error("读取好友文件失败: {}", friendFile, e);
+            // 先解析到局部列表：读失败时保留内存中的旧数据，并禁止本会话回写覆盖磁盘文件。
+            friendsLoadFailed = true;
+            Constants.LOGGER.error("读取好友文件失败（本次会话不写回）: {}", friendFile, e);
+            return;
         }
+        if (FriendManager.INSTANCE != null) {
+            FriendManager.INSTANCE.clearFriends();
+            for (String name : loaded) FriendManager.INSTANCE.addFriend(name);
+        }
+        friendsLoadFailed = false;
     }
 
     public synchronized void saveAccounts() {
+        if (accountsLoadFailed) {
+            Constants.LOGGER.warn("账号文件此前读取失败，跳过本次写回以免覆盖原始数据");
+            return;
+        }
         try {
             ensureRootDirectories();
             JsonArray array = new JsonArray();
@@ -460,6 +484,7 @@ public class ConfigManager {
 
     public synchronized void loadAccounts() {
         List<Account<?>> loaded = new ArrayList<>();
+        boolean parseFailed = false;
         if (Files.exists(accountsFile)) {
             try {
                 String json = Files.readString(accountsFile, StandardCharsets.UTF_8);
@@ -470,14 +495,18 @@ public class ConfigManager {
                         try {
                             loaded.add(Account.fromJson(element.getAsJsonObject()));
                         } catch (Exception e) {
-                            Constants.LOGGER.error("读取单个账号失败", e);
+                            parseFailed = true;
+                            Constants.LOGGER.error("读取单个账号失败（该条目不会被写回覆盖前的数据）", e);
                         }
                     }
                 }
             } catch (Exception e) {
-                Constants.LOGGER.error("读取账号配置失败: {}", accountsFile, e);
+                accountsLoadFailed = true;
+                Constants.LOGGER.error("读取账号配置失败（本次会话不写回）: {}", accountsFile, e);
+                return;
             }
         }
+        accountsLoadFailed = parseFailed;
         AccountManager.INSTANCE.replaceAll(loaded);
     }
 
@@ -538,7 +567,8 @@ public class ConfigManager {
                 if (!s.isAllowAlpha()) c = new Color(c.getRed(), c.getGreen(), c.getBlue());
                 s.setValue(c);
             }
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            Constants.LOGGER.warn("设置 {} 的值无效: {}", setting.getName(), value);
         }
     }
 
