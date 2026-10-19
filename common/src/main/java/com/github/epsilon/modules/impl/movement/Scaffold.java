@@ -1173,6 +1173,7 @@ public class Scaffold extends Module {
     private void onLevelUpdate(LevelUpdateEvent event) {
         ravenScaffold.resetState();
         elowenScaffold.resetState();
+        ScaffoldPolarCoordinator.INSTANCE.resetWorldState();
     }
 
     @EventHandler

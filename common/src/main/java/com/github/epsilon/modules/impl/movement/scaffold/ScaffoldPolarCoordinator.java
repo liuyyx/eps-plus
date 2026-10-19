@@ -215,11 +215,8 @@ public final class ScaffoldPolarCoordinator implements RequestHandler.Provider {
     public void tickPolar() {
         var level = mc.level;
         if (level != lastLevel) {
-            // 维度/服务器切换：服务端旋转缓存与托管角全部失效，必须从头对齐。
             lastLevel = level;
-            PolarRotationManager.INSTANCE.onWorldChange();
-            lastAppliedRotation = null;
-            currentOptimalLine = null;
+            resetWorldState();
         }
         syncSettings();
 
@@ -416,6 +413,15 @@ public final class ScaffoldPolarCoordinator implements RequestHandler.Provider {
         lastAppliedRotation = unjitteredTarget;
 
         RotationManager.INSTANCE.setRotationsDirect(target, Priority.Highest);
+    }
+
+    /** 换世界/切维度：Polar、规划器与预测器的跨世界状态必须一起复位。 */
+    public void resetWorldState() {
+        PolarRotationManager.INSTANCE.onWorldChange();
+        ScaffoldMovementPlanner.reset();
+        ScaffoldMovementPrediction.reset();
+        lastAppliedRotation = null;
+        currentOptimalLine = null;
     }
 
     /** LB:391-399 {@code handleMovementInput}（{@code MovementInputEvent}，MODEL_STATE）。 */
