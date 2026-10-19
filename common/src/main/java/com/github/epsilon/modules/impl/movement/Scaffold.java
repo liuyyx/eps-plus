@@ -7,6 +7,7 @@ import com.github.epsilon.events.bus.EventPriority;
 import com.github.epsilon.events.bus.listeners.ConsumerListener;
 import com.github.epsilon.events.impl.ClientTickEvent;
 import com.github.epsilon.events.impl.KeyboardInputEvent;
+import com.github.epsilon.events.impl.LevelUpdateEvent;
 import com.github.epsilon.events.impl.PacketEvent;
 import com.github.epsilon.events.impl.PlaceBlockEvent;
 import com.github.epsilon.events.impl.PlayerTickEvent;
@@ -27,6 +28,7 @@ import com.github.epsilon.modules.impl.movement.scaffold.clicking.Clicker;
 import com.github.epsilon.modules.impl.movement.scaffold.elowen.ElowenPlaceMode;
 import com.github.epsilon.modules.impl.movement.scaffold.elowen.ElowenRotationMode;
 import com.github.epsilon.modules.impl.movement.scaffold.elowen.ElowenScaffold;
+import com.github.epsilon.modules.impl.movement.scaffold.ravenb4.RavenB4Scaffold;
 import com.github.epsilon.modules.impl.movement.scaffold.rotation.MovementCorrection;
 import com.github.epsilon.modules.impl.movement.scaffold.rotation.RotationHelper;
 import com.github.epsilon.modules.impl.movement.scaffold.rotation.RotationProperty;
@@ -78,6 +80,9 @@ public class Scaffold extends Module {
         super("Scaffold", Category.MOVEMENT);
         EventBus.INSTANCE.subscribe(new ConsumerListener<>(Render3DEvent.class,
                 event -> {
+                    // 该监听器在构造器里注册，不随模块启停订阅/退订 ⇒ 必须自己判启用，
+                    // 否则模块关闭后仍会画 Elowen/Raven 的残留盒子。
+                    if (!isEnabled()) return;
                     // Elowen 的 onRenderWorld：只画当前放置目标（elowen 用 B 字段，AABB 外扩 0.002）。
                     if (isElowenMode()) {
                         BlockPos elowenTarget = elowenScaffold.getRenderBlock();
@@ -85,6 +90,28 @@ public class Scaffold extends Module {
                             AABB elowenBox = new AABB(elowenTarget).inflate(0.002);
                             Render3DScheduler.INSTANCE.addFilledBox(elowenBox, sideColor.getValue());
                             Render3DScheduler.INSTANCE.addOutlineBox(elowenBox, lineColor.getValue());
+                        }
+                    }
+
+                    // Raven B4 的 onRenderWorld：画当前放置目标（原 ScaffoldModule.B）+ 最近放置高亮。
+                    if (isRavenB4Mode() && render.getValue()) {
+                        BlockPos ravenTarget = ravenScaffold.getRenderBlock();
+                        if (ravenTarget != null) {
+                            AABB ravenBox = new AABB(ravenTarget).inflate(0.002);
+                            Render3DScheduler.INSTANCE.addFilledBox(ravenBox, sideColor.getValue());
+                            Render3DScheduler.INSTANCE.addOutlineBox(ravenBox, lineColor.getValue());
+                        }
+                        if (ravenHighlightBlocks.getValue() && !ravenScaffold.getPlacedBlocks().isEmpty()) {
+                            long now = System.currentTimeMillis();
+                            ravenScaffold.getPlacedBlocks().entrySet().removeIf(entry -> now - Math.abs(entry.getValue()) >= 500L);
+                            for (var entry : ravenScaffold.getPlacedBlocks().entrySet()) {
+                                float progress = Math.min((now - Math.abs(entry.getValue())) / 500.0f, 1.0f);
+                                int alpha = (int) (255.0f - progress * 255.0f);
+                                if (alpha <= 0) continue;
+                                AABB box = new AABB(entry.getKey()).inflate(0.002);
+                                Render3DScheduler.INSTANCE.addFilledBox(box, new Color(sideColor.getValue().getRed(),
+                                        sideColor.getValue().getGreen(), sideColor.getValue().getBlue(), alpha));
+                            }
                         }
                     }
 
@@ -141,7 +168,11 @@ public class Scaffold extends Module {
          * {@code com.elowen.o.Y.Z.Scaffold}）：4 个放置模式 × 5 个旋转模式，
          * 全部走静默托管角（不写玩家真实视角）。
          */
-        Elowen
+        Elowen,
+        /**
+         * Raven B4 Scaffold (ravenb4/), copied from Elowen template.
+         */
+        RavenB4
     }
 
     private enum RotationMode {
@@ -400,10 +431,10 @@ public class Scaffold extends Module {
     public final BoolSetting uitemsTelly = boolSetting("Uitems Telly", true, heypixelDependency).group(sgUitems);
     /** OpenPal {@code tellyTick}。 */
     public final IntSetting uitemsTellyTicks = intSetting("Uitems Telly Ticks", 5, 0, 10, 1, heypixelDependency).group(sgUitems);
-    /** OpenPal {@code rotateSpeed}。 */
-    public final IntSetting uitemsRotationSpeed = intSetting("Uitems Rotation Speed", 180, 10, 180, 10, uitemsDependency).group(sgUitems);
-    /** OpenPal {@code rotateBackSpeed}。 */
-    public final IntSetting uitemsRotationBackSpeed = intSetting("Uitems Rotation Back Speed", 180, 10, 180, 10, uitemsDependency).group(sgUitems);
+    /** OpenPal {@code rotateSpeed}（Hypixel 侧硬编码 180，故只在 Heypixel 下有效）。 */
+    public final IntSetting uitemsRotationSpeed = intSetting("Uitems Rotation Speed", 180, 10, 180, 10, heypixelDependency).group(sgUitems);
+    /** OpenPal {@code rotateBackSpeed}（同上）。 */
+    public final IntSetting uitemsRotationBackSpeed = intSetting("Uitems Rotation Back Speed", 180, 10, 180, 10, heypixelDependency).group(sgUitems);
     /** OpenPal {@code duplicateRotPlace}。 */
     public final BoolSetting uitemsDuplicateRotPlace = boolSetting("Duplicate Rot Place", false, uitemsDependency).group(sgUitems);
     /** OpenPal {@code overrideRaycast}。 */
@@ -533,6 +564,91 @@ public class Scaffold extends Module {
         return elowenScaffold;
     }
 
+    /*
+     * ===== Raven B4 搭路（ravenb4/，逐行移植自 xyz.daikirai.module.player.ScaffoldModule）=====
+     * 显示名一律加 "Raven " 前缀：配置文件以显示名为键，本模块已有同名设置，不加前缀会互相覆盖。
+     */
+
+    private final Setting.Dependency ravenDependency = () -> mode.is(Mode.RavenB4);
+
+    private final SettingGroup sgRaven = settingGroup("Raven");
+
+    /** 原 {@code rotationSetting}（"Rotation"）：None / Strict / Smooth / Simple / Lazy / Offset。 */
+    public final EnumSetting<RavenB4Scaffold.RavenRotation> ravenRotationMode =
+            enumSetting("Raven Rotation Mode", RavenB4Scaffold.RavenRotation.Strict, ravenDependency).group(sgRaven);
+    /** 原 {@code fastScaffoldSetting}（"Fast scaffold"）。 */
+    public final EnumSetting<RavenB4Scaffold.RavenFastScaffold> ravenFastScaffold =
+            enumSetting("Raven Fast Scaffold", RavenB4Scaffold.RavenFastScaffold.Disabled, ravenDependency).group(sgRaven);
+    /** 原 {@code fastScaffoldRmbSetting}（"Fast scaffold RMB"：按住右键时生效的档位）。 */
+    public final EnumSetting<RavenB4Scaffold.RavenFastScaffold> ravenFastScaffoldRmb =
+            enumSetting("Raven Fast Scaffold RMB", RavenB4Scaffold.RavenFastScaffold.Disabled, ravenDependency).group(sgRaven);
+    /** 原 {@code multiPlaceSetting}（"Multi-place"）。 */
+    public final EnumSetting<RavenB4Scaffold.RavenMultiPlace> ravenMultiPlace =
+            enumSetting("Raven Multi Place", RavenB4Scaffold.RavenMultiPlace.Disabled, ravenDependency).group(sgRaven);
+    /** 原 {@code precisionSetting}（"Precision"）。 */
+    public final EnumSetting<RavenB4Scaffold.RavenPrecision> ravenPrecision =
+            enumSetting("Raven Precision", RavenB4Scaffold.RavenPrecision.High, ravenDependency).group(sgRaven);
+    /** 原 {@code motion}（"Motion"：地面每刻水平速度乘子）。 */
+    public final DoubleSetting ravenMotion = doubleSetting("Raven Motion", 0.95, 0.1, 1.2, 0.01, ravenDependency).group(sgRaven);
+    /** 原 {@code fastScaffoldMotion}（"Fast scaffold motion"）。 */
+    public final DoubleSetting ravenFastScaffoldMotion = doubleSetting("Raven Fast Scaffold Motion", 0.95, 0.1, 1.2, 0.01, ravenDependency).group(sgRaven);
+    /** 原 {@code sneakEvery}（"Sneak every"：每 N 次放置强制一次潜行）；0 表示关闭。 */
+    public final IntSetting ravenSneakEvery = intSetting("Raven Sneak Every", 0, 0, 20, 1, ravenDependency).group(sgRaven);
+    /** 原 {@code speedBoost}（"Speed boost"：迅捷 II 时的额外加成）。 */
+    public final DoubleSetting ravenSpeedBoost = doubleSetting("Raven Speed Boost", 0.0, 0.0, 1.0, 0.05, ravenDependency).group(sgRaven);
+    /** 原 {@code legitMotion}（"Legit motion"）。 */
+    public final BoolSetting ravenLegitMotion = boolSetting("Raven Legit Motion", false, ravenDependency).group(sgRaven);
+    /** 原 {@code safeWalk}（"SafeWalk"）：开启后以真实视角为旋转基准。 */
+    public final BoolSetting ravenSafeWalk = boolSetting("Raven Safe Walk", false, ravenDependency).group(sgRaven);
+    /** 原 {@code jumpFacingForward}（"Jump facing forward"）。 */
+    public final BoolSetting ravenJumpFacingForward = boolSetting("Raven Jump Facing Forward", false, ravenDependency).group(sgRaven);
+    /** 原 {@code autoSwap}（"Auto swap"）：主手不是方块时自动切到热键栏里的可放置方块。 */
+    public final BoolSetting ravenAutoSwap = boolSetting("Raven Auto Swap", true, ravenDependency).group(sgRaven);
+    /** 原 {@code silentSwing}（"Silent swing"）。 */
+    public final BoolSetting ravenSilentSwing = boolSetting("Raven Silent Swing", false, ravenDependency).group(sgRaven);
+    /** 原 {@code slowOnEnable}（"Slow on enable"）。 */
+    public final BoolSetting ravenSlowOnEnable = boolSetting("Raven Slow On Enable", false, ravenDependency).group(sgRaven);
+    /** 原 {@code slowSpeedPotion}（"Slow speed potion"）。 */
+    public final BoolSetting ravenSlowSpeedPotion = boolSetting("Raven Slow Speed Potion", false, ravenDependency).group(sgRaven);
+    /** 原 {@code highlightBlocks}（"Highlight blocks"）。 */
+    public final BoolSetting ravenHighlightBlocks = boolSetting("Raven Highlight Blocks", false, ravenDependency).group(sgRaven);
+    /** 原 {@code tower}（"Tower"）：Epsilon 无联动塔模块，预留开关。 */
+    public final BoolSetting ravenTower = boolSetting("Raven Tower", false, ravenDependency).group(sgRaven);
+    /** 原 {@code canSprint()} 里 {@code SettingsModule.movementFix}：非快速搭路时的移动修正开关。 */
+    public final BoolSetting ravenMovementFix = boolSetting("Raven Movement Fix", true, ravenDependency).group(sgRaven);
+
+    private final RavenB4Scaffold ravenScaffold = new RavenB4Scaffold(this);
+
+    /** 上一次生效的 Raven 状态，用于驱动引擎的 {@code onEnable/onDisable}（照 {@link #syncElowenModeLifecycle}）。 */
+    private boolean lastRavenActive;
+
+    public boolean isRavenB4Mode() {
+        return mode.is(Mode.RavenB4);
+    }
+
+    public RavenB4Scaffold getRavenScaffold() {
+        return ravenScaffold;
+    }
+
+    /**
+     * Raven B4 的启用/停用同步（照 {@link #syncElowenModeLifecycle}）：
+     * 切到 {@link Mode#RavenB4} 时调引擎 {@code onEnable()}，切走时调 {@code onDisable()} 并释放托管角。
+     * 必须在引擎 {@code onPreTick()} 之前执行。
+     */
+    private void syncRavenB4ModeLifecycle() {
+        final boolean raven = isRavenB4Mode();
+        if (raven == lastRavenActive) return;
+
+        if (lastRavenActive) {
+            ravenScaffold.onDisable();
+            RotationManager.INSTANCE.setActive(false);
+        }
+        lastRavenActive = raven;
+        if (raven) {
+            ravenScaffold.onEnable();
+        }
+    }
+
     private final BoolSetting swingHand = boolSetting("Swing Hand", true);
     private final BoolSetting render = boolSetting("Render", true);
     private final BoolSetting fade = boolSetting("Fade", true, render::getValue);
@@ -591,6 +707,8 @@ public class Scaffold extends Module {
         pearlUsePacketSent = false;
         lastUitemsMode = null;
         lastElowenActive = false;
+        lastRavenActive = false;
+        renderBoxes.clear();
         // LB ModuleScaffold.onEnabled()（404–412）
         ScaffoldPolarCoordinator.INSTANCE.onEnabled();
     }
@@ -622,6 +740,12 @@ public class Scaffold extends Module {
         if (lastElowenActive) {
             elowenScaffold.onDisable();
             lastElowenActive = false;
+        }
+
+        // Raven B4：模块关闭时释放托管角并还原按键（原 ScaffoldModule.onDisable）。
+        if (lastRavenActive) {
+            ravenScaffold.onDisable();
+            lastRavenActive = false;
         }
     }
 
@@ -736,6 +860,7 @@ public class Scaffold extends Module {
 
         syncUitemsModeLifecycle();
         syncElowenModeLifecycle();
+        syncRavenB4ModeLifecycle();
 
         if (isPolarActive()) {
             // Polar 走 LiquidBounce 的 GodBridge 链路：本刻的转向目标、转向落地与放置
@@ -764,6 +889,13 @@ public class Scaffold extends Module {
         if (isElowenMode()) {
             // elowen 的每刻顺序全在引擎里（选模式 → 找目标 → 跳刻清算 → 潜行 → 放置模式 onTick → 提交托管角）。
             elowenScaffold.onPreTick();
+            return;
+        }
+
+        if (isRavenB4Mode()) {
+            // Raven B4 的每刻顺序全在引擎里（计数 → 暂停/换槽检查 → 激活 → FastScaffold 状态机 → 放置 → 提交托管角）。
+            // onPreMotion / onPostPlayerInput 分别由 SendPositionEvent / KeyboardInputEvent 触发（见下方事件）。
+            ravenScaffold.onPreTick();
             return;
         }
 
@@ -817,11 +949,16 @@ public class Scaffold extends Module {
             NotificationManager.INSTANCE.warning(this.getTranslatedName(), EpsilonTranslations.Notifications.SCAFFOLD_FLYING_WARNING.getTranslatedName(), this.hashCode());
         }
         if (emergencyPlacement.getValue() && (!reachable || strength >= 1.5) && rotateCount <= 8 && getBlockCount() >= 1 && canUseBlockResult()) {
+            // 先判 target：原实现先 cancel 再判空，导致「没有可放方块」的那几刻整刻被取消
+            // （玩家不移动、不下落、不发位置包），而 AutoMLG 又因 emergencyPlacementActive 跳过自救。
+            if (blockPos == null) {
+                rotateCount = 0;
+                return false;
+            }
             emergencyPlacementActive = true;
             event.cancel();
 
             rotateCount++;
-            if (blockPos == null) return true;
             Rot2f rotation = getRotation(blockPos, direction);
             RotationManager.INSTANCE.rotations = rotation;
             RotationManager.INSTANCE.setActive(true);
@@ -897,7 +1034,7 @@ public class Scaffold extends Module {
      */
     @EventHandler(priority = EventPriority.LOWEST)
     private void onUitemsSkipTick(PlayerTickEvent.Pre event) {
-        if ((isUitemsMode() || isElowenMode()) && SkipTickUtility.consumeSkipTick()) event.cancel();
+        if ((isUitemsMode() || isElowenMode() || isRavenB4Mode()) && SkipTickUtility.consumeSkipTick()) event.cancel();
     }
 
     /** OpenPal 的渲染分工在模块侧：模式类不做渲染，放置成功由模块补渲染盒。 */
@@ -946,6 +1083,60 @@ public class Scaffold extends Module {
         if (isElowenMode()) {
             elowenScaffold.renderHud(event);
         }
+    }
+
+    /**
+     * Raven B4 的右键接管（原 {@code onMouse(MouseEvent)}：{@code e.setCanceled(true)}）。
+     * 与 Elowen 同优先级 HIGH：必须在原版右键处理之前取消。
+     */
+    @EventHandler(priority = EventPriority.HIGH)
+    private void onRavenUseItem(StartUseItemEvent event) {
+        if (!isRavenB4Mode()) return;
+
+        ravenScaffold.onUseItem(event);
+    }
+
+    /** Raven B4 的 {@code onPreMotion(MotionEvent)}：在位置包发出前调整运动（浮动/起跳相位）。 */
+    @EventHandler
+    private void onRavenSendPosition(SendPositionEvent event) {
+        if (isRavenB4Mode()) {
+            ravenScaffold.onPreMotion();
+        }
+    }
+
+    /** Raven B4 的 {@code onPostPlayerInputAlways()}：注入跳跃/潜行按键（每刻瞬时，落地后清零）。 */
+    @EventHandler
+    private void onRavenKeyboardInput(KeyboardInputEvent event) {
+        if (isRavenB4Mode()) {
+            ravenScaffold.onKeyboardInput(event);
+        }
+    }
+
+    /** Elowen 的每刻瞬时输入（替代旧版直接写 KeyMapping 的持久键态）。 */
+    @EventHandler
+    private void onElowenKeyboardInput(KeyboardInputEvent event) {
+        if (isElowenMode()) {
+            elowenScaffold.onKeyboardInput(event);
+        }
+    }
+
+    /** Uitems（Heypixel/Hypixel）的每刻瞬时输入（替代旧版直接写 KeyMapping 的持久键态）。 */
+    @EventHandler
+    private void onUitemsKeyboardInput(KeyboardInputEvent event) {
+        if (isUitemsMode()) {
+            getActiveUitemsMode().onKeyboardInput(event);
+        }
+    }
+
+    /**
+     * 换世界 / 切维度：引擎的 static 状态必须复位。
+     * 否则旧世界的 keptY/tickCount/active 会带进新世界 —— keptY 会让 candidates() 过滤掉所有候选
+     * （一次都放不出方块），startTick 旧值让 tickCount-startTick 变负数。
+     */
+    @EventHandler
+    private void onLevelUpdate(LevelUpdateEvent event) {
+        ravenScaffold.resetState();
+        elowenScaffold.resetState();
     }
 
     @EventHandler
@@ -1136,6 +1327,27 @@ public class Scaffold extends Module {
     public int nextPlaceDelayTicks() {
         return placeDelay.getValue()
                 + (placeDelayRandom.getValue() > 0 ? placeRandom.nextInt(placeDelayRandom.getValue() + 1) : 0);
+    }
+
+    /** 放置节流闸门：冷却中返回 true（Elowen / Raven B4 引擎在放置前查询，不改变计数）。 */
+    public boolean isPlaceOnCooldown() {
+        return placeDelayCounter > 0;
+    }
+
+    /** 每刻自减一次放置冷却（Elowen / Raven B4 引擎在 onPreTick 开头调用，保证每刻只减一次）。 */
+    public void tickPlaceCooldown() {
+        if (placeDelayCounter > 0) placeDelayCounter--;
+    }
+
+    /**
+     * 放置成功后重掷冷却 = {@link #placeDelay} + [0, {@link #placeDelayRandom}]，
+     * 且**不低于** {@code minTicks}。
+     *
+     * <p>下限是为反作弊留的最小间隔：默认值下若用户把 Place Delay 调到 0/1，
+     * 逐刻连发会被 Vulcan（Type C/K/M）与 Matrix（bridge quickly）直接判定。</p>
+     */
+    public void markPlaceCooldown(int minTicks) {
+        placeDelayCounter = Math.max(minTicks, nextPlaceDelayTicks());
     }
 
     private int getYLevel() {

@@ -1,5 +1,6 @@
 package com.github.epsilon.modules.impl.movement.scaffold.elowen;
 
+import com.github.epsilon.events.impl.KeyboardInputEvent;
 import com.github.epsilon.events.impl.PacketEvent;
 import com.github.epsilon.events.impl.Render2DEvent;
 import com.github.epsilon.events.impl.StartUseItemEvent;
@@ -142,12 +143,22 @@ public final class ElowenScaffold {
     /** 原 {@code Scaffold.b}：启用时的选中槽。 */
     private int savedSlot = -1;
 
-    /**
-     * 原 {@code Elowen.SKIP_TICKS != 0} 在本刻模块逻辑内的等价物（§2.8）。
+    /** 原 {@code Elowen.SKIP_TICKS != 0} 在本刻模块逻辑内的等价物（§2.8）。
      * elowen 是「读写全局 int」，Epsilon 是「{@link SkipTickUtility#addSkipTicks(int)} + 消费」，
      * 故用本布尔承接 {@code placeBlock} 的 {@code SKIP_TICKS != 0} 闸门；每刻在 {@link #onPreTick()} 开头复位。
      */
     private boolean skipTickArmed;
+
+    /**
+     * 每刻瞬时输入意图（潜行/跳跃）。
+     *
+     * <p>elowen 参考写的是 1.8.9 的 {@code movementInput.sneak/jump}（每刻重算的瞬时输入）；
+     * 本移植最初写成 {@code mc.options.keyShift/keyJump.setDown(...)} —— 那是 {@code KeyMapping}
+     * 的**持久键态**，写后无人复位，会导致「一直跳 / 一直潜行」（与 RavenB4 移植同一类缺陷）。
+     * 现在改为意图标志，由 {@link #onKeyboardInput(KeyboardInputEvent)} 落到 {@link KeyboardInputEvent} 上并清零。</p>
+     */
+    private boolean sneakIntent;
+    private boolean jumpIntent;
 
     // ===== 模式实例 =====
     // [elowen o/Y/Z/Scaffold.java:195-199] 四个放置模式是固定实例；旋转模式照 elowen 每刻 new（见 selectRotationMode）
@@ -166,6 +177,36 @@ public final class ElowenScaffold {
     private final Supplier<TextRenderer> textRendererSupplier = Suppliers.memoize(TextRenderer::create);
 
     // ===== 对外访问器（放置/旋转模式读设置与状态）=====
+
+    /** 放置模式请求本刻潜行（替代直接写 {@code mc.options.keyShift.setDown}）。 */
+    public void requestSneak(boolean value) {
+        sneakIntent = value;
+    }
+
+    /** 放置模式请求本刻跳跃（替代直接写 {@code mc.options.keyJump.setDown}）。 */
+    public void requestJump(boolean value) {
+        jumpIntent = value;
+    }
+
+    /** 本刻是否请求了潜行（供模式内部做「写后读」判定，等价于原 {@code movementInput.sneak}）。 */
+    public boolean sneakRequested() {
+        return sneakIntent;
+    }
+
+    /**
+     * {@link KeyboardInputEvent} 落地：把本刻意图写进**瞬时**输入并清零。
+     * 落地后清零保证注入只持续一刻；绝不能改成持久键态。
+     */
+    public void onKeyboardInput(KeyboardInputEvent event) {
+        if (sneakIntent) {
+            event.setSneak(true);
+        }
+        if (jumpIntent) {
+            event.setJump(true);
+        }
+        sneakIntent = false;
+        jumpIntent = false;
+    }
 
     public Minecraft minecraft() {
         return mc;
@@ -308,6 +349,26 @@ public final class ElowenScaffold {
         commitRotation();
     }
 
+    /** 换世界 / 切维度：清掉脚本目标与计时，避免跨世界残留（目标是方块引用，绝不能带进新世界）。 */
+    public void resetState() {
+        targetBlock = null;
+        renderBlock = null;
+        pendingSkipPlace = false;
+        skipTickArmed = false;
+        sneakIntent = false;
+        jumpIntent = false;
+        stuckCounter = 0;
+        skipAttempts = 0;
+        postPlaceGate = 0;
+        airTicksSinceGround = 0;
+        motionCooldown = 0;
+        lastPlacedTick = -1L;
+        lastRotationPacketTick = -1L;
+        tickCounter = 0L;
+        sneakCounter = 0;
+        RotationManager.INSTANCE.setActive(false);
+    }
+
     /** [elowen o/Y/Z/Scaffold.java:977-990] onDisable() */
     public void onDisable() {
         if (mc.player != null) {
@@ -338,6 +399,11 @@ public final class ElowenScaffold {
     public void onPreTick() {
         tickCounter++;
         skipTickArmed = false;
+        // 每刻意图清零：模式在本刻重新申请（等价于 1.8.9 每刻重算 movementInput）。
+        sneakIntent = false;
+        jumpIntent = false;
+        // 共享放置节流（Place Delay + 随机量）：每刻只自减一次。
+        module.tickPlaceCooldown();
         if (mc.gui.screen() != null || mc.player == null) {
             currentRotation.set(serverYaw(), serverPitch());
             return;
@@ -357,15 +423,15 @@ public final class ElowenScaffold {
         }
         if (module.elowenSneak.getValue()) {
             int sneakTicks = ++sneakCounter;
-            if (sneakTicks == 18) {
-                if (mc.player.isSprinting()) {
-                    mc.options.keySprint.setDown(false);
-                    mc.player.setSprinting(false);
-                }
-                mc.options.keyShift.setDown(true);
+            if (sneakTicks == 18 && mc.player.isSprinting()) {
+                // 停止冲刺：只改玩家状态，不写 KeyMapping（写键态会永久卡住）。
+                mc.player.setSprinting(false);
+            }
+            // 原版意图：第 18 刻按下潜行，第 21 刻松开 ⇒ 18..20 三刻保持。
+            if (sneakTicks >= 18 && sneakTicks < 21) {
+                requestSneak(true);
             }
             if (sneakCounter >= 21) {
-                mc.options.keyShift.setDown(false);
                 sneakCounter = 0;
             }
         }
@@ -640,9 +706,17 @@ public final class ElowenScaffold {
         return raycastTargetBlock(rotation, pos) != null;
     }
 
-    /** [elowen o/Y/Z/Scaffold.java:374-376] e → RaycastUtils.B(1.0f, rotation) 的等价物。 */
+    /** [elowen o/Y/Z/Scaffold.java:374-376] e → 只裁剪方块的探测（上游 r() 同形）。
+     *  原实现走实体+方块全量射线，而 searchRotation 一刻要调用上万次 ⇒ 必须只做 level.clip。 */
     public HitResult raycastRotation(Rot2f rotation) {
-        return RaytraceUtils.raytrace(rotation, mc.player.blockInteractionRange(), 1.0f);
+        if (mc.player == null || mc.level == null || rotation == null) {
+            return null;
+        }
+        Vec3 eye = mc.player.getEyePosition();
+        Vec3 look = Vec3.directionFromRotation(rotation.getPitch(), rotation.getYaw());
+        double range = mc.player.blockInteractionRange();
+        Vec3 end = eye.add(look.x * range, look.y * range, look.z * range);
+        return mc.level.clip(new ClipContext(eye, end, ClipContext.Block.OUTLINE, ClipContext.Fluid.ANY, mc.player));
     }
 
     // ===== 旋转求解 =====
@@ -810,6 +884,10 @@ public final class ElowenScaffold {
         if (skipTickArmed) {
             return false;
         }
+        // 放置节流：冷却未结束本刻不放置（逐刻连续放置会被 Vulcan/Matrix 直接判定）。
+        if (module.isPlaceOnCooldown()) {
+            return false;
+        }
         BlockHitResult hitResult = raycastTargetBlock(rotation, targetBlock);
         if (hitResult == null) {
             return false;
@@ -835,6 +913,8 @@ public final class ElowenScaffold {
             mc.player.swing(hand, false);
         }
         mc.getConnection().send(new ServerboundSwingPacket(InteractionHand.MAIN_HAND));
+        // 放置成功：重掷共享冷却，避免逐刻连发形成规律时序。
+        module.markPlaceCooldown(2);
         return true;
     }
 
@@ -898,13 +978,10 @@ public final class ElowenScaffold {
         }
         long currentTick = tickCounter;
         int placeDelay = module.elowenPlaceDelay.getValue();
-        if (placeDelay > 0) {
-            if (currentTick < lastPlacedTick) {
-                return;
-            }
-            if (currentTick - lastPlacedTick - (long) placeDelay >= 0L) {
-                return;
-            }
+        // 语义反转修正：延迟是「距上次放置不足 N 刻则不放」，原实现把它写成了「足够久才不放」，
+        // 配合 lastPlacedTick=-1 初值会让 Place Delay>0 时永远放不下方块。
+        if (placeDelay > 0 && lastPlacedTick >= 0L && currentTick - lastPlacedTick < placeDelay) {
+            return;
         }
         if (canReachBlock(currentRotation, blockPos)) {
             return;
@@ -974,13 +1051,8 @@ public final class ElowenScaffold {
             return;
         }
         int placeDelay = module.elowenPlaceDelay.getValue();
-        if (placeDelay > 0) {
-            if (lastPlacedTick < 0L) {
-                return;
-            }
-            if (tickCounter - lastPlacedTick >= (long) placeDelay) {
-                return;
-            }
+        if (placeDelay > 0 && lastPlacedTick >= 0L && tickCounter - lastPlacedTick < (long) placeDelay) {
+            return;
         }
         Rot2f current = currentRotation;
         if (canReachBlock(current, target)) {

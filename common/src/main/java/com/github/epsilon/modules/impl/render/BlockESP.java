@@ -74,11 +74,15 @@ public class BlockESP extends Module {
     @EventHandler
     private void onPlayerTick(PlayerTickEvent.Pre event) {
         if (searchTimer.every(1000) && canContinue) {
-            CompletableFuture.supplyAsync(this::scan, searchThread).thenAcceptAsync(newAABBList -> {
-                boxes = newAABBList;
-                canContinue = true;
-            }, Util.backgroundExecutor());
             canContinue = false;
+            // 成功与异常都必须放行闸门：原实现用 thenAcceptAsync，scan() 抛异常时
+            // 续体永远不执行，canContinue 永久为 false ⇒ 模块静默失效。
+            CompletableFuture.supplyAsync(this::scan, searchThread).whenCompleteAsync((newAABBList, error) -> {
+                if (error == null && newAABBList != null) {
+                    boxes = newAABBList;
+                }
+                canContinue = true;
+            }, mc);
         }
     }
 
@@ -100,6 +104,10 @@ public class BlockESP extends Module {
     }
 
     private List<AABB> scan() {
+        // 后台线程可能在切维度/退世界期间运行：client/level 为空时直接返回空结果。
+        if (mc.player == null || mc.level == null) {
+            return List.of();
+        }
         List<AABB> boxes = new ArrayList<>();
         Set<BlockPos> processed = new HashSet<>();
 

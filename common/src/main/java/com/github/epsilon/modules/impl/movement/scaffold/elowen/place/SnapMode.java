@@ -36,7 +36,7 @@ public class SnapMode implements PlaceModeHandler {
             return;
         }
         if (engine.eagle()) {
-            mc.options.keyShift.setDown(mc.player.onGround() && engine.noCollisionBelow(0.3f));
+            engine.requestSneak(mc.player.onGround() && engine.noCollisionBelow(0.3f));
         }
         if (mc.options.keyUse.isDown() && target != null) {
             boolean lookingAtBlock = false;

@@ -113,6 +113,14 @@ public class KillAura extends Module {
     private final EnumSetting<AiModel> aiModel = enumSetting("AI Model", AiModel.Model21KC11KP, () -> aimMode.is(AimMode.Ai));
     private final DoubleSetting aiYawMultiplier = doubleSetting("AI Yaw Multiplier", 1.5, 0.5, 2.0, 0.05, () -> aimMode.is(AimMode.Ai));
     private final DoubleSetting aiPitchMultiplier = doubleSetting("AI Pitch Multiplier", 1.0, 0.5, 2.0, 0.05, () -> aimMode.is(AimMode.Ai));
+    // AI 增量硬上限（度/刻）。模型是战斗回归模型，训练分布之外（目标瞬间出现在身后、
+    // 托管角刚被大角差重置）会外推出 ±140~175° 的增量，而本移植按「速度 = 步长」
+    // 全额施加，等于单 tick 甩头 —— 服务端看到的是物理上不可能的旋转轨迹。
+    // 正常瞄准时模型输出只有 3~8°，这两个上限只在模型跑飞时起作用。
+    // 默认取人手快速甩头的量级（约 300°/s ≈ 15°/刻）：设到 30 时实测大误差收敛会
+    // 连转三刻累计 90° 再拉回，观感仍像甩头。
+    private final DoubleSetting aiMaxYawStep = doubleSetting("AI Max Yaw Step", 15.0, 1.0, 180.0, 1.0, () -> aimMode.is(AimMode.Ai));
+    private final DoubleSetting aiMaxPitchStep = doubleSetting("AI Max Pitch Step", 10.0, 1.0, 90.0, 1.0, () -> aimMode.is(AimMode.Ai));
     // Polar 瞄准：把 LiquidBounce AccelerationAngleSmooth 的「区间设置」拆成 Min/Max 两项
     // （Epsilon 没有区间型设置），每刻在区间内随机取一次加速度上限。
     private final DoubleSetting polarYawAccelerationMin = doubleSetting("Polar Yaw Acceleration Min", 22.0, 1.0, 180.0, 0.1, () -> aimMode.is(AimMode.Polar));
@@ -290,7 +298,7 @@ public class KillAura extends Module {
         switch (priorityMode.getValue()) {
             case Range -> targets.sort(Comparator.comparingDouble(o -> (double) o.distanceTo(mc.player)));
             case Fov -> {
-                targets.sort(Comparator.comparingDouble(o -> (double) Math.abs(Mth.wrapDegrees(mc.player.getXRot() - RotationUtils.calculate(o).getYaw()))));
+                targets.sort(Comparator.comparingDouble(o -> (double) Math.abs(Mth.wrapDegrees(mc.player.getYRot() - RotationUtils.calculate(o).getYaw()))));
             }
             case Health -> {
                 targets.sort(Comparator.comparingDouble(o -> o instanceof LivingEntity living ? (double) living.getHealth() : 0.0));
@@ -300,12 +308,21 @@ public class KillAura extends Module {
         target = targets.get(targetIndex);
 
         if (aimMode.is(AimMode.Ai)) {
-            if (!applyAiRotation(target)) return;
+            if (!applyAiRotation(target)) {
+                holdRotation();
+                return;
+            }
         } else if (aimMode.is(AimMode.Polar)) {
-            if (!applyPolarRotation(target)) return;
+            if (!applyPolarRotation(target)) {
+                holdRotation();
+                return;
+            }
         } else {
             Rot2f calculate = calculateAimRotation(target);
-            if (calculate == null) return;
+            if (calculate == null) {
+                holdRotation();
+                return;
+            }
             RotationManager.INSTANCE.setRotations(calculate, rotationSpeed.getValue(), rotation -> RaytraceUtils.raytrace(rotation, 3.0f) instanceof EntityHitResult entityHitResult && entityHitResult.getEntity() == target, rotationPriority.getValue());
         }
 
@@ -346,7 +363,8 @@ public class KillAura extends Module {
             if (pauseOnEat.getValue() && PlayerUtils.isEating() || NoSlowdown.INSTANCE.isWorking()) return;
             if (hitResult instanceof EntityHitResult entityHitResult) {
                 Entity entity = entityHitResult.getEntity();
-                if (!entity.isAlive()) return;
+                // 只打本刻目标列表内的实体：TargetManager 已过滤假人/队友/护甲架/类型。
+                if (!isAttackable(entity)) continue;
 
                 mc.gameMode.attack(mc.player, entity);
 
@@ -366,7 +384,12 @@ public class KillAura extends Module {
         // Polar 的点击节奏在 onClientTick 按刻推进；渲染事件是逐帧的，不能作为其计时基准
         if (target != null && !aimMode.is(AimMode.Polar) && Velocity.INSTANCE.attackQueue <= 0) {
             HitResult hitResult = RotationManager.INSTANCE.getHitResult();
-            if (!hitSelect.getValue() || !(hitResult instanceof EntityHitResult entityHitResult && entityHitResult.getEntity() instanceof Player)) {
+            // 无论 Hit Select 开关，都必须命中一个合法目标才排队：
+            // 关闭 Hit Select 时不得对队友 / 假人 / 非目标实体出刀。
+            if (!(hitResult instanceof EntityHitResult entityHitResult) || !isAttackable(entityHitResult.getEntity())) {
+                return;
+            }
+            if (!hitSelect.getValue() || entityHitResult.getEntity() instanceof Player) {
                 switch (mode.getValue()) {
                     case OnePointNinePlus -> {
                         if (attacks == 0 && mc.player.getAttackStrengthScale(0.5f) >= 1.0f) {
@@ -447,6 +470,12 @@ public class KillAura extends Module {
      * <p>回退行为：模型不可用或输出非法时，源实现保持当前角不动；本移植改为提交普通转向
      * （可用性优先），属刻意适配。模型资源缺失时管理器会输出一次警告。</p>
      *
+     * <p>模型增量由 {@code AI Max Yaw/Pitch Step} 夹到人可达范围内。回归模型在训练
+     * 分布之外（目标瞬间出现在身后、托管角刚被大角差重置）会外推出 ±140~175° 的
+     * 增量；由于本路径按「速度 = 步长」全额施加，不夹取就等于单 tick 甩头，
+     * 且超过 180° 的步长会被 {@code RotationUtils.move()} 的 {@code Mth.wrapDegrees}
+     * 折返成反方向。正常瞄准时模型输出仅 3~8°，上限只在模型跑飞时生效。</p>
+     *
      * @return {@code true} 表示本刻转向已处理；{@code false} 表示被方块遮挡，
      * 调用方应中止整个 tick（与普通模式行为一致）
      */
@@ -470,7 +499,9 @@ public class KillAura extends Module {
         if (RaytraceUtils.raytrace(desired, aimRange.getValue()).getType() == HitResult.Type.BLOCK) return false;
 
         float deltaYaw = Mth.wrapDegrees(desired.getYaw() - managedYaw);
-        float deltaPitch = Mth.wrapDegrees(desired.getPitch() - managedPitch);
+        // pitch 不循环，不能 wrap：误差本就落在 [-180, 180]，而 wrapDegrees 在 ±180
+        // 处会把符号翻过来，喂给模型的 pitch 误差会与真实方向相反。
+        float deltaPitch = desired.getPitch() - managedPitch;
 
         double playerSpeed = mc.player.getDeltaMovement().horizontal().length();
         double targetSpeed = aimTarget.getDeltaMovement().horizontal().length();
@@ -494,8 +525,15 @@ public class KillAura extends Module {
             return true;
         }
 
-        float yawStep = output[0] * aiYawMultiplier.getValue().floatValue();
-        float pitchStep = output[1] * aiPitchMultiplier.getValue().floatValue();
+        // 增量必须夹到人可达范围内再提交。模型在训练分布之外会外推出荒谬增量
+        // （实测可达输入下 21KC11KP 可达 ±175°、19KC8KP ±143°），而下方按
+        // 「速度 = 步长」全额施加，等于单 tick 甩头；且步长一旦超过 180°，
+        // RotationUtils.move() 的 Mth.wrapDegrees 会折返，转向方向与模型意图相反。
+        // 夹取保持符号，只削幅值。正常瞄准时模型输出 3~8°，上限不参与。
+        float maxYawStep = aiMaxYawStep.getValue().floatValue();
+        float maxPitchStep = aiMaxPitchStep.getValue().floatValue();
+        float yawStep = Mth.clamp(output[0] * aiYawMultiplier.getValue().floatValue(), -maxYawStep, maxYawStep);
+        float pitchStep = Mth.clamp(output[1] * aiPitchMultiplier.getValue().floatValue(), -maxPitchStep, maxPitchStep);
         Rot2f stepTarget = new Rot2f(managedYaw + yawStep, Mth.clamp(managedPitch + pitchStep, -90.0f, 90.0f));
 
         // 位移距离必须按 smooth() 内部同一基准（lastRotations）计算，
@@ -505,8 +543,13 @@ public class KillAura extends Module {
                 Mth.wrapDegrees(stepTarget.getYaw() - moveBase.getYaw()),
                 stepTarget.getPitch() - moveBase.getPitch()
         );
-        // 零步长时 RotationUtils.move 会出现 0/0 的 NaN 分配，且本身无需转向。
-        if (!(stepDistance > 1.0e-6)) return true;
+        // 零步长时 RotationUtils.move 会出现 0/0 的 NaN 分配，且本身无需转向；
+        // 但仍要提交一次「原地不动」，否则本刻不提交会让 RotationManager 把托管角
+        // 拉回玩家视角（见 holdRotation）。
+        if (!(stepDistance > 1.0e-6)) {
+            holdRotation();
+            return true;
+        }
 
         // 以等于位移距离的速度提交，等价于本刻全额施加模型增量。
         // 不传射线命中谓词：跳过 RotationManager.smooth() 中依赖谓词的抖动分支
@@ -514,6 +557,39 @@ public class KillAura extends Module {
         RotationManager.INSTANCE.setRotations(stepTarget, stepDistance, rotationPriority.getValue());
         return true;
     }
+
+    /**
+     * 保持当前托管角不动，阻止 {@link RotationManager} 在本刻没有新提交时
+     * 把托管角拽回玩家视角。
+     *
+     * <p>{@code RotationManager.onSendPosition} 每刻末尾都会把
+     * {@code targetRotations} 置为玩家真实视角并清掉 {@code smoothed}。正常情况下
+     * 本模块同刻的 {@code setRotations} 会顶掉它；但方块被遮挡、零位移等早退路径
+     * 不提交时，下一刻 {@code RotationManager.onPlayerTick} 就会拿这个残留目标
+     * 重算 {@code rotations} —— 头被猛地拉回玩家视角，下一刻再转回去。
+     * 模拟实测该拉回单刻可达 30°，近身缠斗（目标贴着箱子，遮挡频繁）时表现为
+     * 「打人时头来回抽搐」。</p>
+     *
+     * <p>速度取「相对管线基准的位移」并留 5% 余量，使托管角精确停在当前值；
+     * 下限 0.5 避免与基准完全相同时 {@code RotationUtils.move} 的 0/0 NaN
+     * （与 {@code applyPolarRotation} 同一处理）。</p>
+     */
+    private void holdRotation() {
+        Rot2f current = RotationManager.INSTANCE.getRotation();
+        Rot2f base = RotationManager.INSTANCE.lastRotations;
+        float yaw = current.getYaw();
+        float pitch = current.getPitch();
+        double step = Math.hypot(Mth.wrapDegrees(yaw - base.getYaw()), pitch - base.getPitch());
+
+        // 与基准逐位相同时 RotationUtils.move 会出现 0/0 的 NaN 分配。偏一个 ULP
+        // 量级的微小量即可避开，灵敏度量化会把它舍回原位，观感仍是原地不动。
+        if (!(step > 1.0e-6)) {
+            yaw += Math.max(1.0e-3f, Math.ulp(yaw) * 4.0f);
+        }
+
+        RotationManager.INSTANCE.setRotations(new Rot2f(yaw, pitch), Math.max(0.5, step * 1.05), rotationPriority.getValue());
+    }
+
 
     /**
      * 计算普通（Normal）瞄准的目标旋转：自适应瞄准点 + 方块遮挡检查。
@@ -615,6 +691,15 @@ public class KillAura extends Module {
                 attacks++;
             }
         }
+    }
+
+    /**
+     * 攻击合法性：必须是本刻目标列表内的存活实体。
+     * {@link com.github.epsilon.managers.target.TargetManager} 已在 `acquireTargets` 中过滤
+     * 假人、队友/好友、护甲架与未启用的实体类型，故这里只需做归属校验。
+     */
+    private boolean isAttackable(Entity entity) {
+        return entity != null && entity.isAlive() && targets != null && targets.contains(entity);
     }
 
     private void resetState() {

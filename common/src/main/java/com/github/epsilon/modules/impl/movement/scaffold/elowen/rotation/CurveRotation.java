@@ -30,7 +30,8 @@ public class CurveRotation implements RotationHandler {
         if (this.currentStep <= 0.0f) {
             this.currentStep = maxStep;
         }
-        float dx = Mth.wrapDegrees(current.getYaw() - target.getYaw());
+        // yaw 步长方向必须与 pitch 一致（朝目标收敛）；原实现取 current-target 导致越走越远、永不抵达。
+        float dx = Mth.wrapDegrees(target.getYaw() - current.getYaw());
         float dy = target.getPitch() - current.getPitch();
         float moveX = Math.abs(dx);
         float limit = 0.5f;

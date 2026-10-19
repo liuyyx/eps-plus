@@ -136,7 +136,24 @@ public class HeypixelScaffold {
         }
     }
 
+    /** 每刻瞬时潜行意图（写 {@code KeyboardInputEvent}，绝不写 {@code KeyMapping}）。 */
+    private boolean sneakIntent;
+
+    /** SafeWalk 分支请求本刻潜行。 */
+    public void requestSneak(boolean value) {
+        sneakIntent = value;
+    }
+
+    /** {@link com.github.epsilon.events.impl.KeyboardInputEvent} 落地：只增不减，保留玩家自己的潜行，落地后清零。 */
+    public void onKeyboardInput(com.github.epsilon.events.impl.KeyboardInputEvent event) {
+        if (sneakIntent) {
+            event.setSneak(true);
+        }
+        sneakIntent = false;
+    }
+
     public void onDisable() {
+        sneakIntent = false;
         SlotHelper.getInstance().stop();
         if (mc.player != null && oldSlot != -1) {
             mc.player.getInventory().setSelectedSlot(oldSlot);
@@ -262,8 +279,8 @@ public class HeypixelScaffold {
         }
 
         if (this.isSafeWalkEnabled() && !this.isTellyEnabled()) {
-            boolean edge = mc.player.onGround() && isOnBlockEdge(0.3F);
-            mc.options.keyShift.setDown(edge);
+            // 每刻瞬时意图，替代原来的 mc.options.keyShift.setDown(edge)（持久键态，写后无人复位）。
+            this.requestSneak(mc.player.onGround() && isOnBlockEdge(0.3F));
         }
 
         if (this.isTellyEnabled()) {

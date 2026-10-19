@@ -41,14 +41,14 @@ public class TellyBridgeMode implements PlaceModeHandler {
             float alignedSign = alignedDelta == 0.0f ? 0 : (alignedDelta < 0.0f ? -1 : 1);
             alignedSign = alignedSign < 0 ? 1.0f : 0.0f;
             boolean noCollision = engine.noCollisionBelow(0.1f);
-            mc.options.keyJump.setDown((alignedSign != 0.0f || noCollision) && (engine.isMoving() || engine.jumpKeyPhysicallyDown()));
+            engine.requestJump((alignedSign != 0.0f || noCollision) && (engine.isMoving() || engine.jumpKeyPhysicallyDown()));
             return;
         }
         boolean moving = engine.isMoving();
         if (!moving) {
             moving = engine.jumpKeyPhysicallyDown();
         }
-        mc.options.keyJump.setDown(moving);
+        engine.requestJump(moving);
         Rot2f targetRotation = engine.getTargetRotation();
         engine.currentRotation = engine.rotationHandler().apply(engine, engine.currentRotation, targetRotation, engine.rotationSpeed());
         engine.placeOrGuard(target);

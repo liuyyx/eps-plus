@@ -33,7 +33,7 @@ public class KeepYMode implements PlaceModeHandler {
         if (!moving) {
             moving = engine.jumpKeyPhysicallyDown();
         }
-        mc.options.keyJump.setDown(moving);
+        engine.requestJump(moving);
         Rot2f targetRotation = engine.getTargetRotation();
         engine.currentRotation = engine.rotationHandler().apply(engine, engine.currentRotation, targetRotation, engine.rotationSpeed());
         engine.placeOrGuard(target);

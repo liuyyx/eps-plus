@@ -1,5 +1,6 @@
 package com.github.epsilon.events.bus;
 
+import com.github.epsilon.Constants;
 import com.github.epsilon.events.bus.listeners.IListener;
 import com.github.epsilon.events.bus.listeners.LambdaListener;
 
@@ -38,7 +39,13 @@ public class EventBus {
 
         if (listeners != null) {
             for (IListener listener : listeners) {
-                listener.call(event);
+                // 单个监听器抛异常不得中断其余监听器、也不得冒泡到渲染线程 / netty IO 线程
+                // （后者会经 channelRead0 的 exceptionCaught 直接断连）。
+                try {
+                    listener.call(event);
+                } catch (Throwable throwable) {
+                    Constants.LOGGER.error("Event listener failed for {}", event.getClass().getSimpleName(), throwable);
+                }
                 if (event instanceof Cancellable cancellable && cancellable.isCancelled()) {
                     break;
                 }

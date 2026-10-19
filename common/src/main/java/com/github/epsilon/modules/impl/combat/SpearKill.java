@@ -69,7 +69,7 @@ public class SpearKill extends Module {
     }
 
     @EventHandler
-    public void onTick(PlayerTickEvent e) {
+    public void onTick(PlayerTickEvent.Pre e) {
         if (ElytraCombat.INSTANCE.isControllingCombat()) {
             return;
         }

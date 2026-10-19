@@ -36,13 +36,12 @@ public class AcaRotation implements RotationHandler {
         if (yawSign < 0) {
             yaw = target.getYaw();
         }
-        float pitchProjection = Math.abs(pitch - target.getPitch());
-        float pitchDistance = pitchProjection - 0.5f;
+        float pitchDistance = Math.abs(pitch - target.getPitch()) - 0.5f;
         yawSign = pitchDistance == 0.0f ? 0 : (pitchDistance < 0.0f ? -1 : 1);
         if (yawSign < 0) {
-            pitchProjection = target.getPitch();
+            // 原实现把 pitch 无条件覆盖为 |pitch-target|（差值），导致 pitch 永远在震荡、收敛不到目标。
+            pitch = target.getPitch();
         }
-        pitch = pitchProjection;
         return new Rot2f(yaw, pitch);
     }
 }

@@ -56,6 +56,8 @@ public class FreeCamera extends Module {
 
     private double fovScale;
     private boolean bobView;
+    /** 是否真的覆盖过 fovEffectScale/bobView（用于 onDisable 按「是否改过」恢复，而不是按当前设置）。 */
+    private boolean staticViewApplied;
 
     private boolean forward, backward, right, left, up, down, isSneaking;
 
@@ -68,6 +70,7 @@ public class FreeCamera extends Module {
         if (staticView.getValue()) {
             mc.options.fovEffectScale().set((double) 0);
             mc.options.bobView().set(false);
+            staticViewApplied = true;
         }
         yaw = mc.player.getYRot();
         pitch = mc.player.getXRot();
@@ -111,9 +114,20 @@ public class FreeCamera extends Module {
 
         mc.options.setCameraType(perspective);
 
-        if (staticView.getValue()) {
+        // 按「是否真的覆盖过」恢复：模块运行期间用户可能把 Static 关掉，
+        // 若按当前设置判断就永远不会恢复用户的 fovEffectScale/bobView。
+        if (staticViewApplied) {
             mc.options.fovEffectScale().set(fovScale);
             mc.options.bobView().set(bobView);
+            staticViewApplied = false;
+        }
+
+        // 相机实体的 noPhysics 只在 in-wall 时临时打开，退出时必须清掉（否则玩家穿墙掉出世界）。
+        if (mc.getCameraEntity() != null) {
+            mc.getCameraEntity().noPhysics = false;
+        }
+        if (mc.player != null) {
+            mc.player.noPhysics = false;
         }
 
         isSneaking = false;
@@ -141,7 +155,10 @@ public class FreeCamera extends Module {
     private void onPostClientTick(ClientTickEvent.Post event) {
         if (nullCheck()) return;
 
-        if (mc.getCameraEntity().isInWall()) mc.getCameraEntity().noPhysics = true;
+        // 只在相机实体卡墙里时临时关闭碰撞，离开墙体立刻恢复（原实现只置 true，永不恢复）。
+        if (mc.getCameraEntity() != null) {
+            mc.getCameraEntity().noPhysics = mc.getCameraEntity().isInWall();
+        }
         if (!perspective.isFirstPerson()) mc.options.setCameraType(CameraType.FIRST_PERSON);
 
         Vec3 forward = Vec3.directionFromRotation(0, yaw);

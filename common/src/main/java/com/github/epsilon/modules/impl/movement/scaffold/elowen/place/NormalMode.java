@@ -32,14 +32,14 @@ public class NormalMode implements PlaceModeHandler {
         }
         boolean onGround = engine.eagle();
         if (onGround) {
-            mc.options.keyShift.setDown(mc.player.onGround() && engine.noCollisionBelow(0.3f));
+            engine.requestSneak(mc.player.onGround() && engine.noCollisionBelow(0.3f));
         }
         onGround = mc.player.onGround();
         if (onGround
                 && engine.isMoving()
                 && engine.jumpKeyPhysicallyDown()
                 && engine.jumpSprint()
-                && !mc.options.keyShift.isDown()) {
+                && !engine.sneakRequested()) {
             // 原：module.j.Z(RotationUtils.i(module.v(), module.j.H, module.c()))
             engine.currentRotation.setYaw(ElowenScaffold.stepTo(engine.currentRotation.getYaw(), engine.serverYaw(), engine.backRotationSpeed()));
             return;
