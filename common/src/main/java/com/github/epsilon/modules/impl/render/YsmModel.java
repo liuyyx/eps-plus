@@ -126,6 +126,16 @@ public class YsmModel extends Module {
     private YsmAnimationPlayer animationPlayer;
     private YsmAnimationPlayer armAnimationPlayer;
     private boolean loadingModel;
+    private int loadGeneration;
+    private final java.util.concurrent.ExecutorService loader = java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
+        Thread thread = new Thread(r, "epsilon-ysm-loader");
+        thread.setDaemon(true);
+        return thread;
+    });
+    private record LoadedModel(YsmModelData model, YsmModelData armModel,
+                               YsmAnimationPlayer animationPlayer, YsmAnimationPlayer armAnimationPlayer,
+                               float horizontalScale, float verticalScale, String defaultTexture) {}
+
     private Identifier textureLocation;
     private boolean failedLogged;
     private int failCount;
@@ -180,6 +190,8 @@ public class YsmModel extends Module {
 
     @Override
     protected void onDisable() {
+        this.loadGeneration++;
+        this.loadingModel = false;
         this.model = null;
         this.armModel = null;
         this.characterFilterCache.clear();
@@ -233,6 +245,8 @@ public class YsmModel extends Module {
             return;
         }
         this.loadingModel = true;
+        final int generation = ++this.loadGeneration;
+        final String requestedKey = this.selectionKey();
         this.model = null;
         this.armModel = null;
         this.characterFilterCache.clear();
@@ -240,59 +254,90 @@ public class YsmModel extends Module {
             mc.getTextureManager().release(this.textureLocation);
             this.textureLocation = null;
         }
-        try {
-            Path file = this.resolveModelPath();
-            if (file == null) {
-                notify("model not found: " + this.modelPreset.getValue()
-                        + (this.modelPreset.is(ModelPreset.Custom) ? " (" + this.customPath.getValue() + ")" : ""));
-                this.toggle();
-                return;
-            }
-            RawYsmModel raw;
-            if (Files.isDirectory(file)) {
-                try (YSMFolderDeserializer deser = new YSMFolderDeserializer(file)) {
-                    raw = deser.deserialize();
-                }
-            } else {
-                raw = tryDeserialize(Files.readAllBytes(file));
-            }
-            if (raw == null) {
-                notify("cannot parse (maybe encrypted YSGP). File: " + file);
-                this.toggle();
-                return;
-            }
-            // YSM 导出文件常把展示几何挂在 Root 下，单靠骨骼名过滤不可靠，加载时直接裁掉。
-            this.stripNonCharacterGeometry(raw);
-            this.model = YsmModelData.build(raw);
-            RawYsmModel.RawGeometry rawArm = raw.mainEntity == null ? null : raw.mainEntity.armModel;
-            // 没有专用 armModel 的导出文件沿用主网格作为手臂网格。
-            if (rawArm == null || rawArm.bones.isEmpty()) {
-                rawArm = raw.mainEntity == null ? null : raw.mainEntity.mainModel;
-            }
-            this.armModel = rawArm == null ? null : YsmModelData.buildGeometry(rawArm);
-            this.animationPlayer = new YsmAnimationPlayer(raw, this.model.boneIndex);
-            this.armAnimationPlayer = this.armModel == null ? null
-                    : new YsmAnimationPlayer(raw, this.armModel.boneIndex, true);
-            this.ensurePoseCapacity(this.model.bones.size());
-            this.ensureArmPoseCapacity(this.armModel == null ? 0 : this.armModel.bones.size());
-            // width_scale 控制水平轴（X/Z），height_scale 控制竖直轴（Y）；原先两者写反。
-            this.modelHorizontalScale = raw.properties == null ? 1.0f : raw.properties.widthScale;
-            this.modelVerticalScale = raw.properties == null ? 1.0f : raw.properties.heightScale;
-            String defaultTexture = raw.properties == null ? null : raw.properties.defaultTexture;
-            this.textureLocation = this.registerTexture(defaultTexture);
-            this.failCount = 0;
-            this.failedLogged = false;
-            this.loadedKey = this.selectionKey();
-            notify("loaded " + this.model.bones.size() + " bones, "
-                    + this.model.textures.size() + " textures"
-                    + (this.armModel == null ? " (no arm model)" : ", " + this.armModel.bones.size() + " arm bones"));
-        } catch (Throwable e) {
-            Constants.LOGGER.error("YsmModel: load failed", e);
-            notify("load failed: " + e);
-            this.toggle();
-        } finally {
+        Path file = this.resolveModelPath();
+        if (file == null) {
             this.loadingModel = false;
+            notify("model not found: " + this.modelPreset.getValue()
+                    + (this.modelPreset.is(ModelPreset.Custom) ? " (" + this.customPath.getValue() + ")" : ""));
+            this.toggle();
+            return;
         }
+        // 文件读取 / JSON 解析 / 网格构建全部放到后台线程：原先在 ClientTick 里同步执行，
+        // 大模型（数十 MB）会直接卡住渲染线程。纹理注册与字段替换回到客户端线程做。
+        this.loader.submit(() -> {
+            LoadedModel loaded = null;
+            Throwable failure = null;
+            boolean unparseable = false;
+            try {
+                RawYsmModel raw;
+                if (Files.isDirectory(file)) {
+                    try (YSMFolderDeserializer deser = new YSMFolderDeserializer(file)) {
+                        raw = deser.deserialize();
+                    }
+                } else {
+                    raw = tryDeserialize(Files.readAllBytes(file));
+                }
+                if (raw == null) {
+                    unparseable = true;
+                } else {
+                    // YSM 导出文件常把展示几何挂在 Root 下，单靠骨骼名过滤不可靠，加载时直接裁掉。
+                    this.stripNonCharacterGeometry(raw);
+                    YsmModelData mainModel = YsmModelData.build(raw);
+                    RawYsmModel.RawGeometry rawArm = raw.mainEntity == null ? null : raw.mainEntity.armModel;
+                    if (rawArm == null || rawArm.bones.isEmpty()) {
+                        rawArm = raw.mainEntity == null ? null : raw.mainEntity.mainModel;
+                    }
+                    YsmModelData armGeometry = rawArm == null ? null : YsmModelData.buildGeometry(rawArm);
+                    loaded = new LoadedModel(
+                            mainModel,
+                            armGeometry,
+                            new YsmAnimationPlayer(raw, mainModel.boneIndex),
+                            armGeometry == null ? null : new YsmAnimationPlayer(raw, armGeometry.boneIndex, true),
+                            raw.properties == null ? 1.0f : raw.properties.widthScale,
+                            raw.properties == null ? 1.0f : raw.properties.heightScale,
+                            raw.properties == null ? null : raw.properties.defaultTexture);
+                }
+            } catch (Throwable e) {
+                failure = e;
+            }
+            final LoadedModel result = loaded;
+            final Throwable error = failure;
+            final boolean parseFailed = unparseable;
+            mc.execute(() -> {
+                if (generation != this.loadGeneration || !this.isEnabled()) return;
+                this.applyLoadResult(requestedKey, result, error, parseFailed, file);
+            });
+        });
+    }
+
+    private void applyLoadResult(String requestedKey, LoadedModel loaded, Throwable failure, boolean unparseable, Path file) {
+        this.loadingModel = false;
+        if (failure != null) {
+            Constants.LOGGER.error("YsmModel: load failed", failure);
+            notify("load failed: " + failure);
+            this.toggle();
+            return;
+        }
+        if (unparseable || loaded == null) {
+            notify("cannot parse (maybe encrypted YSGP). File: " + file);
+            this.toggle();
+            return;
+        }
+        this.model = loaded.model();
+        this.armModel = loaded.armModel();
+        this.animationPlayer = loaded.animationPlayer();
+        this.armAnimationPlayer = loaded.armAnimationPlayer();
+        this.ensurePoseCapacity(this.model.bones.size());
+        this.ensureArmPoseCapacity(this.armModel == null ? 0 : this.armModel.bones.size());
+        this.modelHorizontalScale = loaded.horizontalScale();
+        this.modelVerticalScale = loaded.verticalScale();
+        this.textureLocation = this.registerTexture(loaded.defaultTexture());
+        this.failCount = 0;
+        this.failedLogged = false;
+        this.loadedKey = requestedKey;
+        notify("loaded " + this.model.bones.size() + " bones, "
+                + this.model.textures.size() + " textures"
+                + (this.armModel == null ? " (no arm model)" : ", " + this.armModel.bones.size() + " arm bones"));
     }
 
     private static RawYsmModel tryDeserialize(byte[] data) {
