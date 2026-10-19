@@ -36,6 +36,14 @@ public class MixinPlayer {
         return event.getYaw();
     }
 
+    /** 击退方向由 sin(getYRot()) 与 cos(getYRot()) 共同决定，两处必须用同一个伪造角。 */
+    @ModifyExpressionValue(method = {"causeExtraKnockback", "doSweepAttack"}, require = 0,
+            at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/player/Player;getYRot()F", ordinal = 1))
+    private float modifyAttackYawSecond(float original) {
+        AttackYawEvent event = EventBus.INSTANCE.post(new AttackYawEvent(original));
+        return event.getYaw();
+    }
+
     @WrapWithCondition(method = "causeExtraKnockback", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/player/Player;setDeltaMovement(Lnet/minecraft/world/phys/Vec3;)V"))
     private boolean onAttackSlowdown(Player instance, Vec3 movement, @Share("cancelAttackSlowdown") LocalBooleanRef cancelled) {
         AttackSlowdownEvent event = EventBus.INSTANCE.post(new AttackSlowdownEvent());

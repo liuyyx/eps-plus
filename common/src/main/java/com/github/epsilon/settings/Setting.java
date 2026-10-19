@@ -55,7 +55,8 @@ public abstract class Setting<V> {
     }
 
     public void reset() {
-        this.value = this.defaultValue;
+        // 走 setValue：子类会夹紧/归一化并触发 onChanged，避免「值回到默认、派生状态仍旧」。
+        setValue(this.defaultValue);
     }
 
     public V getDefaultValue() {

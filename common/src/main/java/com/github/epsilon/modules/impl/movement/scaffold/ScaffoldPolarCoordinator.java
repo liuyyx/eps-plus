@@ -391,6 +391,7 @@ public final class ScaffoldPolarCoordinator implements RequestHandler.Provider {
         //   LB 的托管角由平滑器每刻按随机速度推进，天然带变化；直通落地会收敛成一个常量角，
         //   所以按 AGENTS.md 的规则补抖动：幅度取**本机鼠标灵敏度网格的整 1 步**，偏航与俯仰都加，
         //   符号随机（避免 ±1 交替本身成为周期 2 的规律），且只在角度与上一刻完全相同时施加。
+        Rot2f unjitteredTarget = target;
         if (lastAppliedRotation != null
                 && target.getYaw() == lastAppliedRotation.getYaw()
                 && target.getPitch() == lastAppliedRotation.getPitch()) {
@@ -400,7 +401,8 @@ public final class ScaffoldPolarCoordinator implements RequestHandler.Provider {
                     Mth.clamp(target.getPitch() + (float) ((jitterRandom.nextBoolean() ? quantum : -quantum)), -90.0f, 90.0f)
             );
         }
-        lastAppliedRotation = target;
+        // 记录未抖动的托管角：若记录抖动后的值，下一刻比较永不相等，抖动只能隔刻生效（周期 2）。
+        lastAppliedRotation = unjitteredTarget;
 
         RotationManager.INSTANCE.setRotationsDirect(target, Priority.Highest);
     }
@@ -458,15 +460,10 @@ public final class ScaffoldPolarCoordinator implements RequestHandler.Provider {
 
             if (ledgeAction.stepBack()) {
                 // LB: event.directionalInput = event.directionalInput.copy(forwards = false, backwards = true)
-                // [适配] LB 的 directionalInput 之后由 MovementCorrection 按**托管角**解释；
-                //        Epsilon 的 MovementFix（HIGH）已经先按托管角重写过 forward/strafe，
-                //        所以这里必须借同一个修正器把「在托管坐标系里后退」表达出来。
+                // [适配] MovementFix（HIGH）已把输入归一到托管角坐标系，服务端也按托管角解释，
+                //        因此这里直接给托管系后退即可；再调一次 fixMovement 会让 +180 被抵消、后退变前进。
                 event.setForward(-1.0f);
                 event.setStrafe(0.0f);
-
-                if (MovementFix.INSTANCE.isEnabled()) {
-                    MovementFix.INSTANCE.fixMovement(event, managedRotation.getYRot() + 180.0f);
-                }
             }
 
             if (ledgeAction.sneakTime() > forceSneak) {
