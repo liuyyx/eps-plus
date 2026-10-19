@@ -197,9 +197,10 @@ public class Timer extends Module {
                 currentTime = now;
             }
             onGround = movePacket.isOnGround();
-        } else if (packet instanceof ServerboundInteractPacket && lagging && !packets.isEmpty()) {
+        } else if (packet instanceof ServerboundAttackPacket && lagging && !packets.isEmpty()) {
+            // 26.2 的攻击是独立包；ServerboundInteractPacket 是实体右键交互。
+            // 且不能 cancel：队列只缓存 ClientboundPingPacket，被取消的交互包不会补发，等于永久吞掉右键。
             attack = true;
-            event.cancel();
         }
     }
 

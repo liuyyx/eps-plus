@@ -288,6 +288,8 @@ public final class RavenB4Scaffold {
     private static int groundTicks;
 
     private static final Direction[] SIDES = {Direction.EAST, Direction.SOUTH, Direction.NORTH, Direction.WEST};
+    /** {@link #placed} 的淘汰时长（ms）。 */
+    private static final long PLACED_TTL_MS = 5000L;
     private static final BlockPos.MutableBlockPos SCRATCH = new BlockPos.MutableBlockPos();
 
     /**
@@ -546,6 +548,10 @@ public final class RavenB4Scaffold {
     // ===== 放置流水线（原 place / search / candidates / firstPlaceable）=====
 
     private static BlockPos place(BlockPos last, ItemStack itemStack) {
+        // placed 是 static 且只在「高亮」开启时才被渲染侧清理：这里按 TTL 自行淘汰，
+        // 否则默认配置下它会随每次放置无限增长（canPlaceAgainst 还要逐项线性扫描）。
+        long now = System.currentTimeMillis();
+        placed.entrySet().removeIf(entry -> now - Math.abs(entry.getValue()) > PLACED_TTL_MS);
         BlockPos target = search(last);
         if (target == null) {
             return null;

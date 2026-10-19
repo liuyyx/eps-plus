@@ -118,7 +118,9 @@ public class Trajectories extends Module {
         points.add(renderedStart != null ? renderedStart : simulator.position());
         BlockHitResult blockHit = null;
         List<Entity> entityHits = new ArrayList<>();
-        int limit = simulationSteps.getValue() == 0 ? Integer.MAX_VALUE : simulationSteps.getValue();
+        int configured = simulationSteps.getValue();
+        // 0 不能当作「无限」：渲染线程上最多 2^31 次迭代 + 无界 points 会直接卡死并 OOM。
+        int limit = Math.max(1, Math.min(configured <= 0 ? 5000 : configured, 5000));
 
         for (int i = 0; i < limit; i++) {
             ProjectileSimulator.Step step = simulator.tick();

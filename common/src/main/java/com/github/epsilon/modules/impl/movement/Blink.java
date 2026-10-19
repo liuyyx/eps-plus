@@ -120,12 +120,13 @@ public class Blink extends Module {
     }
 
     private void releaseAll() {
-        if (!packets.isEmpty()) {
-            for (Packet packet : packets) {
-                NetworkUtils.sendPacketNoEvent(packet);
-                if (packet instanceof ServerboundMovePlayerPacket serverboundMovePlayerPacket) {
-                    handlePlayerMove(serverboundMovePlayerPacket);
-                }
+        // 必须出队：原实现只遍历不移除，而 Slow Release 关闭分支每 tick 都会调用它，
+        // 造成已发送包被反复重发、队列持续增长（对服务端的重复包洪水）。
+        Packet<?> packet;
+        while ((packet = this.packets.poll()) != null) {
+            NetworkUtils.sendPacketNoEvent(packet);
+            if (packet instanceof ServerboundMovePlayerPacket serverboundMovePlayerPacket) {
+                handlePlayerMove(serverboundMovePlayerPacket);
             }
         }
     }

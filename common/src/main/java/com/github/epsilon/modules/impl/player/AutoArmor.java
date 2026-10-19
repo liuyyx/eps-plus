@@ -122,7 +122,9 @@ public class AutoArmor extends Module {
                 if (mc.player.isMoving() && noMove.getValue()) return;
 
                 int inventorySlot = slot < 9 ? 36 + slot : slot;
-                int armorSlot = 8 - armorPiece.getEquipmentSlot().getIndex();
+                // InventoryMenu 护甲槽 5..8 = HEAD,CHEST,LEGS,FEET；
+                // EquipmentSlot.getIndex(): FEET=2,LEGS=3,CHEST=4,HEAD=5 ⇒ 目标槽 = 10 - index。
+                int armorSlot = 10 - armorPiece.getEquipmentSlot().getIndex();
 
                 if (strict.getValue()) {
                     mc.getConnection().send(new ServerboundPlayerCommandPacket(

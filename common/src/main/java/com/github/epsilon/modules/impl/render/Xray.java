@@ -61,7 +61,7 @@ public class Xray extends Module {
     private final BoolSetting lava = boolSetting("Lava", false);
 
     private final TimerUtils delayTimer = new TimerUtils();
-    private final ArrayList<BlockPos> ores = new ArrayList<>();
+    private final java.util.Set<BlockPos> ores = new java.util.LinkedHashSet<>();
     private final ArrayList<BlockPos> toCheck = new ArrayList<>();
     private final ArrayList<BlockMemory> checked = new ArrayList<>();
     private BlockPos displayBlock;
@@ -73,10 +73,22 @@ public class Xray extends Module {
         ores.clear();
         toCheck.clear();
         checked.clear();
+        all = 0;
+        done = 0;
+        mc.smartCull = false;
+        // 配置在客户端启动时回放（此时还没有世界）：此时 getBlocks() 会 NPE，
+        // 并让 ConfigManager 的整轮加载中断（后续模块全部回到默认值）。等进世界后再补初始化。
+        if (mc.player == null || mc.level == null) {
+            return;
+        }
+        initScan();
+    }
+
+    private void initScan() {
+        toCheck.clear();
         toCheck.addAll(getBlocks());
         all = toCheck.size();
         done = 0;
-        mc.smartCull = false;
         mc.levelExtractor.allChanged();
         area = getArea();
     }
@@ -89,6 +101,16 @@ public class Xray extends Module {
 
     @EventHandler
     private void onPlayerTick(PlayerTickEvent.Pre event) {
+        // 启动期没有世界，进世界后补一次初始化。
+        if (all == 0 && toCheck.isEmpty() && mc.player != null && mc.level != null) {
+            initScan();
+        }
+        // ores 曾是只增不减的 ArrayList：这里改成集合 + 逐刻按距离淘汰，避免无界增长。
+        int pruneRadius = radius.getValue() + 6;
+        ores.removeIf(pos -> mc.player == null
+                || Math.abs(pos.getX() - mc.player.getX()) > pruneRadius
+                || Math.abs(pos.getY() - mc.player.getY()) > pruneRadius + 8
+                || Math.abs(pos.getZ() - mc.player.getZ()) > pruneRadius);
         if (plugin.is(Plugin.New)) {
             checked.forEach(blockMemory -> {
                 if (blockMemory.isDelayed() && !ores.contains(blockMemory.blockPos))
