@@ -1,4 +1,4 @@
-#version 410
+#version 410 core
 
 layout(std140) uniform GlslSandboxInfo {
     vec4 SandboxResolutionTime;

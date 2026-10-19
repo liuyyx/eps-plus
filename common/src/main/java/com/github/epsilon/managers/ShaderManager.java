@@ -299,8 +299,8 @@ public class ShaderManager {
                 new GlowParams(
                         targetWidth,
                         targetHeight,
-                        mc.getWindow().getGuiScaledWidth(),
-                        mc.getWindow().getGuiScaledHeight(),
+                        targetWidth,
+                        targetHeight,
                         color,
                         settings.glowColor1.getValue(),
                         settings.glowColor2.getValue(),
@@ -319,8 +319,6 @@ public class ShaderManager {
     private ShaderUniforms writeShaderUniforms(int screenWidth, int screenHeight, Shaders.ShaderSettings settings, boolean writeColors, boolean useTargetColors) {
         float width = Math.max(1.0f, screenWidth);
         float height = Math.max(1.0f, screenHeight);
-        float scaledWidth = Math.max(1.0f, mc.getWindow().getGuiScaledWidth());
-        float scaledHeight = Math.max(1.0f, mc.getWindow().getGuiScaledHeight());
         Color outline = settings.outlineColor.getValue();
         Color smokeOutline1 = settings.smokeOutlineColor1.getValue();
         Color smokeOutline2 = settings.smokeOutlineColor2.getValue();
@@ -346,8 +344,8 @@ public class ShaderManager {
                                 settings.factor.getValue().floatValue(),
                                 settings.gradient.getValue().floatValue(),
                                 settings.octaves.getValue(),
-                                scaledWidth,
-                                scaledHeight,
+                                width,
+                                height,
                                 useTargetColors ? 1.0f : 0.0f
                         )
                 ),

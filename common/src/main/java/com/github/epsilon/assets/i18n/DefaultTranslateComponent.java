@@ -38,7 +38,12 @@ public class DefaultTranslateComponent implements TranslateComponent {
 
     private static String resolveTranslation(String key) {
         if (EpsilonLanguageManager.INSTANCE.has(key)) {
-            return EpsilonLanguageManager.INSTANCE.getOrDefault(key);
+            String value = EpsilonLanguageManager.INSTANCE.getOrDefault(key);
+            // 同步脚本会用空串占位新增键；空串必须视为「未翻译」，否则界面显示空白名，
+            // 文档里的 i18nFallback（取键最后一段）也永远不会生效。
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
         }
         return ClientSetting.INSTANCE.i18nFallback.getValue() ? formatKey(key) : key;
     }
