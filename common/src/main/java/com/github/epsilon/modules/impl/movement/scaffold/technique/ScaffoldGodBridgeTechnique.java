@@ -339,7 +339,11 @@ public final class ScaffoldGodBridgeTechnique extends ScaffoldTechnique implemen
     // LB: `sneakTime.random()`（config 层 IntRange.random() → Random.nextInt(first, last + 1)，含两端）
     // [适配] RNG：Kotlin Random.Default → ThreadLocalRandom（均匀分布语义一致）
     private int randomSneakTime() {
-        return ThreadLocalRandom.current().nextInt(sneakTimeMin, sneakTimeMax + 1);
+        // 两个设置独立可调：Min > Max 时 nextInt(origin,bound) 会抛 IllegalArgumentException，
+        // 且异常会跳出整段 ledge 处理（该刻失去保护）。这里归一化区间。
+        int min = Math.min(sneakTimeMin, sneakTimeMax);
+        int max = Math.max(sneakTimeMin, sneakTimeMax);
+        return ThreadLocalRandom.current().nextInt(min, max + 1);
     }
 
     // LB: `modes.random()`（kotlin.collections.Collection.random()）

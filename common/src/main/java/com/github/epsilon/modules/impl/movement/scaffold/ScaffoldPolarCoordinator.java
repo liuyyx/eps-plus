@@ -434,6 +434,12 @@ public final class ScaffoldPolarCoordinator implements RequestHandler.Provider {
 
     /** LB:401-425 {@code movementInputHandler}（{@code MovementInputEvent}，SAFETY_FEATURE）。 */
     public void handleMovementInputSafety(KeyboardInputEvent event) {
+        // LB: ScaffoldEagleFeature.stateUpdateHandler（SAFETY_FEATURE）—— 原先没有调用点，
+        // “Eagle Enabled”从不真的潜行，而预测却按 CROUCHING 眼高找目标。
+        if (ScaffoldEagleFeature.isEnabled()) {
+            ScaffoldEagleFeature.INSTANCE.handleMovementInput(event, this.rawInput);
+        }
+
         if (forceSneak > 0) {
             event.setSneak(true);
             forceSneak--;
