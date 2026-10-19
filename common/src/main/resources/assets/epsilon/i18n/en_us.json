@@ -837,10 +837,10 @@
         "work with pickaxe": "Work With Pickaxe",
         "sword swap": "Sword Swap",
         "swing hand": "Swing Hand",
-        "render vector": "Render Vector",
         "fade time": "Fade Time",
         "side color": "Side Color",
-        "line color": "Line Color"
+        "line color": "Line Color",
+        "render": "Render Vector"
       },
       "auto mend": {
         "_value": "Auto Mend",
@@ -1971,7 +1971,7 @@
           "hypixel": "Hypixel",
           "elowen": "Elowen",
           "ravenb4": "Raven B4"
-                  },
+        },
         "elowen": {
           "_value": "Elowen"
         },
@@ -2001,77 +2001,77 @@
         "elowen block count": "Elowen Block Count",
         "elowen hud y": "Elowen HUD Y",
         "elowen sideway rotation": "Elowen Sideway Rotation",
-          "raven": {
-            "_value": "Raven"
-          },
-          "raven rotation mode": {
-            "_value": "Raven Rotation Mode",
-            "none": "None",
-            "strict": "Strict",
-            "smooth": "Smooth",
-            "simple": "Simple",
-            "lazy": "Lazy",
-            "offset": "Offset"
-          },
-          "raven fast scaffold": {
-            "_value": "Raven Fast Scaffold",
-            "disabled": "Disabled",
-            "vanilla": "Vanilla",
-            "constant_a": "Constant A",
-            "constant_b": "Constant B",
-            "float_a": "Float A",
-            "float_b": "Float B",
-            "jump_a": "Jump A",
-            "jump_b": "Jump B",
-            "jump_c": "Jump C",
-            "jump_d": "Jump D",
-            "keep_y_a": "Keep Y A",
-            "keep_y_b": "Keep Y B",
-            "side": "Side"
-          },
-          "raven fast scaffold rmb": {
-            "_value": "Raven Fast Scaffold RMB",
-            "disabled": "Disabled",
-            "vanilla": "Vanilla",
-            "constant_a": "Constant A",
-            "constant_b": "Constant B",
-            "float_a": "Float A",
-            "float_b": "Float B",
-            "jump_a": "Jump A",
-            "jump_b": "Jump B",
-            "jump_c": "Jump C",
-            "jump_d": "Jump D",
-            "keep_y_a": "Keep Y A",
-            "keep_y_b": "Keep Y B",
-            "side": "Side"
-          },
-          "raven multi place": {
-            "_value": "Raven Multi Place",
-            "disabled": "Disabled",
-            "extra1": "1 Extra",
-            "extra2": "2 Extra"
-          },
-          "raven precision": {
-            "_value": "Raven Precision",
-            "low": "Low",
-            "medium": "Medium",
-            "high": "High",
-            "veryhigh": "Very High"
-          },
-          "raven motion": "Raven Motion",
-          "raven fast scaffold motion": "Raven Fast Scaffold Motion",
-          "raven sneak every": "Raven Sneak Every",
-          "raven speed boost": "Raven Speed Boost",
-          "raven legit motion": "Raven Legit Motion",
-          "raven safe walk": "Raven Safe Walk",
-          "raven jump facing forward": "Raven Jump Facing Forward",
-          "raven auto swap": "Raven Auto Swap",
-          "raven silent swing": "Raven Silent Swing",
-          "raven slow on enable": "Raven Slow On Enable",
-          "raven slow speed potion": "Raven Slow Speed Potion",
-          "raven highlight blocks": "Raven Highlight Blocks",
-          "raven tower": "Raven Tower",
-          "raven movement fix": "Raven Movement Fix",
+        "raven": {
+          "_value": "Raven"
+        },
+        "raven rotation mode": {
+          "_value": "Raven Rotation Mode",
+          "none": "None",
+          "strict": "Strict",
+          "smooth": "Smooth",
+          "simple": "Simple",
+          "lazy": "Lazy",
+          "offset": "Offset"
+        },
+        "raven fast scaffold": {
+          "_value": "Raven Fast Scaffold",
+          "disabled": "Disabled",
+          "vanilla": "Vanilla",
+          "constant_a": "Constant A",
+          "constant_b": "Constant B",
+          "float_a": "Float A",
+          "float_b": "Float B",
+          "jump_a": "Jump A",
+          "jump_b": "Jump B",
+          "jump_c": "Jump C",
+          "jump_d": "Jump D",
+          "keep_y_a": "Keep Y A",
+          "keep_y_b": "Keep Y B",
+          "side": "Side"
+        },
+        "raven fast scaffold rmb": {
+          "_value": "Raven Fast Scaffold RMB",
+          "disabled": "Disabled",
+          "vanilla": "Vanilla",
+          "constant_a": "Constant A",
+          "constant_b": "Constant B",
+          "float_a": "Float A",
+          "float_b": "Float B",
+          "jump_a": "Jump A",
+          "jump_b": "Jump B",
+          "jump_c": "Jump C",
+          "jump_d": "Jump D",
+          "keep_y_a": "Keep Y A",
+          "keep_y_b": "Keep Y B",
+          "side": "Side"
+        },
+        "raven multi place": {
+          "_value": "Raven Multi Place",
+          "disabled": "Disabled",
+          "extra1": "1 Extra",
+          "extra2": "2 Extra"
+        },
+        "raven precision": {
+          "_value": "Raven Precision",
+          "low": "Low",
+          "medium": "Medium",
+          "high": "High",
+          "veryhigh": "Very High"
+        },
+        "raven motion": "Raven Motion",
+        "raven fast scaffold motion": "Raven Fast Scaffold Motion",
+        "raven sneak every": "Raven Sneak Every",
+        "raven speed boost": "Raven Speed Boost",
+        "raven legit motion": "Raven Legit Motion",
+        "raven safe walk": "Raven Safe Walk",
+        "raven jump facing forward": "Raven Jump Facing Forward",
+        "raven auto swap": "Raven Auto Swap",
+        "raven silent swing": "Raven Silent Swing",
+        "raven slow on enable": "Raven Slow On Enable",
+        "raven slow speed potion": "Raven Slow Speed Potion",
+        "raven highlight blocks": "Raven Highlight Blocks",
+        "raven tower": "Raven Tower",
+        "raven movement fix": "Raven Movement Fix",
         "swap mode": {
           "_value": "Swap Mode",
           "none": "None",
@@ -2366,9 +2366,15 @@
       },
       "chams": {
         "_value": "Chams",
-        "no depth": "No Depth",
         "players": "Players",
-        "chests": "Chests"
+        "chests": "Chests",
+        "self": "Self",
+        "friends": "Friends",
+        "crystals": "Crystals",
+        "creatures": "Creatures",
+        "monsters": "Monsters",
+        "ambients": "Ambients",
+        "others": "Others"
       },
       "crystal chams": {
         "_value": "Crystal Chams",

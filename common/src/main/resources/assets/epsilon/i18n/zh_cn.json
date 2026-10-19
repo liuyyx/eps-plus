@@ -837,10 +837,10 @@
         "work with pickaxe": "兼容镐子",
         "sword swap": "切剑",
         "swing hand": "挥手",
-        "render vector": "渲染速度向量",
         "fade time": "淡出时间",
         "side color": "侧面颜色",
-        "line color": "线条颜色"
+        "line color": "线条颜色",
+        "render": "渲染速度向量"
       },
       "auto mend": {
         "_value": "自动修补",
@@ -1971,7 +1971,7 @@
           "hypixel": "Hypixel",
           "elowen": "Elowen",
           "ravenb4": "Raven B4"
-                  },
+        },
         "elowen": {
           "_value": "Elowen"
         },
@@ -2001,77 +2001,77 @@
         "elowen block count": "Elowen 方块计数",
         "elowen hud y": "Elowen HUD Y",
         "elowen sideway rotation": "Elowen 侧向旋转",
-          "raven": {
-            "_value": "Raven"
-          },
-          "raven rotation mode": {
-            "_value": "Raven 旋转模式",
-            "none": "无",
-            "strict": "严格",
-            "smooth": "平滑",
-            "simple": "简单",
-            "lazy": "惰性",
-            "offset": "偏移"
-          },
-          "raven fast scaffold": {
-            "_value": "Raven 快速搭路",
-            "disabled": "关闭",
-            "vanilla": "原版",
-            "constant_a": "恒定 A",
-            "constant_b": "恒定 B",
-            "float_a": "漂浮 A",
-            "float_b": "漂浮 B",
-            "jump_a": "跳跃 A",
-            "jump_b": "跳跃 B",
-            "jump_c": "跳跃 C",
-            "jump_d": "跳跃 D",
-            "keep_y_a": "保持 Y A",
-            "keep_y_b": "保持 Y B",
-            "side": "侧向"
-          },
-          "raven fast scaffold rmb": {
-            "_value": "Raven 快速搭路(右键)",
-            "disabled": "关闭",
-            "vanilla": "原版",
-            "constant_a": "恒定 A",
-            "constant_b": "恒定 B",
-            "float_a": "漂浮 A",
-            "float_b": "漂浮 B",
-            "jump_a": "跳跃 A",
-            "jump_b": "跳跃 B",
-            "jump_c": "跳跃 C",
-            "jump_d": "跳跃 D",
-            "keep_y_a": "保持 Y A",
-            "keep_y_b": "保持 Y B",
-            "side": "侧向"
-          },
-          "raven multi place": {
-            "_value": "Raven 多次放置",
-            "disabled": "关闭",
-            "extra1": "额外 1",
-            "extra2": "额外 2"
-          },
-          "raven precision": {
-            "_value": "Raven 精度",
-            "low": "低",
-            "medium": "中",
-            "high": "高",
-            "veryhigh": "极高"
-          },
-          "raven motion": "Raven 水平速度",
-          "raven fast scaffold motion": "Raven 快速搭路速度",
-          "raven sneak every": "Raven 每 N 次潜行",
-          "raven speed boost": "Raven 速度加成",
-          "raven legit motion": "Raven 拟真运动",
-          "raven safe walk": "Raven 安全行走",
-          "raven jump facing forward": "Raven 跳跃朝前",
-          "raven auto swap": "Raven 自动换槽",
-          "raven silent swing": "Raven 静默挥手",
-          "raven slow on enable": "Raven 启用减速",
-          "raven slow speed potion": "Raven 减速药水补偿",
-          "raven highlight blocks": "Raven 高亮方块",
-          "raven tower": "Raven 塔",
-          "raven movement fix": "Raven 移动修正",
+        "raven": {
+          "_value": "Raven"
+        },
+        "raven rotation mode": {
+          "_value": "Raven 旋转模式",
+          "none": "无",
+          "strict": "严格",
+          "smooth": "平滑",
+          "simple": "简单",
+          "lazy": "惰性",
+          "offset": "偏移"
+        },
+        "raven fast scaffold": {
+          "_value": "Raven 快速搭路",
+          "disabled": "关闭",
+          "vanilla": "原版",
+          "constant_a": "恒定 A",
+          "constant_b": "恒定 B",
+          "float_a": "漂浮 A",
+          "float_b": "漂浮 B",
+          "jump_a": "跳跃 A",
+          "jump_b": "跳跃 B",
+          "jump_c": "跳跃 C",
+          "jump_d": "跳跃 D",
+          "keep_y_a": "保持 Y A",
+          "keep_y_b": "保持 Y B",
+          "side": "侧向"
+        },
+        "raven fast scaffold rmb": {
+          "_value": "Raven 快速搭路(右键)",
+          "disabled": "关闭",
+          "vanilla": "原版",
+          "constant_a": "恒定 A",
+          "constant_b": "恒定 B",
+          "float_a": "漂浮 A",
+          "float_b": "漂浮 B",
+          "jump_a": "跳跃 A",
+          "jump_b": "跳跃 B",
+          "jump_c": "跳跃 C",
+          "jump_d": "跳跃 D",
+          "keep_y_a": "保持 Y A",
+          "keep_y_b": "保持 Y B",
+          "side": "侧向"
+        },
+        "raven multi place": {
+          "_value": "Raven 多次放置",
+          "disabled": "关闭",
+          "extra1": "额外 1",
+          "extra2": "额外 2"
+        },
+        "raven precision": {
+          "_value": "Raven 精度",
+          "low": "低",
+          "medium": "中",
+          "high": "高",
+          "veryhigh": "极高"
+        },
+        "raven motion": "Raven 水平速度",
+        "raven fast scaffold motion": "Raven 快速搭路速度",
+        "raven sneak every": "Raven 每 N 次潜行",
+        "raven speed boost": "Raven 速度加成",
+        "raven legit motion": "Raven 拟真运动",
+        "raven safe walk": "Raven 安全行走",
+        "raven jump facing forward": "Raven 跳跃朝前",
+        "raven auto swap": "Raven 自动换槽",
+        "raven silent swing": "Raven 静默挥手",
+        "raven slow on enable": "Raven 启用减速",
+        "raven slow speed potion": "Raven 减速药水补偿",
+        "raven highlight blocks": "Raven 高亮方块",
+        "raven tower": "Raven 塔",
+        "raven movement fix": "Raven 移动修正",
         "swap mode": {
           "_value": "切换模式",
           "none": "无",
@@ -2366,9 +2366,15 @@
       },
       "chams": {
         "_value": "透视模型",
-        "no depth": "无视深度",
         "players": "玩家",
-        "chests": "箱子"
+        "chests": "箱子",
+        "self": "自己",
+        "friends": "好友",
+        "crystals": "水晶",
+        "creatures": "生物",
+        "monsters": "怪物",
+        "ambients": "环境生物",
+        "others": "其他"
       },
       "crystal chams": {
         "_value": "水晶透视",
