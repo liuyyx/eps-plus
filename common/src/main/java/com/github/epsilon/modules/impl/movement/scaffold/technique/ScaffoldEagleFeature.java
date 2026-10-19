@@ -170,7 +170,11 @@ public final class ScaffoldEagleFeature {
     // LB: blocksToEagle.refresh() → RefreshableIntState.refresh() = current = get().random()
     // [适配] RNG：Kotlin Random.Default → ThreadLocalRandom；IntRange.random() 为含两端均匀分布（范围为 0..0 时恒为 0）
     private static void refreshBlocksToEagle() {
-        blocksToEagle = blocksToEagleMin + ThreadLocalRandom.current().nextInt(blocksToEagleMax - blocksToEagleMin + 1);
+        // 两个设置独立可调：Max < Min 时 bound <= 0 会抛异常，且异常发生在放置成功回调里，
+        // 会跳过 currentTarget 清理与换回槽位。这里归一化区间。
+        int min = Math.min(blocksToEagleMin, blocksToEagleMax);
+        int max = Math.max(blocksToEagleMin, blocksToEagleMax);
+        blocksToEagle = min + ThreadLocalRandom.current().nextInt(max - min + 1);
     }
 
     // LB: edgeDistance.refresh() → RefreshableFloatState.refresh() = current = get().random()
