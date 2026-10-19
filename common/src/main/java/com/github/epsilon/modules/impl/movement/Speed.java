@@ -89,6 +89,12 @@ public class Speed extends Module {
     @EventHandler(priority = EventPriority.HIGH)
     private void onPacketReceive(PacketEvent.Receive event) {
         if (nullCheck()) return;
+        // 该事件在 netty 线程派发，而这里会写 player.setDeltaMovement 与 speed/distance 等
+        // 客户端线程状态；统一搬回客户端线程，避免运动向量被并发改写。
+        if (!mc.isSameThread()) {
+            mc.execute(() -> onPacketReceive(event));
+            return;
+        }
 
         if (mode.is(Mode.Strafe)) {
             if (event.getPacket() instanceof ClientboundSetEntityMotionPacket(int id, Vec3 packetMovement)) {
@@ -124,7 +130,7 @@ public class Speed extends Module {
                             this.speed += this.lastExp * this.multiplier.getValue();
                             this.distance += this.lastExp * this.multiplier.getValue();
 
-                            if (mc.player.getDeltaMovement().y > 0) {
+                            if (mc.player.getDeltaMovement().y > 0 && this.vertical.getValue() != 0) {
                                 setMotionY(mc.player.getDeltaMovement().y * this.vertical.getValue());
                             }
                         }

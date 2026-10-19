@@ -167,6 +167,12 @@ public class ServerGuard extends Module {
     @EventHandler(priority = EventPriority.HIGHEST)
     private void onPacketReceive(PacketEvent.Receive event) {
         if (nullCheck()) return;
+        // 该事件在 netty 线程派发，而 placedBlocks/pendingAttacks 等状态同时在客户端线程读写；
+        // 统一搬回客户端线程，避免 HashMap/HashSet 并发损坏。
+        if (!mc.isSameThread()) {
+            mc.execute(() -> onPacketReceive(event));
+            return;
+        }
         Packet<?> packet = event.getPacket();
 
         if (swallowBlock.getValue() && packet instanceof ClientboundBlockUpdatePacket change) {

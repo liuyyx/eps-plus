@@ -657,13 +657,24 @@ public class AccountsScreen extends Screen {
         if (!authenticating.compareAndSet(null, account)) return;
 
         ExecutorManager.INSTANCE.execute(() -> {
+            boolean fetched;
             try {
-                if (account.fetchInfo() && account.login() && account.getType() != AccountType.Cracked) {
-                    account.getCache().loadHead();
-                }
-            } finally {
-                authenticating.set(null);
+                // 只有网络部分留在后台线程。
+                fetched = account.fetchInfo();
+            } catch (Throwable throwable) {
+                fetched = false;
             }
+            boolean ready = fetched;
+            // login() 会写 mc.user / mc.skinManager / mc.services 等客户端实时状态，必须在客户端线程执行。
+            mc.execute(() -> {
+                try {
+                    if (ready && account.login() && account.getType() != AccountType.Cracked) {
+                        account.getCache().loadHead();
+                    }
+                } finally {
+                    authenticating.set(null);
+                }
+            });
         });
     }
 

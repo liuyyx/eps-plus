@@ -47,6 +47,11 @@ public class AutoMend extends Module {
 
     @EventHandler
     private void onClientTick(PlayerTickEvent.Pre event) {
+        // 原实现每 tick 无条件喝经验瓶（20 瓶/秒清空背包），完全没有「需要修补」的判据。
+        if (!needsMending()) return;
+        // 节流：每 4 刻最多一瓶，避免一次修补把整背包经验瓶喝光。
+        if (mc.player.tickCount % 4 != 0) return;
+
         FindItemResult result = InvUtils.findInHotbar(Items.EXPERIENCE_BOTTLE);
         if (!result.found()) return;
 
@@ -67,6 +72,23 @@ public class AutoMend extends Module {
         } else {
             shouldSwapBack = true;
         }
+    }
+
+    /** 身上是否有需要修补的可损坏物品（装备/手持）。 */
+    private boolean needsMending() {
+        for (net.minecraft.world.entity.EquipmentSlot slot : new net.minecraft.world.entity.EquipmentSlot[]{
+                net.minecraft.world.entity.EquipmentSlot.MAINHAND,
+                net.minecraft.world.entity.EquipmentSlot.OFFHAND,
+                net.minecraft.world.entity.EquipmentSlot.HEAD,
+                net.minecraft.world.entity.EquipmentSlot.CHEST,
+                net.minecraft.world.entity.EquipmentSlot.LEGS,
+                net.minecraft.world.entity.EquipmentSlot.FEET}) {
+            net.minecraft.world.item.ItemStack stack = mc.player.getItemBySlot(slot);
+            if (stack.isDamageableItem() && stack.getDamageValue() > 0) {
+                return true;
+            }
+        }
+        return false;
     }
 
 }
