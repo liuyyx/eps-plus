@@ -9,6 +9,7 @@ import org.lwjgl.system.MemoryUtil;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -24,8 +25,11 @@ public class LuminRingBuffer {
     private static final int BUFFER_COUNT = 3;
 
     private final int usage;
-    private final GpuBuffer[] buffers = new GpuBuffer[BUFFER_COUNT];
-    private final int[] sizes = new int[BUFFER_COUNT];
+    private final int initialCapacity;
+    // 槽位按“本帧是否已使用”选择：同一帧内 clear() 超过 3 次时不能回绕覆盖仍在同一命令缓冲里的数据。
+    private GpuBuffer[] buffers;
+    private int[] sizes;
+    private long[] usedFrames;
     private final List<GpuBuffer> retiredBuffers = new ArrayList<>();
 
     private GpuBufferSlice.MappedView mappedBuffer;
@@ -41,8 +45,13 @@ public class LuminRingBuffer {
      */
     public LuminRingBuffer(long size, @GpuBuffer.Usage int usage) {
         int initialSize = checkedBufferSize(size);
+        this.initialCapacity = initialSize;
         this.usage = GpuBuffer.USAGE_MAP_WRITE | GpuBuffer.USAGE_COPY_DST | GpuBuffer.USAGE_COPY_SRC | usage;
-        for (int i = 0; i < buffers.length; i++) {
+        this.buffers = new GpuBuffer[BUFFER_COUNT];
+        this.sizes = new int[BUFFER_COUNT];
+        this.usedFrames = new long[BUFFER_COUNT];
+        Arrays.fill(this.usedFrames, Long.MIN_VALUE);
+        for (int i = 0; i < BUFFER_COUNT; i++) {
             buffers[i] = createBuffer(i, initialSize);
             sizes[i] = initialSize;
         }
@@ -102,6 +111,7 @@ public class LuminRingBuffer {
     public void tryMap() {
         if (mapped) return;
         beginFrameIfNeeded();
+        usedFrames[current] = frameId;
         mappedBuffer = getGpuBuffer().map(false, true);
         mapped = true;
     }
@@ -121,7 +131,23 @@ public class LuminRingBuffer {
      */
     public void rotate() {
         beginFrameIfNeeded();
-        current = (current + 1) % buffers.length;
+        // 选择本帧尚未写入过的槽位；全部用完时新增一个，而不是回绕覆盖同帧已录制的内容。
+        for (int step = 1; step <= buffers.length; step++) {
+            int index = (current + step) % buffers.length;
+            if (usedFrames[index] != frameId) {
+                current = index;
+                usedFrames[index] = frameId;
+                return;
+            }
+        }
+        int index = buffers.length;
+        buffers = Arrays.copyOf(buffers, index + 1);
+        sizes = Arrays.copyOf(sizes, index + 1);
+        usedFrames = Arrays.copyOf(usedFrames, index + 1);
+        buffers[index] = createBuffer(index, sizes[current]);
+        sizes[index] = sizes[current];
+        usedFrames[index] = frameId;
+        current = index;
     }
 
     /**

@@ -615,6 +615,13 @@ public class Scaffold extends Module {
     public final BoolSetting ravenSlowSpeedPotion = boolSetting("Raven Slow Speed Potion", false, ravenDependency).group(sgRaven);
     /** 原 {@code highlightBlocks}（"Highlight blocks"）。 */
     public final BoolSetting ravenHighlightBlocks = boolSetting("Raven Highlight Blocks", false, ravenDependency).group(sgRaven);
+    /** Raven Tower 的运行时状态（上游 TowerModule.towering）；Epsilon 尚无塔实现，恒 false。 */
+    private boolean ravenTowering;
+
+    public boolean isRavenTowering() {
+        return ravenTowering;
+    }
+
     /** 原 {@code tower}（"Tower"）：Epsilon 无联动塔模块，预留开关。 */
     public final BoolSetting ravenTower = boolSetting("Raven Tower", false, ravenDependency).group(sgRaven);
     /** 原 {@code canSprint()} 里 {@code SettingsModule.movementFix}：非快速搭路时的移动修正开关。 */

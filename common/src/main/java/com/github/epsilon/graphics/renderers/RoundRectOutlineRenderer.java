@@ -176,6 +176,8 @@ public class RoundRectOutlineRenderer implements IRenderer {
 
     @Override
     public void clear() {
+        // clear() 必须回到帧初始状态：scissor 由 setScissor 设置，调度器之外没有别处会复位。
+        scissorEnabled = false;
         if (vertexCount > 0) {
             if (buffer.isMapped()) buffer.unmap();
             buffer.rotate();

@@ -140,7 +140,7 @@ public final class RavenB4Scaffold {
                 if (mc.player.onGround()) {
                     this.ticks = 1;
                     delay = 1;
-                    if (mc.player.getDeltaMovement().y == -0.0784000015258789) {
+                    if (isFallMotion()) {
                         jump();
                     }
                     keptY = (int) Math.floor(mc.player.getY()) - 1;
@@ -1099,7 +1099,7 @@ public final class RavenB4Scaffold {
             return;
         }
         if (fastScaffold == RavenFastScaffold.Float_A) {
-            if (mc.player.getY() % 1.0 == 0.0 && mc.player.getDeltaMovement().y == -0.0784000015258789) {
+            if (mc.player.getY() % 1.0 == 0.0 && isFallMotion()) {
                 fastScaffold.state = 1;
                 if (isMoving() && !mc.player.isShiftKeyDown()) {
                     double d = fastScaffold.sprint ? 0.2 + perSpeedLevel(isDiagonal() ? 0.035 : 0.043)
@@ -1114,7 +1114,7 @@ public final class RavenB4Scaffold {
                 }
             }
         } else if (fastScaffold == RavenFastScaffold.Float_B) {
-            if (mc.player.getY() % 1.0 == 0.0 && mc.player.getDeltaMovement().y == -0.0784000015258789
+            if (mc.player.getY() % 1.0 == 0.0 && isFallMotion()
                     && isMoving() && !mc.player.isShiftKeyDown()) {
                 double d;
                 if (!floatWasSet && (isDiagonal() || !isAirBelow())) {
@@ -1742,6 +1742,20 @@ public final class RavenB4Scaffold {
         // Epsilon 无 Raven B4 的 TowerModule；用本模块的 "Raven Tower" 设置近似
         // （原先恒 false ⇒ 该设置全仓无读取点，且 Raven Multi Place 在默认档位下永不生效）。
         return module.ravenTower.getValue();
+    }
+
+    /** 1.8.9 FALL_MOTION 的现代 double 等价区间（精确相等在现代物理下不可达）。 */
+    private static final double FALL_MOTION = -0.0784000015258789;
+
+    private static boolean isFallMotion() {
+        double vy = mc.player.getDeltaMovement().y;
+        return vy > FALL_MOTION - 5.0E-4 && vy < FALL_MOTION + 5.0E-4;
+    }
+
+    private static boolean physicalRightMouseDown() {
+        return mc.gui.screen() == null
+                && org.lwjgl.glfw.GLFW.glfwGetMouseButton(mc.getWindow().handle(),
+                org.lwjgl.glfw.GLFW.GLFW_MOUSE_BUTTON_RIGHT) == org.lwjgl.glfw.GLFW.GLFW_PRESS;
     }
 
     private static float lastYaw() {
