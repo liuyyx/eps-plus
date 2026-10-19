@@ -65,6 +65,9 @@ public class PlayerHeadTexture extends LuminTexture {
     public static byte[] downloadHead(String url) throws IOException {
         BufferedImage skin;
         try (InputStream in = Http.get(url).sendInputStream()) {
+            // sendInputStream 在非 200/IO 失败时返回 null，ImageIO.read(null) 会抛
+            // IllegalArgumentException（逃出只 catch IOException 的调用方）。
+            if (in == null) throw new IOException("Failed to download skin image.");
             skin = ImageIO.read(in);
         }
 

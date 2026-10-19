@@ -68,7 +68,10 @@ public class MicrosoftLogin {
         if (res == null) return new LoginData();
 
         String accessToken = res.access_token;
-        refreshToken = res.refresh_token;
+        // 只有服务端真的轮换了令牌才覆盖：null 会写坏 accounts.json 并让后续启动解析失败。
+        if (res.refresh_token != null && !res.refresh_token.isBlank()) {
+            refreshToken = res.refresh_token;
+        }
 
         // XBL
         XblXstsResponse xblRes = Http.post("https://user.auth.xboxlive.com/user/authenticate")

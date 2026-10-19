@@ -28,6 +28,7 @@ public class Http {
     private static final String USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Safari/537.36";
 
     private static final HttpClient CLIENT = HttpClient.newBuilder()
+            .connectTimeout(java.time.Duration.ofSeconds(10))
             .executor(Executors.newVirtualThreadPerTaskExecutor())
             .build();
 
@@ -173,6 +174,11 @@ public class Http {
             } catch (IOException | InterruptedException e) {
                 exceptionHandler.accept(e);
                 return null;
+            } catch (RuntimeException e) {
+                // 非预期 JSON（HTML 错误页/验证码/错误对象）会抛 JsonSyntaxException；
+                // 必须交给 exceptionHandler，否则会逃出登录回调导致界面永久等待。
+                exceptionHandler.accept(e);
+                return null;
             }
         }
 
@@ -188,6 +194,7 @@ public class Http {
 
         private <T> HttpResponse<T> send(HttpResponse.BodyHandler<T> bodyHandler, String accept) throws IOException, InterruptedException {
             builder.header("Accept", accept);
+            builder.timeout(java.time.Duration.ofSeconds(30));
             if (!hasBody) builder.method("GET", HttpRequest.BodyPublishers.noBody());
             HttpResponse<T> res = CLIENT.send(builder.build(), bodyHandler);
             return res.statusCode() == 200 ? res : null;

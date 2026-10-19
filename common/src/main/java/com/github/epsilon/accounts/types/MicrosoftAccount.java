@@ -36,7 +36,9 @@ public class MicrosoftAccount extends Account<MicrosoftAccount> {
         MicrosoftLogin.LoginData data = MicrosoftLogin.login(name);
         if (!data.isGood()) return null;
 
-        name = data.newRefreshToken;
+        if (data.newRefreshToken != null && !data.newRefreshToken.isBlank()) {
+            name = data.newRefreshToken;
+        }
         cache.username = data.username;
         cache.uuid = data.uuid;
 
@@ -46,7 +48,7 @@ public class MicrosoftAccount extends Account<MicrosoftAccount> {
     @Override
     public boolean equals(Object o) {
         if (!(o instanceof MicrosoftAccount account)) return false;
-        return account.name.equals(this.name);
+        return java.util.Objects.equals(account.name, this.name);
     }
 
 }
