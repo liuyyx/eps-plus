@@ -67,6 +67,8 @@ public class Speed extends Module {
     private boolean stop;
     private double speed;
     private double distance;
+    /** 速度/爆炸包带来的单刻加速；必须在状态机重算 speed 之后、应用运动之前消费。 */
+    private double pendingBoost;
 
     private int strictTicks;
     private int strafe = 4;
@@ -109,8 +111,7 @@ public class Speed extends Module {
                     if (this.lastExp > 0) {
                         this.expTimer.reset();
 
-                        this.speed += this.lastExp * this.multiplier.getValue();
-                        this.distance += this.lastExp * this.multiplier.getValue();
+                        this.pendingBoost += this.lastExp * this.multiplier.getValue();
 
                         if (mc.player.getDeltaMovement().y > 0 && this.vertical.getValue() != 0) {
                             setMotionY(mc.player.getDeltaMovement().y * this.vertical.getValue());
@@ -127,8 +128,7 @@ public class Speed extends Module {
                         if (this.lastExp > 0) {
                             this.expTimer.reset();
 
-                            this.speed += this.lastExp * this.multiplier.getValue();
-                            this.distance += this.lastExp * this.multiplier.getValue();
+                            this.pendingBoost += this.lastExp * this.multiplier.getValue();
 
                             if (mc.player.getDeltaMovement().y > 0 && this.vertical.getValue() != 0) {
                                 setMotionY(mc.player.getDeltaMovement().y * this.vertical.getValue());
@@ -229,6 +229,8 @@ public class Speed extends Module {
 
             this.speed = Math.min(this.speed, 10);
             this.speed = Math.max(this.speed, getSpeed(this.slow.getValue(), this.strafeSpeed.getValue()));
+            this.speed += this.pendingBoost;
+            this.pendingBoost = 0;
             Vec2 moveVector = mc.player.input.getMoveVector();
             double n = moveVector.y;
             double n2 = moveVector.x;
@@ -252,7 +254,8 @@ public class Speed extends Module {
         }
         if (mc.player.hasEffect(MobEffects.SLOWNESS)) {
             double amplifier = mc.player.getEffect(MobEffects.SLOWNESS).getAmplifier();
-            slowEffect = 1 + (0.2 * (amplifier + 1));
+            // 原版 Slowness 是 ADD_MULTIPLIED_TOTAL -0.15*(amp+1)，不是 SPEED 的 +0.2 公式。
+            slowEffect = Math.max(0.0, 1.0 - 0.15 * (amplifier + 1));
         }
         final double base = 0.2873f * speedEffect / slowEffect;
         float jumpEffect = 0.0f;
@@ -293,6 +296,8 @@ public class Speed extends Module {
             if (strictTicks > 50) {
                 strictTicks = 0;
             }
+            speed += this.pendingBoost;
+            this.pendingBoost = 0;
             final Vec2 motion = handleStrafeMotion((float) speed);
             event.setX(motion.x);
             event.setZ(motion.y);
@@ -305,8 +310,9 @@ public class Speed extends Module {
         Vec2 moveVector = mc.player.input.getMoveVector();
         float forward = moveVector.y;
         float strafe = moveVector.x;
-        float tickDelta = mc.getDeltaTracker().getGameTimeDeltaPartialTick(true);
-        float yaw = Mth.lerp(tickDelta, RotationManager.INSTANCE.getLastRotation().getYaw(), RotationManager.INSTANCE.getYaw());
+        // 不能用渲染插值：Mth.lerp 不做角度回绕（±180 处会扫过 0° 造成反向），
+        // 且运动是定刻物理，不应依赖渲染 partialTick。
+        float yaw = RotationManager.INSTANCE.getYaw();
         if (forward == 0.0f && strafe == 0.0f) {
             return Vec2.ZERO;
         }
@@ -328,7 +334,7 @@ public class Speed extends Module {
 
         if (slowness && mc.player.hasEffect(MobEffects.SLOWNESS)) {
             int amplifier = mc.player.getEffect(MobEffects.SLOWNESS).getAmplifier();
-            defaultSpeed /= 1.0 + 0.2 * (amplifier + 1);
+            defaultSpeed *= Math.max(0.0, 1.0 - 0.15 * (amplifier + 1));
         }
 
         if (mc.player.isCrouching()) {
