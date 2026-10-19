@@ -4,6 +4,7 @@ import com.github.epsilon.graphics.LuminRenderSystem;
 import com.github.epsilon.gui.hudeditor.HudLayoutHelper;
 import com.github.epsilon.gui.lib.UiTree;
 import com.github.epsilon.gui.lib.render.UiRenderBatch;
+import com.github.epsilon.events.bus.EventBus;
 import com.github.epsilon.modules.Module;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -33,12 +34,19 @@ public abstract class HudModule extends Module {
     private VerticalAnchor verticalAnchor = VerticalAnchor.Top;
     private UiTree.Scope currentRenderScope;
 
+    /** HUD 元素的可见性。与 Module.enabled 分开：隐藏元素不应弹提示、写聊天栏或退订事件。 */
+    private boolean visible = true;
+
     public HudModule(String name, float width, float height) {
         this(name, 0f, 0f, width, height);
     }
 
     public HudModule(String name, float x, float y, float width, float height) {
         super(name, null);
+        // HUD 元素始终订阅事件：隐藏只影响绘制，不应停止数据收集（如 PlayerInfo 的统计）。
+        EventBus.INSTANCE.subscribe(this);
+        // 新配置/重置后 HUD 默认为可见，而不是全部消失。
+        setDefaultEnabled(true);
 
         this.x = x;
         this.y = y;
@@ -50,6 +58,29 @@ public abstract class HudModule extends Module {
         this.defaultY = y;
         this.defaultAnchorX = x;
         this.defaultAnchorY = y;
+    }
+
+    @Override
+    public boolean isEnabled() {
+        return this.visible;
+    }
+
+    @Override
+    public void toggle() {
+        setEnabled(!this.visible);
+    }
+
+    @Override
+    public void setEnabled(boolean enabled) {
+        if (this.visible == enabled) {
+            return;
+        }
+        this.visible = enabled;
+        if (enabled) {
+            onEnable();
+        } else {
+            onDisable();
+        }
     }
 
     @Override
