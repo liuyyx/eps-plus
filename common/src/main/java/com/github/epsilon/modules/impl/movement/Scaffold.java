@@ -862,6 +862,13 @@ public class Scaffold extends Module {
         syncElowenModeLifecycle();
         syncRavenB4ModeLifecycle();
 
+        // Polar 以 Priority.Highest 提交托管角，且从不自行降级：若在其它引擎分支之后才释放，
+        // 这里永远跑不到（各分支都已 return），Elowen/Raven 的 Medium 提交会被优先级门丢弃，
+        // 准星与 MovementFix 卡在神桥角。故在分流**之前**按「Polar 是否生效」统一释放。
+        if (!isPolarActive()) {
+            ScaffoldPolarCoordinator.INSTANCE.releaseRotationIfIdle();
+        }
+
         if (isPolarActive()) {
             // Polar 走 LiquidBounce 的 GodBridge 链路：本刻的转向目标、转向落地与放置
             // 全部由协调层按 LB 的顺序完成（rotationUpdate → RotationManager.update → tickHandler）。
@@ -900,9 +907,6 @@ public class Scaffold extends Module {
         }
 
         if (placeDelayCounter > 0) placeDelayCounter--;
-
-        // Polar 刚被切走（模式/变体改动）时释放遗留的托管角，避免旧的神桥角继续粘住准星与走位。
-        ScaffoldPolarCoordinator.INSTANCE.releaseRotationIfIdle();
 
         blockResult = findBlockResult();
 
