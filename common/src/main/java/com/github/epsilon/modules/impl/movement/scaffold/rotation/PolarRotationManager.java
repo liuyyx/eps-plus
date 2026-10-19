@@ -142,10 +142,11 @@ public final class PolarRotationManager implements RequestHandler.Provider {
     /**
      * LB 原文：{@code private val fakeLagging get() = BlinkManager.isLagging || ModuleBacktrack.isLagging()}
      * <p>
-     * [适配] Epsilon 无 BlinkManager / ModuleBacktrack 的对应机制 → 恒 false（保留字段与方法结构）。
+     * [适配] Epsilon 无 BlinkManager 的延迟语义；Backtrack 已提供 isLagging()。
+     * 压包期间服务端视角停更，必须改用 theoreticalServerRotation 计算。
      */
     private boolean fakeLagging() {
-        return false;
+        return com.github.epsilon.modules.impl.combat.Backtrack.INSTANCE.isLagging();
     }
 
     /**
