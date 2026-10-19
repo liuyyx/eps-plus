@@ -290,8 +290,8 @@ public final class RavenB4Scaffold {
     private static int lastRotationPacketTick = -1;
 
     private static final Direction[] SIDES = {Direction.EAST, Direction.SOUTH, Direction.NORTH, Direction.WEST};
-    /** {@link #placed} 的淘汰时长（ms）。 */
-    private static final long PLACED_TTL_MS = 5000L;
+    /** {@link #placed} 的淘汰时长（ms，对齐参考 {@code renderPlaced()} 的 500ms 窗口）。 */
+    private static final long PLACED_TTL_MS = 500L;
     private static final BlockPos.MutableBlockPos SCRATCH = new BlockPos.MutableBlockPos();
 
     /**
@@ -433,6 +433,9 @@ public final class RavenB4Scaffold {
         syncSettings();
         // 共享放置节流（Place Delay + 随机量）：每刻只自减一次。
         module.tickPlaceCooldown();
+        // placed 每刻按参考的 500ms 窗口淘汰（不能只靠高亮渲染路径，否则默认配置下会一直涨）。
+        long now = System.currentTimeMillis();
+        placed.entrySet().removeIf(entry -> now - Math.abs(entry.getValue()) > PLACED_TTL_MS);
         update();
         // 原宿主在 update 之后调 {@code getRotations(lastYaw, lastPitch)}（RotationManager 的发包路径）。
         // 故本刻把 update 里刚解算出的 aimYaw/aimPitch 直接提交，**同刻**生效；
@@ -1272,16 +1275,20 @@ public final class RavenB4Scaffold {
             if (facing != null) {
                 Vec3 vec3 = hitVec(pos, facing);
                 BlockHitResult hit = new BlockHitResult(vec3, facing, pos, false);
-                if (isReplaceable(hit.getBlockPos().relative(hit.getDirection()))
-                        && placeAt(hit, itemStack)) {
-                    placedAt = System.currentTimeMillis();
-                    // 记录真正落块的位置（pos.relative(facing)），不是支撑块 pos：
-                    // 否则高亮画在旧块上，canPlaceAgainst 也认不出这块是刚放的。
-                    placed.put(pos.relative(facing), placedAt);
-                    if (fastScaffold.ticks == -1) {
-                        fastScaffold.ticks = 0;
+                if (isReplaceable(hit.getBlockPos().relative(hit.getDirection()))) {
+                    // 追加放置要用「它自己的命中点」算朝向，不能用主放置的 aimYaw/aimPitch（指向另一块）。
+                    Rot2f look = RotationUtils.calculate(vec3);
+                    sendRotationNow(look.getYaw(), look.getPitch());
+                    if (placeAt(hit, itemStack)) {
+                        placedAt = System.currentTimeMillis();
+                        // 记录真正落块的位置（pos.relative(facing)），不是支撑块 pos：
+                        // 否则高亮画在旧块上，canPlaceAgainst 也认不出这块是刚放的。
+                        placed.put(pos.relative(facing), placedAt);
+                        if (fastScaffold.ticks == -1) {
+                            fastScaffold.ticks = 0;
+                        }
+                        return;
                     }
-                    return;
                 }
             }
             fastScaffold.ticks = -1;
@@ -1315,7 +1322,7 @@ public final class RavenB4Scaffold {
         }
         // 与 place() 主路径保持一致：用解算出的 facing 落块（而不是射线自身的面），
         // 否则落块位置与 lastPlaced/placed 记录不同源，下一 tick 会贴着没放过的方块找目标。
-        sendPlacementRotation(r[0], r[1]);
+        sendRotationNow(r[0], r[1]);
         if (!placeAtBlock(against, facing, hit.getLocation(), itemStack)) {
             return false;
         }
@@ -1356,6 +1363,14 @@ public final class RavenB4Scaffold {
         if (mc.player.tickCount == lastRotationPacketTick) {
             return;
         }
+        sendRotationNow(yaw, pitch);
+    }
+
+    /** 强制发一次旋转包（追加放置必须各自跟上：同刻的每刻一次闸门已被主放置用掉）。 */
+    private static void sendRotationNow(float yaw, float pitch) {
+        if (mc.player == null || mc.getConnection() == null) {
+            return;
+        }
         lastRotationPacketTick = mc.player.tickCount;
         mc.getConnection().send(new ServerboundMovePlayerPacket.Rot(yaw, pitch, mc.player.onGround(),
                 mc.player.horizontalCollision));
@@ -1387,8 +1402,14 @@ public final class RavenB4Scaffold {
             smoothSnap = false;
             rightHeld = false;
             active = false;
-            // 原 {@code RotationManager.smoothYaw = null}：停用时释放托管角。
-            RotationManager.INSTANCE.setActive(false);
+            // 只在托管角确实由本引擎提交时才释放：裸 setActive(false) 会清掉同刻其它模块
+            // （KillAura 等在 ClientTickEvent.Pre 先提交）的托管状态。真正的释放在 onDisable/切模式。
+            Rot2f current = RotationManager.INSTANCE.getRotation();
+            if (current != null
+                    && Math.abs(current.getYaw() - lastSentRotation.getYaw()) < 0.01f
+                    && Math.abs(current.getPitch() - lastSentRotation.getPitch()) < 0.01f) {
+                RotationManager.INSTANCE.setActive(false);
+            }
             jumpState = 1;
             if (mc.player.onGround() && rotation != RavenRotation.Offset) {
                 multiplyMotion(0.75, false);
@@ -1718,9 +1739,9 @@ public final class RavenB4Scaffold {
     }
 
     private static boolean towerActive() {
-        // [移植注] Epsilon 无 Raven B4 的 TowerModule（带 slowedTicks / towering 标志），
-        // 由本模块的 ravenTower 设置近似；无联动塔时恒为 false。
-        return false;
+        // Epsilon 无 Raven B4 的 TowerModule；用本模块的 "Raven Tower" 设置近似
+        // （原先恒 false ⇒ 该设置全仓无读取点，且 Raven Multi Place 在默认档位下永不生效）。
+        return module.ravenTower.getValue();
     }
 
     private static float lastYaw() {

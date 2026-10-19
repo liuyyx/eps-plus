@@ -335,10 +335,7 @@ public class KillAura extends Module {
         if (!aimMode.is(AimMode.Polar) && hitSelect.getValue() && hitResult instanceof EntityHitResult entityHitResult
                 && isAttackable(entityHitResult.getEntity()) && velocity.attackQueue <= 0) {
             var player = (LivingEntity) entityHitResult.getEntity();
-            ClientPacketListener connection = mc.getConnection();
-            PlayerInfo localPlayerInfo = connection == null ? null : connection.getPlayerInfo(mc.player.getUUID());
-            int latencyTicks = localPlayerInfo == null ? 0 : localPlayerInfo.getLatency() / 50;
-            if (player.hurtTime <= latencyTicks + 1 || (mc.player.hurtTime >= 6 && !Velocity.INSTANCE.isEnabled()) || Criticals.INSTANCE.fallTicks == 2) {
+            if (canQueueAttackOn(player)) {
                 switch (mode.getValue()) {
                     case OnePointNinePlus -> {
                         if (attacks == 0 && mc.player.getAttackStrengthScale(0.5f) >= 1.0f) {
@@ -388,7 +385,9 @@ public class KillAura extends Module {
             HitResult hitResult = RotationManager.INSTANCE.getHitResult();
             // 无论 Hit Select 开关，都必须命中一个合法目标才排队；
             // 用嵌套而不是 return：return 会跳过本方法后面整段 ESP 渲染。
-            if (hitResult instanceof EntityHitResult entityHitResult && isAttackable(entityHitResult.getEntity())) {
+            if (hitResult instanceof EntityHitResult entityHitResult
+                    && isAttackable(entityHitResult.getEntity())
+                    && canQueueAttackOn((LivingEntity) entityHitResult.getEntity())) {
                 switch (mode.getValue()) {
                     case OnePointNinePlus -> {
                         if (attacks == 0 && mc.player.getAttackStrengthScale(0.5f) >= 1.0f) {
@@ -692,6 +691,16 @@ public class KillAura extends Module {
         }
     }
 
+    /** 出刀窗口判据（目标受击窗口 / 本地受击还手 / 暴击相位），两条排队路径共用。 */
+    private boolean canQueueAttackOn(LivingEntity target) {
+        ClientPacketListener connection = mc.getConnection();
+        PlayerInfo localInfo = connection == null ? null : connection.getPlayerInfo(mc.player.getUUID());
+        int latencyTicks = localInfo == null ? 0 : localInfo.getLatency() / 50;
+        return target.hurtTime <= latencyTicks + 1
+                || (mc.player.hurtTime >= 6 && !Velocity.INSTANCE.isEnabled())
+                || Criticals.INSTANCE.fallTicks == 2;
+    }
+
     /**
      * 攻击合法性：必须是本刻目标列表内的存活实体。
      * {@link com.github.epsilon.managers.target.TargetManager} 已在 `acquireTargets` 中过滤
@@ -712,6 +721,8 @@ public class KillAura extends Module {
         polarPrevPitchDelta = 0.0f;
         polarLastTarget = null;
         polarLastTick = Integer.MIN_VALUE;
+        targetIndex = 0;
+        switchTimer.reset();
     }
 
     /**
