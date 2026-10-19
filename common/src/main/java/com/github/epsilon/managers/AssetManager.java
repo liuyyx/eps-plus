@@ -177,7 +177,8 @@ public class AssetManager {
     private final Path tempDir = rootDir.resolve(".tmp");
 
     private final Set<Asset> declinedThisSession = EnumSet.noneOf(Asset.class);
-    private final Map<String, Identifier> registeredTextures = new HashMap<>();
+    // 渲染线程 get/put，下载线程 release：必须并发安全。
+    private final Map<String, Identifier> registeredTextures = new java.util.concurrent.ConcurrentHashMap<>();
 
     private volatile DownloadJob activeJob;
     private boolean legacyVideoChecked;
@@ -614,12 +615,18 @@ public class AssetManager {
     }
 
     public void releaseRegisteredTextures() {
-        Map<String, Identifier> registered = Map.copyOf(registeredTextures);
+        // 先在当前线程取快照并清空登记表，再把 release 排到渲染线程。
+        // 原先非渲染线程直接 return，但表已经清空 -> 已注册的纹理永远无法释放。
+        Map<String, Identifier> registered = new HashMap<>(registeredTextures);
         registeredTextures.clear();
-        if (registered.isEmpty() || mc == null || !RenderSystem.isOnRenderThread()) {
+        if (registered.isEmpty() || mc == null) {
             return;
         }
-        registered.values().forEach(identifier -> mc.getTextureManager().release(identifier));
+        if (RenderSystem.isOnRenderThread()) {
+            registered.values().forEach(identifier -> mc.getTextureManager().release(identifier));
+        } else {
+            mc.execute(() -> registered.values().forEach(identifier -> mc.getTextureManager().release(identifier)));
+        }
     }
 
     /**

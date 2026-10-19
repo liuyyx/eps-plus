@@ -209,8 +209,17 @@ public class ModuleManager {
     @EventHandler
     private void onMousePress(MousePressEvent event) {
         boolean canReact = mc.level != null && mc.gui.screen() == null;
+        int key = KeybindUtils.encodeMouseButton(event.getButton());
+        // GUI 键位也可能被绑成鼠标键（KeybindWidget 允许），键盘分支永远匹配不到负的鼠标编码。
+        if (canReact && event.getAction() == InputConstants.PRESS && key == ClientSetting.INSTANCE.guiKeybind.getValue()) {
+            mc.gui.setScreen(switch (ClientSetting.INSTANCE.guiMode.getValue()) {
+                case Panel -> PanelScreen.INSTANCE;
+                case Dropdown -> DropdownScreen.INSTANCE;
+            });
+            return;
+        }
         if (canReact || event.getAction() == InputConstants.RELEASE) {
-            dispatchKeyBind(KeybindUtils.encodeMouseButton(event.getButton()), event.getAction());
+            dispatchKeyBind(key, event.getAction());
         }
     }
 

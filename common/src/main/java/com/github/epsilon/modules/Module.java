@@ -171,6 +171,10 @@ public class Module implements SettingHost {
 
     public void setBindMode(BindMode bindMode) {
         this.bindMode = bindMode;
+        // Hold 模式的"开启"只能来源于按住：切换瞬间若仍是开启状态，松开事件永远不会到来。
+        if (bindMode == BindMode.Hold && isEnabled()) {
+            setEnabled(false);
+        }
     }
 
     public String getName() {

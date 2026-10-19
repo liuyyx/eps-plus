@@ -356,7 +356,9 @@ public class ConfigManager {
 
         // Apply enabled state last so onEnable/onDisable fire after settings are set
         if (moduleObj.has("enabled") && moduleObj.get("enabled").isJsonPrimitive()) {
-            module.setEnabled(moduleObj.get("enabled").getAsBoolean());
+            boolean enabled = moduleObj.get("enabled").getAsBoolean();
+            // Hold 模块的开启状态只由按键按下产生，恢复成开启会让它永远无法关闭。
+            module.setEnabled(enabled && module.getBindMode() != Module.BindMode.Hold);
         }
     }
 
@@ -375,7 +377,7 @@ public class ConfigManager {
     private JsonObject buildModuleObject(Module module) {
         JsonObject obj = new JsonObject();
         obj.addProperty("version", CONFIG_VERSION);
-        obj.addProperty("enabled", module.isEnabled());
+        obj.addProperty("enabled", module.isEnabled() && module.getBindMode() != Module.BindMode.Hold);
         obj.addProperty("keyBind", module.getKeyBind());
         obj.addProperty("bindMode", module.getBindMode().name());
         obj.addProperty("hidden", module.isHidden());
