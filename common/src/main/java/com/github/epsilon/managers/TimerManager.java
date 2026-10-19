@@ -23,7 +23,9 @@ public class TimerManager {
     }
 
     public void tryReset() {
-        if (lastTimer != getDefault()) {
+        // 必须比较**当前生效值**：lastTimer 只在 reset() 里更新，用它比较永远检测不到
+        // 其它模块（Step/HoleSnap）写进去的临时倍率。
+        if (timer != getDefault()) {
             reset();
         }
     }
@@ -34,7 +36,8 @@ public class TimerManager {
 
     public float getDefault() {
         Timer timer = Timer.INSTANCE;
-        return timer.isEnabled() ? timer.multiplier.getValue().floatValue() : 1f;
+        // Balance/SlowBalance 的基线是 1.0x，只有 Always 才是 multiplier。
+        return timer.isEnabled() ? timer.baselineFactor() : 1f;
     }
 
 }

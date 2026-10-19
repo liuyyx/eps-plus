@@ -81,9 +81,18 @@ public class Timer extends Module {
         releaseAll();
     }
 
+    /** 当前模式的「回归基线」：只有 Always 模式把 multiplier 当基线，其余模式应为 1.0x。 */
+    public float baselineFactor() {
+        return mode.is(Mode.Always) ? multiplier.getValue().floatValue() : 1.0f;
+    }
+
     @EventHandler
     private void onClientTick(ClientTickEvent.Pre event) {
-        if (nullCheck()) return;
+        if (nullCheck()) {
+            // 退服/主菜单下也要还原时间倍率：否则最后一个倍率会一直乘在客户端 tick 上。
+            TimerManager.INSTANCE.set(1.0F);
+            return;
+        }
 
         // 先收回其他模块留下的临时倍率，再应用当前 Timer 模式。
         TimerManager.INSTANCE.tryReset();
