@@ -26,7 +26,8 @@ public class DoubleSetting extends Setting<Double> {
     }
 
     public void setUnboundedValue(Double value) {
-        super.setValue(value);
+        // 同上：越界值必须夹紧。
+        super.setValue(Mth.clamp(value, min, max));
     }
 
     public double getMin() {

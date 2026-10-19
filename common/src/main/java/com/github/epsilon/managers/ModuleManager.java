@@ -108,6 +108,7 @@ public class ModuleManager {
         addModule(ElytraGrimAccelerate.INSTANCE);
         addModule(Dolphin.INSTANCE);
         addModule(AutoSprint.INSTANCE);
+        addModule(AutoBuild.INSTANCE);
         addModule(Blink.INSTANCE);
         addModule(Eagle.INSTANCE);
         addModule(AutoMap.INSTANCE);
@@ -171,6 +172,7 @@ public class ModuleManager {
         addModule(Trajectories.INSTANCE);
         addModule(WorldTweaks.INSTANCE);
         addModule(Xray.INSTANCE);
+        addModule(YsmModel.INSTANCE);
 
     }
 
@@ -185,13 +187,16 @@ public class ModuleManager {
 
     @EventHandler
     private void onKeyPress(KeyPressEvent event) {
-        if (mc.level == null || mc.gui.screen() != null || event.getKey() == GLFW.GLFW_KEY_UNKNOWN) return;
+        if (event.getKey() == GLFW.GLFW_KEY_UNKNOWN) return;
 
         int keyCode = event.getKey();
         int action = event.getAction();
+        // RELEASE 必须始终派发：Hold 模式靠它关闭模块，开界面/退世界时丢弃会让模块永久启用。
+        boolean canReact = mc.level != null && mc.gui.screen() == null;
+        if (action != InputConstants.RELEASE && !canReact) return;
 
         ClientSetting cs = ClientSetting.INSTANCE;
-        if (keyCode == cs.guiKeybind.getValue() && action == InputConstants.PRESS) {
+        if (canReact && keyCode == cs.guiKeybind.getValue() && action == InputConstants.PRESS) {
             mc.gui.setScreen(switch (ClientSetting.INSTANCE.guiMode.getValue()) {
                 case Panel -> PanelScreen.INSTANCE;
                 case Dropdown -> DropdownScreen.INSTANCE;
@@ -203,7 +208,8 @@ public class ModuleManager {
 
     @EventHandler
     private void onMousePress(MousePressEvent event) {
-        if (mc.level != null && mc.gui.screen() == null) {
+        boolean canReact = mc.level != null && mc.gui.screen() == null;
+        if (canReact || event.getAction() == InputConstants.RELEASE) {
             dispatchKeyBind(KeybindUtils.encodeMouseButton(event.getButton()), event.getAction());
         }
     }
@@ -234,14 +240,19 @@ public class ModuleManager {
         }
 
         for (Module module : affectedModules) {
-            if (module.getBindMode() == Module.BindMode.Toggle) {
-                module.toggle();
-            } else if (module.getBindMode() == Module.BindMode.Hold) {
-                if (isPress && !module.isEnabled()) {
-                    module.setEnabled(true);
-                } else if (isRelease && module.isEnabled()) {
-                    module.setEnabled(false);
+            // 单个模块的 onEnable/onDisable 抛异常不得影响同键其它模块与提示音。
+            try {
+                if (module.getBindMode() == Module.BindMode.Toggle) {
+                    module.toggle();
+                } else if (module.getBindMode() == Module.BindMode.Hold) {
+                    if (isPress && !module.isEnabled()) {
+                        module.setEnabled(true);
+                    } else if (isRelease && module.isEnabled()) {
+                        module.setEnabled(false);
+                    }
                 }
+            } catch (Throwable throwable) {
+                com.github.epsilon.Constants.LOGGER.error("切换模块 {} 失败", module.getName(), throwable);
             }
         }
 

@@ -1,5 +1,6 @@
 package com.github.epsilon.settings.impl;
 
+import com.github.epsilon.Constants;
 import com.github.epsilon.assets.i18n.TranslateComponent;
 import com.github.epsilon.settings.Setting;
 import com.github.epsilon.utils.client.PlatformRequirement;
@@ -114,16 +115,21 @@ public class EnumSetting<E extends Enum<E>> extends Setting<E> {
         for (E e : constants) {
             if (matchesMode(e, mode)) {
                 setValue(e);
+                return;
             }
         }
+        // 配置里的枚举值对不上（改名/降级/手改）时必须留下诊断，而不是静默保留默认值。
+        Constants.LOGGER.warn("枚举设置 {} 无法匹配值 {}，保留当前值 {}", getName(), mode, getValue());
     }
 
     public void setModeSilently(String mode) {
         for (E e : constants) {
             if (matchesMode(e, mode)) {
                 setValueSilently(e);
+                return;
             }
         }
+        Constants.LOGGER.warn("枚举设置 {} 无法匹配值 {}，保留当前值 {}", getName(), mode, getValue());
     }
 
     public void setMode(E mode) {

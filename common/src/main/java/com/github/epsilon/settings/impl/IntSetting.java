@@ -26,7 +26,8 @@ public class IntSetting extends Setting<Integer> {
     }
 
     public void setUnboundedValue(Integer value) {
-        super.setValue(value);
+        // GUI 文本输入与配置回填都走这里：不夹紧会让越界值进入运行态并被写回配置文件。
+        super.setValue(Mth.clamp(value, min, max));
     }
 
     public int getMin() {
