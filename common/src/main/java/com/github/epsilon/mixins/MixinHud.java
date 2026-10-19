@@ -104,7 +104,7 @@ public class MixinHud {
 
     @Inject(method = "extractTabList", at = @At("HEAD"), cancellable = true)
     private void onExtractTabList(GuiGraphicsExtractor graphics, DeltaTracker deltaTracker, CallbackInfo ci) {
-        if (Island.INSTANCE.isEnabled()) ci.cancel();
+        if (Island.INSTANCE.isEnabled() && Island.INSTANCE.isTabListActive()) ci.cancel();
     }
 
 }

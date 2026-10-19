@@ -67,11 +67,18 @@ public class HudElementManager {
         }
         scene.endFrame();
 
+        // renderOverlay 的坐标来自 Lumin 空间（元素布局也是），必须与编辑器路径一样做缩放补偿，
+        // 否则 Render Scale 与原版 GUI Scale 不一致时装备图标/面板错位。
+        var graphics = event.getGuiGraphics();
+        float overlayScale = (float) (com.github.epsilon.graphics.LuminRenderSystem.getGuiScale() / mc.getWindow().getGuiScale());
+        graphics.pose().pushMatrix();
+        graphics.pose().scale(overlayScale, overlayScale);
         for (HudModule element : elements) {
             if (element.isEnabled()) {
-                element.renderOverlay(event.getGuiGraphics(), mc.getDeltaTracker());
+                element.renderOverlay(graphics, mc.getDeltaTracker());
             }
         }
+        graphics.pose().popMatrix();
     }
 
 }

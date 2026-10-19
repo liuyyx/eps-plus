@@ -116,6 +116,8 @@ public class Island extends HudModule {
 
         TargetInstance instance = LandController.INSTANCE.getInstance(TargetInstance.class);
         if (target != null && (instance == null || instance.getTarget() != target)) {
+            // 旧实例还会活 1.2s（isClosed 有计时器），不清理会每帧堆一个并反复重置血条动画。
+            LandController.INSTANCE.removeInstances(TargetInstance.class);
             LivingEntity captured = target;
             LandController.INSTANCE.post(new TargetInstance(captured, textRendererSupplier,
                     new CheckPattern(() -> target != captured))
@@ -158,8 +160,13 @@ public class Island extends HudModule {
         }
     }
 
+    /** 原版 Tab 列表被 Island 接管的条件；MixinHud 必须用同一判据，否则取消后无人绘制。 */
+    public boolean isTabListActive() {
+        return tabList.getValue() && !nullCheck() && mc.gui.screen() == null && mc.options.keyPlayerList.isDown();
+    }
+
     private void updateTabListInstance() {
-        if (!tabList.getValue() || nullCheck() || mc.gui.screen() != null || !mc.options.keyPlayerList.isDown()) {
+        if (!isTabListActive()) {
             LandController.INSTANCE.removeInstances(TabListInstance.class);
             return;
         }

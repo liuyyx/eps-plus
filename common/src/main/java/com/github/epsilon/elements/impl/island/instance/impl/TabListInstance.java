@@ -118,7 +118,8 @@ public class TabListInstance extends LandInstance {
         rows = total == 0 ? 0 : (int) Math.ceil(total / (double) columns);
 
         float gapsWidth = COL_GAP * Math.max(0, columns - 1);
-        float screenMaxWidth = Math.max(1f, mc.getWindow().getGuiScaledWidth() - 50f);
+        // Island 全部画在 Lumin 空间；用原版 GUI 宽度会在 Render Scale 不同时裁错列宽。
+        float screenMaxWidth = Math.max(1f, com.github.epsilon.graphics.LuminRenderSystem.getScaledWidthInt() - 50f);
         float maxColumnWidth = Math.max(1f, (screenMaxWidth - gapsWidth) / columns);
         float columnWidth = Math.min(computeBaseRowWidth(showScore), maxColumnWidth);
 

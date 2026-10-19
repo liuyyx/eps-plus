@@ -18,6 +18,7 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
@@ -127,13 +128,14 @@ public class MixinLocalPlayer extends AbstractClientPlayer {
         return event.isSlowdown();
     }
 
-    @Inject(method = "move", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/player/AbstractClientPlayer;move(Lnet/minecraft/world/entity/MoverType;Lnet/minecraft/world/phys/Vec3;)V"), cancellable = true)
-    private void onMove(MoverType moverType, Vec3 delta, CallbackInfo ci) {
+    @ModifyVariable(method = "move", at = @At("HEAD"), argsOnly = true)
+    private Vec3 modifyMoveDelta(Vec3 delta) {
         MoveEvent event = EventBus.INSTANCE.post(new MoveEvent(delta.x, delta.y, delta.z));
-        if (event.isCancelled()) {
-            super.move(moverType, new Vec3(event.getX(), event.getY(), event.getZ()));
-            ci.cancel();
-        }
+        if (!event.isCancelled()) return delta;
+        // 只替换参数，不能 cancel 掉 LocalPlayer.move：
+        // 它后面还有 updateAutoJump / addWalkedDistance（自动跳跃与潜行距离统计），
+        // 原先在 super.move 后 cancel 会把这两步一起丢掉。
+        return new Vec3(event.getX(), event.getY(), event.getZ());
     }
 
 }

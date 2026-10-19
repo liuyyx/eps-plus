@@ -65,7 +65,9 @@ public class LandController {
 
     public <T extends LandInstance> T getInstance(Class<T> type) {
         if (type == null) return null;
-        for (LandInstance instance : instances) {
+        // 与 update() 的选取规则一致：优先级相同时取列表中最后一个（最新）。
+        for (int i = instances.size() - 1; i >= 0; i--) {
+            LandInstance instance = instances.get(i);
             if (type.isInstance(instance)) {
                 return type.cast(instance);
             }
