@@ -45,6 +45,7 @@ import com.github.epsilon.utils.player.InvUtils;
 import com.github.epsilon.utils.player.RotationUtility;
 import com.github.epsilon.utils.player.SkipTickUtility;
 import com.github.epsilon.utils.render.animation.Easing;
+import com.github.epsilon.utils.rotation.Priority;
 import com.github.epsilon.utils.rotation.RaytraceUtils;
 import com.github.epsilon.utils.rotation.Rot2f;
 import com.github.epsilon.utils.rotation.RotationUtils;
@@ -982,8 +983,8 @@ public class Scaffold extends Module {
 
             rotateCount++;
             Rot2f rotation = getRotation(blockPos, direction);
-            RotationManager.INSTANCE.rotations = rotation;
-            RotationManager.INSTANCE.setActive(true);
+            // 走公开 API：优先级门、target/lastRotations 记账由托管器统一维护（直写字段会绕过仲裁）。
+            RotationManager.INSTANCE.setRotationsDirect(rotation, Priority.Medium);
 
             mc.getConnection().send(new ServerboundMovePlayerPacket.Rot(rotation.getYaw(), rotation.getPitch(), mc.player.onGround(), mc.player.horizontalCollision));
 
@@ -1186,7 +1187,9 @@ public class Scaffold extends Module {
             total += mc.player.getOffhandItem().getCount();
         }
 
-        int maxSlot = swapMode.is(SwapMode.InvSwitch) ? mc.player.getInventory().getContainerSize() : 9;
+        // 26.2 的 getContainerSize() = 36 主背包 + 7 装备槽（含 index 40 = 副手），
+        // 而副手已在上面单独计入 ⇒ 这里只扫 36 个主槽，避免副手被重复计数。
+        int maxSlot = swapMode.is(SwapMode.InvSwitch) ? 36 : 9;
         for (int i = 0; i < maxSlot; i++) {
             ItemStack stack = mc.player.getInventory().getItem(i);
             if (isValidStack(stack)) {

@@ -375,7 +375,7 @@ public final class ElowenScaffold {
         sneakCounter = 0;
         // 漏了这个闩门会让「卡住自救」在新世界里整段被跳过（它只在坠落分支被置 false）。
         canPlaceFlag = true;
-        RotationManager.INSTANCE.setActive(false);
+        releaseManagedRotationIfOwned();
     }
 
     /** [elowen o/Y/Z/Scaffold.java:977-990] onDisable() */
@@ -393,7 +393,20 @@ public final class ElowenScaffold {
         placeModeHandler.onDisable();
         // [适配·必须] elowen 的 RotationManager 有自己的停用路径；Epsilon 侧托管必须显式释放，
         // 否则准星与 MovementFix 会永久粘在旧角（见 RotationMouseHandler 注释）。
-        RotationManager.INSTANCE.setActive(false);
+        releaseManagedRotationIfOwned();
+    }
+
+    /** 只在托管角确实由本引擎提交时才释放（避免清掉同刻其它模块的托管状态）。 */
+    private void releaseManagedRotationIfOwned() {
+        if (!RotationManager.INSTANCE.isActive()) {
+            return;
+        }
+        Rot2f managed = RotationManager.INSTANCE.getRotation();
+        if (managed != null
+                && Math.abs(managed.getYaw() - currentRotation.getYaw()) < 0.01f
+                && Math.abs(managed.getPitch() - currentRotation.getPitch()) < 0.01f) {
+            RotationManager.INSTANCE.setActive(false);
+        }
     }
 
     // ===== 每刻 =====
@@ -414,7 +427,9 @@ public final class ElowenScaffold {
         // 共享放置节流（Place Delay + 随机量）：每刻只自减一次。
         module.tickPlaceCooldown();
         if (mc.gui.screen() != null || mc.player == null) {
+            // 必须提交：否则 RotationManager 仍持有上一刻脚本角，开背包/商店时朝向被钉死在旧角。
             currentRotation.set(serverYaw(), serverPitch());
+            commitRotation();
             return;
         }
         updateGroundState();
@@ -637,6 +652,12 @@ public final class ElowenScaffold {
         if (!mainHandPlaceable && !offHandPlaceable) {
             return;
         }
+        if (mc.player.getInventory().getSelectedSlot() >= 0) {
+            ItemStack current = mc.player.getInventory().getItem(mc.player.getInventory().getSelectedSlot());
+            if (current != null && current.getItem() instanceof BlockItem && module.isValidStack(current)) {
+                return; // 当前槽已合法，不动
+            }
+        }
         for (int slot = 0; slot < 9; ++slot) {
             ItemStack slotStack = mc.player.getInventory().getItem(slot);
             if (!(slotStack.getItem() instanceof BlockItem)) {
@@ -645,10 +666,9 @@ public final class ElowenScaffold {
             if (!module.isValidStack(slotStack)) {
                 continue;
             }
-            if (mc.player.getInventory().getSelectedSlot() == slot) {
-                break;
-            }
+            // 取第一个合法槽即停：原实现缺 break，会把选中槽改成最后一个合法方块。
             mc.player.getInventory().setSelectedSlot(slot);
+            return;
         }
     }
 

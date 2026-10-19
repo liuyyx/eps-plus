@@ -488,7 +488,9 @@ public final class ScaffoldPolarCoordinator implements RequestHandler.Provider {
     private void tick() {
         // LB: updateRenderCount(blockCount) —— 渲染计数不搬
         // LB: waitTicks(currentDelay) 的等价物：等待期整段跳过 tickHandler（但 rotationUpdate/update 照常）
-        if (waitTicks > 1) {
+        // LB waitTicks(currentDelay) 等价物：等待刻数就是 waitTicks 值（原先 >1 会少等一刻，
+        // Delay=1 时退化成「一刻都不等」）。
+        if (waitTicks > 0) {
             waitTicks--;
             return;
         }
@@ -848,6 +850,11 @@ public final class ScaffoldPolarCoordinator implements RequestHandler.Provider {
         if (module.polarModesSneak.getValue()) modes.add(ScaffoldGodBridgeTechnique.Mode.SNEAK);
         if (module.polarModesStopInput.getValue()) modes.add(ScaffoldGodBridgeTechnique.Mode.STOP_INPUT);
         if (module.polarModesStepBack.getValue()) modes.add(ScaffoldGodBridgeTechnique.Mode.BACKWARDS);
+        // LB 的 "Modes" 多选不可为空（canBeNone=false）；四个开关全关时空集合会让
+        // randomMode() 抛 NoSuchElementException，整刻的边缘处理被异常打断。
+        if (modes.isEmpty()) {
+            modes.add(ScaffoldGodBridgeTechnique.Mode.JUMP);
+        }
         technique.setModes(modes);
 
         technique.setForceSneakBelowCount(module.polarForceSneakBelow.getValue());
