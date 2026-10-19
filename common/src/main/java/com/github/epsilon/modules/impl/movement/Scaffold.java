@@ -1073,6 +1073,12 @@ public class Scaffold extends Module {
     private void onElowenUseItem(StartUseItemEvent event) {
         if (!isElowenMode()) return;
 
+        // 只在手上真有可放置方块时接管右键：原实现无条件 cancel，
+        // 会让 Elowen 模式下的吃/喝/开箱/射箭全部失效（Raven 引擎同样只在 active 时接管）。
+        if (!isValidStack(mc.player.getMainHandItem()) && !isValidStack(mc.player.getOffhandItem())) {
+            return;
+        }
+
         event.cancel();
         elowenScaffold.onUseItem(event);
     }

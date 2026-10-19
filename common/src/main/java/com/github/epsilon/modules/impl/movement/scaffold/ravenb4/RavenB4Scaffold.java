@@ -469,11 +469,16 @@ public final class RavenB4Scaffold {
         }
         ItemStack itemStack = mc.player.getMainHandItem();
         if (!module.isValidStack(itemStack)) {
-            // 参考：if (!autoSwap.isToggled() || AutoSwapModule.countBlocks() == 0) stop();
-            if (!module.ravenAutoSwap.getValue() || module.getBlockCount() == 0) {
-                stop();
+            // 副手也可能是可放置方块（getPlacementHand 支持 OFF_HAND）；原实现直接 return，
+            // 会让 active 残留 true（右键劫持 + 托管角不停），而 getBlockCount 又把副手算进总数。
+            boolean offhandPlaceable = module.isValidStack(mc.player.getOffhandItem());
+            if (!offhandPlaceable) {
+                if (!module.ravenAutoSwap.getValue() || module.getBlockCount() == 0) {
+                    stop();
+                }
+                return;
             }
-            return;
+            itemStack = mc.player.getOffhandItem();
         }
         long l = System.currentTimeMillis();
         if (!active) {
@@ -1259,8 +1264,8 @@ public final class RavenB4Scaffold {
             if (facing != null) {
                 Vec3 vec3 = hitVec(pos, facing);
                 BlockHitResult hit = new BlockHitResult(vec3, facing, pos, false);
-                if (isReplaceable(hit.getBlockPos().relative(hit.getDirection()))) {
-                    placeAt(hit, itemStack);
+                if (isReplaceable(hit.getBlockPos().relative(hit.getDirection()))
+                        && placeAt(hit, itemStack)) {
                     placedAt = System.currentTimeMillis();
                     placed.put(pos, placedAt);
                     if (fastScaffold.ticks == -1) {
@@ -1298,7 +1303,9 @@ public final class RavenB4Scaffold {
         if (hit == null) {
             return false;
         }
-        placeAt(hit, itemStack);
+        if (!placeAt(hit, itemStack)) {
+            return false;
+        }
         lastPlaced = target;
         placedAt = System.currentTimeMillis();
         placed.put(target, placedAt);

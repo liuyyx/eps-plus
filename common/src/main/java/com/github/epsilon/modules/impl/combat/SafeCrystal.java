@@ -90,7 +90,9 @@ public class SafeCrystal extends Module {
                     mc.player
             ));
 
-            if (blockHit.getType() == HitResult.Type.MISS) {
+            // clip 返回 MISS 表示射线没有命中任何方块（视线通畅）；命中方块才是被遮挡。
+            // 原条件写反了：视线通畅时 return、被遮挡时反而攻击。
+            if (blockHit.getType() != HitResult.Type.MISS) {
                 return;
             }
         }

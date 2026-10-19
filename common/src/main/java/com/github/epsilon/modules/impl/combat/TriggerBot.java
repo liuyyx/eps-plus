@@ -56,11 +56,15 @@ public class TriggerBot extends Module {
         Entity target = getCrosshairTarget();
         if (target == null) return;
 
+        // 两道门必须独立：shouldAttack()==false 一律不攻击（原实现只在 delay>0 时 return，
+        // delay 归零后仍会打，且 delay 只在「不该打」分支里递减，随机延迟设置实际失效）。
         if (!shouldAttack()) {
-            if (delay > 0) {
-                delay--;
-                return;
-            }
+            return;
+        }
+
+        if (delay > 0) {
+            delay--;
+            return;
         }
 
         mc.gameMode.attack(mc.player, target);

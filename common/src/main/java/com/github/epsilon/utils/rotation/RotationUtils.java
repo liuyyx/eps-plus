@@ -390,6 +390,10 @@ public class RotationUtils {
             double deltaPitch = (targetRotation.getPitch() - lastRotation.getPitch());
 
             double distance = Math.sqrt(deltaYaw * deltaYaw + deltaPitch * deltaPitch);
+            // 目标与基准完全相同时 distance=0，delta/distance 会得到 NaN 并污染托管角（直到重生）。
+            if (distance == 0.0D) {
+                return new Rot2f(0.0f, 0.0f);
+            }
             double distributionYaw = Math.abs(deltaYaw / distance);
             double distributionPitch = Math.abs(deltaPitch / distance);
 

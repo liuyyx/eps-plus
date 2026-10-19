@@ -29,9 +29,8 @@ public class NoGhostBlocks extends Module {
         blockState.getBlock().playerWillDestroy(mc.level, event.getBlockPos(), blockState, mc.player);
     }
 
-    @EventHandler
-    private void onPlaceBlock(PlaceBlockEvent event) {
-        if (placing.getValue()) event.cancel();
-    }
+    // 幽灵方块拦截不通过取消 PlaceBlockEvent 实现：
+    // EventBus 一旦看到 isCancelled() 就中断后续派发，会吞掉 Scaffold 等模块的 PlaceBlockEvent 观察者。
+    // 真正的拦截点在 MixinBlockItem.modifyState（直接查询本模块），这里不再 cancel。
 
 }

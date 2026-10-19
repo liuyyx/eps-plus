@@ -12,11 +12,13 @@ import org.spongepowered.asm.mixin.injection.At;
 public class MixinGlDebug {
 
     @WrapOperation(method = "printDebugLog", at = @At(value = "INVOKE", target = "Lorg/slf4j/Logger;info(Ljava/lang/String;Ljava/lang/Object;)V"))
-    private static void avoidSpam(Logger instance, String s, Object o, Operation<Void> original, @Local(argsOnly = true, index = 3) int severity) {
-        if (severity != 37190) {
-            return;
+    private static void avoidSpam(Logger instance, String s, Object o, Operation<Void> original, @Local(argsOnly = true, index = 4) int severity) {
+        // index=4 才是 severity（1 source / 2 type / 3 id / 4 severity）；原 index=3 取的是消息 id。
+        // 无论是否升级，都必须转发原日志，否则驱动真实 GL 错误会从日志里静默消失。
+        original.call(instance, s, o);
+        if (severity == 37190) {
+            instance.error(s, o, new RuntimeException());
         }
-        instance.error(s, o, new RuntimeException());
     }
 
 }
