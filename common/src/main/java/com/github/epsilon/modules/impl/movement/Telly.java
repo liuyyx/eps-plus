@@ -20,6 +20,7 @@ import com.github.epsilon.modules.Module;
 import com.github.epsilon.settings.impl.BoolSetting;
 import com.github.epsilon.settings.impl.DoubleSetting;
 import com.github.epsilon.utils.client.KeybindUtils;
+import com.github.epsilon.utils.rotation.RotationUtils;
 import com.google.common.base.Suppliers;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.KeyMapping;
@@ -135,7 +136,8 @@ public class Telly extends Module {
     private int hitboxLastFace = -1;
     private boolean activationMovementHeld = false;
     private boolean antiSwayTapUsed = false;
-    private final Set<String> cancelledGhostBlocks = new HashSet<>();
+    // PacketEvent.Receive 在 Netty 线程执行（add/remove），客户端线程同时 contains/clear ⇒ 必须并发集合。
+    private final Set<String> cancelledGhostBlocks = java.util.concurrent.ConcurrentHashMap.newKeySet();
     private boolean tellyAutoPlaceWindow = false;
     private boolean autoPlaceDebugActive = false;
     private boolean safeWalkStateCaptured = false;
@@ -182,13 +184,13 @@ public class Telly extends Module {
     private float scriptedRotationPitch = 0.0f;
 
     /**
-     * ⚠️ 源客户端环境的<b>硬编码</b>灵敏度网格（对应灵敏度 0.5）。
+     * 抖动/量化的单位**一律**走 {@link RotationUtils#mouseQuantum()}（{@code f³ × 8 × 0.15}，
+     * 按本机灵敏度实时计算）—— **不要**再引入源客户端那套硬编码量子。
      *
-     * <p>本机灵敏度 0.3562555 ⇒ 真实网格 <b>0.0850°</b>，用 0.034 量化会落在错格点上
-     * （见 AGENTS.md「量化网格必须用客户端实际灵敏度」）。{@link com.github.epsilon.utils.rotation.RotationUtils}
-     * 已提供同一式子的实时值 {@code RotationUtils.mouseQuantum()}，应改用它，别再用这个常量。
+     * <p>源版（1.8.9 客户端）写的 {@code 0.03404715} 在本机只有真实网格的 0.4 格：
+     * 取整时 ±0.034 会被舍成 0（抖动被吃掉）、±0.068 被放大成整格 ⇒ 旋转退化成机器般平滑，
+     * Intave 判 {@code acting computer-like} 并踢出。见 AGENTS.md「量化网格必须用客户端实际灵敏度」。
      */
-    private static final double SENSITIVITY_QUANTUM = 0.03404715;
     private static final int[] YAW_NUDGE_PATTERN = {0, 1, -1, 2, -2};
     private int rotationStepCounter = 0;
     private static final double ACTIVATION_ACROSS_MIN = 0.38;
@@ -205,7 +207,7 @@ public class Telly extends Module {
     /**
      * 「玩家手动接管」判据：相机相对脚本给的朝向偏了多少度就认为玩家在动视角、让位给他。
      *
-     * <p>⚠️ 这里**有意偏离**脚本原实现。原版门限是 {@code SENSITIVITY_QUANTUM * 0.45 ≈ 0.015°}
+     * <p>⚠️ 这里**有意偏离**脚本原实现。原版门限是「一个灵敏度网格 × 0.45 ≈ 0.015°」
      * 再累积到 25 —— 实测它会把「按住右键+潜行时手指的微小移动」也攒成接管，
      * 16 轮实测里几乎每一轮都被它提前掐断（placedOk 停在 10~55），表现为「有时成功有时失败」。
      * 5° 是明显属于人为操作、而手抖达不到的量级。
@@ -694,6 +696,9 @@ public class Telly extends Module {
         }
         activatePromptAt = 0L;
         promptBrokeAt = 0L;
+        // 提示失效后不再沿用上一块方块的高亮框（否则玩家会照着一个早已失效的框摆位）。
+        hitboxLastPos = null;
+        hitboxLastFace = -1;
         setActivationMovementHold(false);
         if (!running) restoreSafeWalkState();
     }
@@ -741,7 +746,10 @@ public class Telly extends Module {
     }
 
     private boolean isActivationYawAligned(float yaw) {
-        float nearestDiagonal = Math.round((yaw - 45.0f) / 90.0f) * 90.0f + 45.0f;
+        // 判据必须与 aimAtActivationGrid 的吸附网格同源：原先硬编码 45°，而 Snap Degrees 允许 42~48，
+        // 只要 snapBase 偏离 45 超过容差（42/48），吸附后永远判不通过 ⇒ 提示不出、模块无法激活。
+        float base = snapBase.getValue().floatValue();
+        float nearestDiagonal = Math.round((yaw - base) / 90.0f) * 90.0f + base;
         return Math.abs(tellyWrapAngle(yaw - nearestDiagonal)) <= ACTIVATION_YAW_TOLERANCE;
     }
 
@@ -797,7 +805,9 @@ public class Telly extends Module {
         sb.append(pitch >= activationPitch() ? "√低头" : "×低头");
         sb.append(String.format(Locale.ROOT, "%.0f ", pitch));
 
-        float nearestDiagonal = Math.round((yaw - 45.0f) / 90.0f) * 90.0f + 45.0f;
+        // 与 isActivationYawAligned 同源，避免「诊断说 √ 但实际判据用另一套网格」。
+        float snapBaseValue = snapBase.getValue().floatValue();
+        float nearestDiagonal = Math.round((yaw - snapBaseValue) / 90.0f) * 90.0f + snapBaseValue;
         float yawDelta = Math.abs(tellyWrapAngle(yaw - nearestDiagonal));
         sb.append(yawDelta <= ACTIVATION_YAW_TOLERANCE ? "√对角" : "×对角");
         sb.append(String.format(Locale.ROOT, "%.2f ", yawDelta));
@@ -1431,8 +1441,15 @@ public class Telly extends Module {
         if (player == null) return;
 
         applySmoothedRotation();
-        rotationStartYaw = player.getYRot();
-        rotationStartPitch = player.getXRot();
+        // 运行中必须以**上一刻的脚本角**为插值起点：此时玩家的真实视角可能已被别的模块
+        // 或玩家自己的鼠标改过，拿它当起点会让曲线断裂、出现脚本之外的跳变。
+        if (running) {
+            rotationStartYaw = scriptedRotationYaw;
+            rotationStartPitch = scriptedRotationPitch;
+        } else {
+            rotationStartYaw = player.getYRot();
+            rotationStartPitch = player.getXRot();
+        }
         float correctedTargetYaw = targetYaw;
         boolean adaptivePlacementTarget = running
                 && tellyAutoPlaceWindow
@@ -1447,7 +1464,7 @@ public class Telly extends Module {
         }
 
         rotationStepCounter++;
-        correctedTargetYaw += (float) (SENSITIVITY_QUANTUM * YAW_NUDGE_PATTERN[rotationStepCounter % 5]);
+        correctedTargetYaw += (float) (RotationUtils.mouseQuantum() * YAW_NUDGE_PATTERN[rotationStepCounter % 5]);
 
         rotationTargetYaw = rotationStartYaw + tellyWrapAngle(correctedTargetYaw - rotationStartYaw);
         rotationTargetPitch = clamp(targetPitch, -90.0f, 90.0f);
@@ -1477,9 +1494,22 @@ public class Telly extends Module {
         if (progress >= 1.0) rotationActive = false;
     }
 
+    /**
+     * 把 {@code value} 沿 {@code origin} 方向截断到**本机实时**灵敏度网格的整数倍。
+     *
+     * <p>量子取自 {@link RotationUtils#mouseQuantum()}，与发包时的
+     * {@code RotationUtils.applySensitivityPatch} 同源；用源客户端那套硬编码常量会在本机落在错格点上。
+     *
+     * <p>**截断而非四舍五入**：脚本原实现是 {@code delta -= delta % gcd}（向零取整）。
+     * 早先这里写成 {@code Math.round}，每步会多走半格，与脚本曲线对不上。
+     */
     private float quantizeFrom(float origin, float value) {
-        double steps = Math.round((value - origin) / SENSITIVITY_QUANTUM);
-        return (float) (origin + steps * SENSITIVITY_QUANTUM);
+        double quantum = RotationUtils.mouseQuantum();
+        if (quantum <= 0.0) return value;
+
+        double delta = value - origin;
+        delta -= delta % quantum;
+        return (float) (origin + delta);
     }
 
     // =====================================================================
@@ -3018,6 +3048,9 @@ public class Telly extends Module {
 
     private int getConditionModeCheck(LocalPlayer player) {
         if (forcedModeCheck != 0) return forcedModeCheck;
+        // Telly 运行时本身就是对角线直线桥；中段 forward-only 输入会被误判成 mode 2（斜向搜索），
+        // 再被 isStraightTellyTarget 否掉，表现就是「不走直线 / 方块连不起来」。
+        if (running) return 1;
         return getDetectedModeCheck(player);
     }
 
