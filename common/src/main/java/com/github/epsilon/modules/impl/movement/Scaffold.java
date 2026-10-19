@@ -711,6 +711,14 @@ public class Scaffold extends Module {
         lastElowenActive = false;
         lastRavenActive = false;
         renderBoxes.clear();
+        // SkipTick 计数器是全局静态的：不清就会把上一次会话残留的跳刻带到本次启用，
+        // 启用后玩家会被取消实体 tick（冻结）最多 12 刻。
+        SkipTickUtility.reset();
+        skipTickRecoveryActive = false;
+        skipTickRecoveryFailed = false;
+        skipTickRecoveryCandidateTicks = 0;
+        skipTickRecoveryBlockPos = null;
+        skipTickRecoveryFace = null;
         // LB ModuleScaffold.onEnabled()（404–412）
         ScaffoldPolarCoordinator.INSTANCE.onEnabled();
     }
@@ -749,6 +757,14 @@ public class Scaffold extends Module {
             ravenScaffold.onDisable();
             lastRavenActive = false;
         }
+
+        // 关模块时同样清掉跳刻残留与自救状态，避免带进下一次启用。
+        SkipTickUtility.reset();
+        skipTickRecoveryActive = false;
+        skipTickRecoveryFailed = false;
+        skipTickRecoveryCandidateTicks = 0;
+        skipTickRecoveryBlockPos = null;
+        skipTickRecoveryFace = null;
     }
 
     private HeypixelScaffold getUitemsMode(Mode mode) {

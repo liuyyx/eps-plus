@@ -21,7 +21,9 @@ public class AcaRotation implements RotationHandler {
     @Override
     public Rot2f apply(ElowenScaffold engine, Rot2f current, Rot2f target, float maxStep) {
         // 原：RotationUtils.e(current.H, target.H) * STEP_FACTOR（e = wrapDegrees(a - b)）
-        float stepYaw = Mth.wrapDegrees(current.getYaw() - target.getYaw()) * STEP_FACTOR;
+        // 步长方向必须与 pitch 同向（朝目标收敛）：原实现取 current-target 会持续外扩、
+        // 永远进不了 0.5° 的吸附分支（与 CurveRotation 已修的同一类错误）。
+        float stepYaw = Mth.wrapDegrees(target.getYaw() - current.getYaw()) * STEP_FACTOR;
         float stepPitch = (target.getPitch() - current.getPitch()) * STEP_FACTOR;
         double distance = Math.sqrt(stepYaw * stepYaw + stepPitch * stepPitch);
         if (distance > MAX_STEP) {

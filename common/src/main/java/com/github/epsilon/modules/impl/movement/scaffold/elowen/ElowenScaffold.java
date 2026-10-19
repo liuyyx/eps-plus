@@ -282,6 +282,12 @@ public final class ElowenScaffold {
 
     /** 物理按键是否真的按下（elowen 的 {@code Scaffold.isKeyDown(KeyMapping)}，走 mixin accessor 取 key）。 */
     private static boolean physicalKeyDown(KeyMapping mapping) {
+        // 26.2 的 InputConstants.isKeyDown 是纯键盘查询（glfwGetKey）；
+        // 键位绑到鼠标时 getValue() 是原始按钮号 1..8，必须走鼠标分支，否则查的是同号键盘键。
+        if (mapping.key.getType() == com.mojang.blaze3d.platform.InputConstants.Type.MOUSE) {
+            return org.lwjgl.glfw.GLFW.glfwGetMouseButton(mc.getWindow().handle(),
+                    mapping.key.getValue()) == org.lwjgl.glfw.GLFW.GLFW_PRESS;
+        }
         int code = KeybindUtils.getKey(mapping);
         return code >= 0 && InputConstants.isKeyDown(mc.getWindow(), code);
     }
@@ -291,12 +297,13 @@ public final class ElowenScaffold {
         return physicalKeyDown(mc.options.keyJump);
     }
 
-    /** 原 {@code Scaffold.isMoving()} 的 live 支。 */
+    /** 原 {@code Scaffold.isMoving()}：读**输入向量**（elowen 1.8.9 的 movementInput 语义）。 */
     public boolean isMoving() {
         if (mc.player == null) {
             return false;
         }
-        return mc.player.getDeltaMovement().horizontalDistance() - 0.01 > 0.0;
+        var move = mc.player.input.getMoveVector();
+        return move.y != 0.0f || move.x != 0.0f;
     }
 
     /**
@@ -366,6 +373,8 @@ public final class ElowenScaffold {
         lastRotationPacketTick = -1L;
         tickCounter = 0L;
         sneakCounter = 0;
+        // 漏了这个闩门会让「卡住自救」在新世界里整段被跳过（它只在坠落分支被置 false）。
+        canPlaceFlag = true;
         RotationManager.INSTANCE.setActive(false);
     }
 
@@ -911,8 +920,8 @@ public final class ElowenScaffold {
         }
         if (module.elowenSwing.getValue()) {
             mc.player.swing(hand, false);
+            mc.getConnection().send(new ServerboundSwingPacket(hand));
         }
-        mc.getConnection().send(new ServerboundSwingPacket(InteractionHand.MAIN_HAND));
         // 放置成功：重掷共享冷却，避免逐刻连发形成规律时序。
         module.markPlaceCooldown(2);
         return true;
@@ -1047,7 +1056,9 @@ public final class ElowenScaffold {
         if (targetCenter == null) {
             return;
         }
-        if (targetCenter.subtract(mc.player.getEyePosition()).lengthSqr() - 20.25 <= 0.0) {
+        // 目标就在脚下/身侧，距离必然 < 4.5 格：原判据「≤4.5 就 return」把整条放置链封死，
+        // 必须是「超过交互距离才放弃」。
+        if (targetCenter.subtract(mc.player.getEyePosition()).lengthSqr() - 20.25 > 0.0) {
             return;
         }
         int placeDelay = module.elowenPlaceDelay.getValue();
@@ -1055,7 +1066,9 @@ public final class ElowenScaffold {
             return;
         }
         Rot2f current = currentRotation;
-        if (canReachBlock(current, target)) {
+        // 必须「够得到」才尝试放置：原判据取反（够得到就 return、够不到才往下走），
+        // 而 placeBlock 又要求射线命中该目标 ⇒ 两条分支都不可能放置。
+        if (!canReachBlock(current, target)) {
             return;
         }
         if (postPlaceGate <= 0 && canPlaceFlag && motionCooldown <= 0 && stuckCounter >= 8) {

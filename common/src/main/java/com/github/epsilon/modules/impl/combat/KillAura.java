@@ -332,7 +332,9 @@ public class KillAura extends Module {
         }
 
         HitResult hitResult = RotationManager.INSTANCE.getHitResult();
-        if (!aimMode.is(AimMode.Polar) && hitSelect.getValue() && hitResult instanceof EntityHitResult entityHitResult && entityHitResult.getEntity() instanceof Player player && !AntiBot.INSTANCE.isBot(player) && !TargetManager.INSTANCE.isSameTeam(player) && velocity.attackQueue <= 0) {
+        if (!aimMode.is(AimMode.Polar) && hitSelect.getValue() && hitResult instanceof EntityHitResult entityHitResult
+                && isAttackable(entityHitResult.getEntity()) && velocity.attackQueue <= 0) {
+            var player = (LivingEntity) entityHitResult.getEntity();
             ClientPacketListener connection = mc.getConnection();
             PlayerInfo localPlayerInfo = connection == null ? null : connection.getPlayerInfo(mc.player.getUUID());
             int latencyTicks = localPlayerInfo == null ? 0 : localPlayerInfo.getLatency() / 50;
@@ -384,12 +386,9 @@ public class KillAura extends Module {
         // Polar 的点击节奏在 onClientTick 按刻推进；渲染事件是逐帧的，不能作为其计时基准
         if (target != null && !aimMode.is(AimMode.Polar) && Velocity.INSTANCE.attackQueue <= 0) {
             HitResult hitResult = RotationManager.INSTANCE.getHitResult();
-            // 无论 Hit Select 开关，都必须命中一个合法目标才排队：
-            // 关闭 Hit Select 时不得对队友 / 假人 / 非目标实体出刀。
-            if (!(hitResult instanceof EntityHitResult entityHitResult) || !isAttackable(entityHitResult.getEntity())) {
-                return;
-            }
-            if (!hitSelect.getValue() || entityHitResult.getEntity() instanceof Player) {
+            // 无论 Hit Select 开关，都必须命中一个合法目标才排队；
+            // 用嵌套而不是 return：return 会跳过本方法后面整段 ESP 渲染。
+            if (hitResult instanceof EntityHitResult entityHitResult && isAttackable(entityHitResult.getEntity())) {
                 switch (mode.getValue()) {
                     case OnePointNinePlus -> {
                         if (attacks == 0 && mc.player.getAttackStrengthScale(0.5f) >= 1.0f) {
