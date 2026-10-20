@@ -1,5 +1,7 @@
 package com.github.epsilon.modules.impl.movement;
 
+import com.github.epsilon.Constants;
+
 import com.github.epsilon.events.bus.EventHandler;
 import com.github.epsilon.events.bus.EventPriority;
 import com.github.epsilon.events.impl.GameJoinedEvent;
@@ -1221,21 +1223,29 @@ public class Telly extends Module {
                     || changedState.canBeReplaced();
             if (running && becamePassable && isStraightTellyTarget(changed)) {
                 // 服务端回发「放置位仍是空气」= 那次放置被服务端静默拒绝。
-                // 打上距离与当时的 support/face，用于区分「距离/命中点不合规」还是「时序」。
-                LocalPlayer lp = mc.player;
-                String eyeDist = lp == null ? "-" : String.format(Locale.ROOT, "%.3f",
-                        getEyes(lp).distanceTo(Vec3.atCenterOf(new BlockPos(changed[0], changed[1], changed[2]))));
-                dbg(() -> "SERVER-SWALLOW at=" + java.util.Arrays.toString(changed)
-                        + " name=" + blockNameAt(changed[0], changed[1], changed[2])
-                        + " lastPlaced=" + java.util.Arrays.toString(lastPlacedPos)
-                        + " lastSupport=" + java.util.Arrays.toString(lastSupportPos)
-                        + " lastFace=" + lastSupportFace
-                        + " reach=" + String.format(Locale.ROOT, "%.3f", reach())
-                        + " eyeDist=" + eyeDist
-                        + " tick=" + currentClientTick);
+                // 这里在 netty 线程：getEyes/blockNameAt 会读 mc.player/mc.level，必须搬回客户端线程。
+                if (mc.isSameThread()) {
+                    logSwallowed(changed);
+                } else {
+                    mc.execute(() -> logSwallowed(changed));
+                }
             }
         }
         return true;
+    }
+
+    private void logSwallowed(int[] changed) {
+        if (!running || mc.player == null || mc.level == null) return;
+        String eyeDist = String.format(Locale.ROOT, "%.3f",
+                getEyes(mc.player).distanceTo(Vec3.atCenterOf(new BlockPos(changed[0], changed[1], changed[2]))));
+        dbg(() -> "SERVER-SWALLOW at=" + java.util.Arrays.toString(changed)
+                + " name=" + blockNameAt(changed[0], changed[1], changed[2])
+                + " lastPlaced=" + java.util.Arrays.toString(lastPlacedPos)
+                + " lastSupport=" + java.util.Arrays.toString(lastSupportPos)
+                + " lastFace=" + lastSupportFace
+                + " reach=" + String.format(Locale.ROOT, "%.3f", reach())
+                + " eyeDist=" + eyeDist
+                + " tick=" + currentClientTick);
     }
 
     // =====================================================================
@@ -3768,7 +3778,7 @@ public class Telly extends Module {
     /** 调试日志出口：受 Debug Log 设置控制，只写 latest.log，不进聊天栏。 */
     private void dbg(String message) {
         if (debugLog.getValue()) {
-            System.out.println("[Telly] " + message);
+            Constants.LOGGER.info("[Telly] {}", message);
         }
     }
 
@@ -3781,7 +3791,7 @@ public class Telly extends Module {
      */
     private void dbg(Supplier<String> message) {
         if (debugLog.getValue()) {
-            System.out.println("[Telly] " + message.get());
+            Constants.LOGGER.info("[Telly] {}", message.get());
         }
     }
 
