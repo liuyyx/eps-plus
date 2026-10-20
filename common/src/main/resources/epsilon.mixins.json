@@ -57,6 +57,7 @@
     "MixinItemEntityRenderer",
     "MixinItemFeatureRenderer",
     "MixinItemInHandRenderer",
+    "MixinKeyMapping",
     "MixinKeyboardHandler",
     "MixinKeyboardInput",
     "MixinLevelExtractor",
@@ -82,7 +83,9 @@
     "MixinVisGraph",
     "MixinWalkAnimationState",
     "MixinWebBlock",
-    "MixinWindow"
+    "MixinWindow",
+    "MixinYsmAvatarRenderer",
+    "MixinYsmLivingEntityRenderer"
   ],
   "injectors": {
     "defaultRequire": 1

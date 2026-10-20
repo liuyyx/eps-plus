@@ -593,13 +593,19 @@ public class Telly extends Module {
         return 75.0f;
     }
 
+    /** 自动换槽前玩家手上的槽位；停止时恢复。 */
+    private int restoreSelectedSlot = -1;
+
     private void handleAutoSwap(LocalPlayer player) {
         if (!autoSwap.getValue()) return;
 
         int threshold = 5;
         ItemStack held = player.getMainHandItem();
-        int heldCount = held != null && isUsableBlockStack(held) ? held.getCount() : 0;
+        boolean heldUsable = held != null && isUsableBlockStack(held);
+        int heldCount = heldUsable ? held.getCount() : 0;
         if (heldCount > threshold) return;
+        // 只换同类方块：原先只比数量，会把木板桥中途换成圆石。
+        net.minecraft.world.item.Item heldItem = heldUsable ? held.getItem() : null;
 
         int bestSlot = -1;
         int bestSize = heldCount;
@@ -607,13 +613,19 @@ public class Telly extends Module {
             if (slot == mc.player.getInventory().getSelectedSlot()) continue;
             ItemStack stack = mc.player.getInventory().getItem(slot);
             if (!isUsableBlockStack(stack)) continue;
+            if (heldItem != null && stack.getItem() != heldItem) continue;
             if (stack.getCount() > bestSize) {
                 bestSize = stack.getCount();
                 bestSlot = slot;
             }
         }
 
-        if (bestSlot != -1) mc.player.getInventory().setSelectedSlot(bestSlot);
+        if (bestSlot != -1) {
+            if (restoreSelectedSlot == -1) {
+                restoreSelectedSlot = mc.player.getInventory().getSelectedSlot();
+            }
+            mc.player.getInventory().setSelectedSlot(bestSlot);
+        }
     }
 
     /** 等待时间换算为毫秒，供内部计时比较。 */
@@ -1185,7 +1197,13 @@ public class Telly extends Module {
 
     private boolean onPacketReceived(Packet<?> packet) {
         if (running && packet instanceof ClientboundPlayerPositionPacket) {
-            stopAutomation(true);
+            // PacketEvent.Receive 在 netty 线程：stopAutomationInner 会写通知队列、
+            // 改 setSprinting、KeyMapping、GLFW 与 ModuleManager，必须回主线程执行。
+            if (mc.isSameThread()) {
+                stopAutomation(true);
+            } else {
+                mc.execute(() -> stopAutomation(true));
+            }
             return true;
         }
         if (packet instanceof ClientboundBlockUpdatePacket change && change.getPos() != null) {
@@ -1370,6 +1388,10 @@ public class Telly extends Module {
             releaseMovementKeys();
             restorePhysicalUse();
             setPressed("attack", physicalLeftMouseDown());
+            if (restoreSelectedSlot >= 0 && restoreSelectedSlot < 9) {
+                mc.player.getInventory().setSelectedSlot(restoreSelectedSlot);
+            }
+            restoreSelectedSlot = -1;
         } catch (Exception ignored) {
         }
 
@@ -2141,7 +2163,8 @@ public class Telly extends Module {
             return placementFail("look-misaligned", placedPos, supportPos, face, player);
         }
 
-        if (cancelledGhostBlocks.contains(posKey(supportPos))) {
+        // 写入/移除都记录被放置格；原先这里查 supportPos（差一格），守卫永不命中。
+        if (cancelledGhostBlocks.contains(posKey(placedPos))) {
             return placementFail("cancelled-ghost", placedPos, supportPos, face, player);
         }
         if (!isReplaceable(placedPos[0], placedPos[1], placedPos[2])) {
@@ -3678,7 +3701,11 @@ public class Telly extends Module {
 
     private void setPressed(String key, boolean state) {
         KeyMapping mapping = mapping(key);
-        if (mapping != null) mapping.setDown(state);
+        if (mapping == null) return;
+        // 26.2 的 use/attack/sneak/sprint 是 ToggleKeyMapping：开启原版 toggle 时
+        // setDown(false) 是空操作、setDown(true) 变成取反，脚本无法可靠控制。
+        // 直接写基类 KeyMapping.isDown 字段（见 MixinKeyMapping）。
+        ((com.github.epsilon.interfaces.KeyMappingAccessor) mapping).epsilon$setDownState(state);
     }
 
     private int keyCode(String key) {
