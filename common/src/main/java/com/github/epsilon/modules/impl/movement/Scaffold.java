@@ -1178,6 +1178,7 @@ public class Scaffold extends Module {
 
     @EventHandler
     private void onPacketSend(PacketEvent.Send event) {
+        if (mc.player == null) return;
         if (event.getPacket() instanceof ServerboundUseItemPacket packet) {
             ItemStack usedStack = mc.player.getItemInHand(packet.getHand());
             if (usedStack.is(Items.ENDER_PEARL) || usedStack.isEmpty() && mc.player.getCooldowns().isOnCooldown(Items.ENDER_PEARL.getDefaultInstance())) {

@@ -36,8 +36,11 @@ public final class YsmPhysics {
                     ? 1.0f : Math.min(this.response, 1000.0f);
             float dt = Float.isFinite(timeStep) ? Math.max(0.0f, timeStep) : 0.0f;
             float t = Mth.clamp(dt / resp, 0.0f, 1.0f);
-            float next = (1.0f - t) * this.lastSimulation + t * this.input;
-            this.lastSimulation = Float.isFinite(next) ? next : this.input;
+            // input 同样是模型文件里的外部输入：非有限值不能写回状态，否则 NaN/Inf 会永久粘住。
+            float in = Float.isFinite(this.input) ? this.input
+                    : (Float.isFinite(this.lastSimulation) ? this.lastSimulation : 0.0f);
+            float next = (1.0f - t) * this.lastSimulation + t * in;
+            this.lastSimulation = Float.isFinite(next) ? next : in;
         }
 
         @Override
@@ -64,14 +67,17 @@ public final class YsmPhysics {
 
         @Override
         public void update(float timeStep) {
-            float in = this.input;
+            // input 是外部输入：非有限值回落到当前状态，避免污染并永久持 Inf。
+            float in = Float.isFinite(this.input) ? this.input
+                    : (Float.isFinite(this.lastSimulation) ? this.lastSimulation : 0.0f);
             // freq/coeff 下限必须 > 0：原 clamp 允许 0 ⇒ k1/k2/k3 出现 Inf，Inf-Inf=NaN 并常驻骨骼变换
             // （模型整只炸开）。模型文件里的参数是外部输入，必须做非退化与有限性校验。
             float freq = !Float.isFinite(this.frequency) || this.frequency <= 0.0f
                     ? 1.0f : Mth.clamp(this.frequency, 0.01f, 5.0f);
             float coeff = !Float.isFinite(this.coefficient) || this.coefficient <= 0.0f
                     ? 0.01f : Mth.clamp(this.coefficient, 0.01f, 1.0f);
-            float resp = Float.isFinite(this.response) ? this.response : 0.0f;
+            float resp = !Float.isFinite(this.response) || this.response < 0.0f
+                    ? 0.0f : Math.min(this.response, 1000.0f);
 
             float k1 = coeff / Mth.PI / freq;
             float k2 = 1.0f / (2.0f * Mth.PI * freq) / (2.0f * Mth.PI * freq);
@@ -82,9 +88,8 @@ public final class YsmPhysics {
 
             float maxTimeStep = (float) Math.sqrt(4.0f * k2 + k1 * k1) - k1;
             int cycleTime = maxTimeStep <= 0.0f ? 1 : (int) Math.ceil(timeStep / maxTimeStep);
-            if (cycleTime < 1) {
-                cycleTime = 1;
-            }
+            // timeStep 理论上有上限（调用方 clamp 0..0.1），但别让异常值触发 2^31 次积分循环。
+            cycleTime = Mth.clamp(cycleTime, 1, 256);
             float step = timeStep / cycleTime;
 
             float sim = this.lastSimulation;
@@ -146,7 +151,7 @@ public final class YsmPhysics {
 
     /** 每帧推进（timeStep 为秒）。 */
     public void update(float timeStep) {
-        if (timeStep <= 0.0f) {
+        if (!Float.isFinite(timeStep) || timeStep <= 0.0f) {
             return;
         }
         for (Model model : this.models.values()) {

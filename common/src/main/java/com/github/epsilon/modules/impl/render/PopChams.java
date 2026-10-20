@@ -54,6 +54,12 @@ public class PopChams extends Module {
 
     @EventHandler
     private void onReceivePacket(PacketEvent.Receive event) {
+        // 收包在 netty 线程派发，模块可能带着 enabled 活过退世界 ⇒ 必须先判空/搬回客户端线程。
+        if (mc.player == null || mc.level == null) return;
+        if (!mc.isSameThread()) {
+            mc.execute(() -> onReceivePacket(event));
+            return;
+        }
         if (!(event.getPacket() instanceof ClientboundEntityEventPacket packet) || packet.getEventId() != EntityEvent.PROTECTED_FROM_DEATH)
             return;
 

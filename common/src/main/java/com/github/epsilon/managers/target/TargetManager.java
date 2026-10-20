@@ -156,12 +156,16 @@ public class TargetManager {
         if (teams.is(ClientSetting.Teams.None)) {
             return false;
         }
-        if (entity instanceof Player) {
+        if (entity instanceof Player && mc.player != null) {
+            // 没有队伍时 getTeam()/getTeamColor() 都返回默认值，直接比较会把「无队伍」当成同队，
+            // 导致 Teams 模式下所有无队伍玩家都被判为队友。
             if (teams.is(ClientSetting.Teams.Color)) {
-                return entity.getTeamColor() == mc.player.getTeamColor();
-            } else {
-                return Objects.equals(getTeam(entity), getTeam(mc.player));
+                return entity.getTeam() != null && mc.player.getTeam() != null
+                        && entity.getTeamColor() == mc.player.getTeamColor();
             }
+            String ownTeam = getTeam(entity);
+            String otherTeam = getTeam(mc.player);
+            return ownTeam != null && ownTeam.equals(otherTeam);
         }
         return false;
     }

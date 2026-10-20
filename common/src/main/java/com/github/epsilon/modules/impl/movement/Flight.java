@@ -20,6 +20,7 @@ public class Flight extends Module {
 
     @Override
     protected void onDisable() {
+        if (mc.player == null) return;
         mc.player.setDeltaMovement(0.0, 0.0, 0.0);
     }
 

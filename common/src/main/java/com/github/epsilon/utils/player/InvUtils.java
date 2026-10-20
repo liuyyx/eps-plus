@@ -138,7 +138,8 @@ public class InvUtils {
      * @param saveSwap 是否保存切换前的槽位以便恢复
      */
     public static void swap(int slot, boolean saveSwap) {
-        if (slot == 40 || mc.player.getInventory().getSelectedSlot() == slot) {
+        // slot 是快捷栏索引（0..8）；副手 40 与背包槽位不能直接写 selectedSlot。
+        if (mc.player == null || slot < 0 || slot >= 9 || mc.player.getInventory().getSelectedSlot() == slot) {
             return;
         }
 
@@ -155,7 +156,7 @@ public class InvUtils {
      * 恢复上次保存的快捷栏槽位。
      */
     public static void swapBack() {
-        if (previousSlot == -1) return;
+        if (previousSlot == -1 || mc.player == null) return;
         swap(previousSlot, false);
         previousSlot = -1;
     }

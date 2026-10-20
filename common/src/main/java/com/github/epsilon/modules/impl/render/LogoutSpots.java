@@ -73,6 +73,12 @@ public class LogoutSpots extends Module {
 
     @EventHandler
     private void onPacketReceive(PacketEvent.Receive event) {
+        // 收包在 netty 线程派发，模块可能带着 enabled 活过退世界 ⇒ 必须先判空/搬回客户端线程。
+        if (mc.player == null || mc.level == null) return;
+        if (!mc.isSameThread()) {
+            mc.execute(() -> onPacketReceive(event));
+            return;
+        }
         if (event.getPacket() instanceof ClientboundPlayerInfoUpdatePacket packet) {
             if (packet.actions().contains(Action.ADD_PLAYER)) {
                 for (Entry entry : packet.entries()) {

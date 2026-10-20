@@ -151,7 +151,7 @@ class FseTableReader
         verify(position == 0, input, "Input is corrupted");
 
         for (int i = 0; i < tableSize; i++) {
-            byte symbol = table.symbol[i];
+            int symbol = table.symbol[i] & 0xFF;
             short nextState = nextSymbol[symbol]++;
             table.numberOfBits[i] = (byte) (tableLog - highestBit(nextState));
             table.newState[i] = (short) ((nextState << table.numberOfBits[i]) - tableSize);
