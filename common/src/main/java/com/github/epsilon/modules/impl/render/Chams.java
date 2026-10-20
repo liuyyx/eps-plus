@@ -75,6 +75,10 @@ public class Chams extends Module {
     }
 
     public boolean isValidEntity(Entity entity) {
+        // GUI 预览走 EntityRenderer.createRenderState（不经过 extractEntity），accessor 取回 null。
+        if (entity == null) {
+            return false;
+        }
         if (entity instanceof Player player) {
             if (player == mc.player && !self.getValue()) {
                 return false;
