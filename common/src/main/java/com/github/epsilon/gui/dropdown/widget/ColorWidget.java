@@ -40,6 +40,7 @@ public class ColorWidget extends SettingWidget<ColorSetting> {
     private final DropdownTextField alphaField = new DropdownTextField(3, value -> value.matches("[0-9]"));
 
     private boolean opened;
+    private int lastSessionId = -1;
     private boolean pickingSB;
     private boolean pickingHue;
     private Channel pickingChannel;
@@ -62,8 +63,14 @@ public class ColorWidget extends SettingWidget<ColorSetting> {
 
     @Override
     public void draw(UiTree.Scope scope, UiTextMetrics textMetrics, int mouseX, int mouseY) {
-        // -1 / Integer.MIN_VALUE 是框架的「无 hover」哨兵；直接当坐标会把颜色改成白色。
-        if (mouseX < 0 || mouseY < 0) return;
+        // 会话切换（关闭后重开）必须清掉 picking，否则 ESC 中断的取色会在下次打开时继续改颜色。
+        int session = DropdownScreen.INSTANCE.getSessionId();
+        if (session != lastSessionId) {
+            lastSessionId = session;
+            pickingSB = false;
+            pickingHue = false;
+            pickingChannel = null;
+        }
         syncAlphaAvailability();
         openAnim.run(opened ? 1.0f : 0.0f);
         float t = openAnim.getValue();
@@ -98,7 +105,10 @@ public class ColorWidget extends SettingWidget<ColorSetting> {
         }
         drawSliderPicker(scope, gradX + gradW * hsb[0], hueY, hueH);
 
-        if (pickingSB) {
+        // -1 / Integer.MIN_VALUE 是框架的「无 hover」哨兵：只跳过取值更新，控件本身照常绘制。
+        boolean hasMouse = mouseX >= 0 && mouseY >= 0;
+
+        if (pickingSB && hasMouse) {
             DropdownScreen.INSTANCE.react(ReisaDropdownCompanion.Action.COLOR_PICK);
             float newSat = Mth.clamp((mouseX - absoluteX(gradX)) / gradW, 0.0f, 1.0f);
             float newBri = 1.0f - Mth.clamp((mouseY - absoluteY(gradY)) / (PICKER_HEIGHT * t), 0.0f, 1.0f);
@@ -107,7 +117,7 @@ public class ColorWidget extends SettingWidget<ColorSetting> {
             previewColor(newColor);
         }
 
-        if (pickingHue) {
+        if (pickingHue && hasMouse) {
             DropdownScreen.INSTANCE.react(ReisaDropdownCompanion.Action.COLOR_PICK);
             float newHue = Mth.clamp((mouseX - absoluteX(gradX)) / gradW, 0.0f, 1.0f);
             Color newColor = Color.getHSBColor(newHue, hsb[1], hsb[2]);
@@ -115,7 +125,7 @@ public class ColorWidget extends SettingWidget<ColorSetting> {
             previewColor(newColor);
         }
 
-        if (pickingChannel != null) {
+        if (pickingChannel != null && hasMouse) {
             DropdownScreen.INSTANCE.react(ReisaDropdownCompanion.Action.COLOR_PICK);
             updateChannelFromMouse(pickingChannel, mouseX);
         }

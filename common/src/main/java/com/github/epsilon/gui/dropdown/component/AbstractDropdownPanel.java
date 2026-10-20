@@ -31,6 +31,7 @@ public abstract class AbstractDropdownPanel implements DropdownPanel {
     protected float width = DropdownTheme.PANEL_WIDTH;
     protected boolean opened;
     protected boolean visible;
+    private int lastSessionId = -1;
     protected boolean dragging;
     protected float dragOffsetX;
     protected float dragOffsetY;
@@ -89,6 +90,13 @@ public abstract class AbstractDropdownPanel implements DropdownPanel {
 
     @Override
     public void beginRenderFrame(int frameId) {
+        // 会话切换（关闭后重开）必须清掉拖拽状态，否则 ESC 中断的拖动/滚动会在下次打开时继续生效。
+        int session = DropdownScreen.INSTANCE.getSessionId();
+        if (session != lastSessionId) {
+            lastSessionId = session;
+            dragging = false;
+            scrollBar.reset();
+        }
         renderFrameId = frameId;
         cachedMetricsFrameId = Integer.MIN_VALUE;
     }
