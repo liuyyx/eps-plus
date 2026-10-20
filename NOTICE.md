@@ -128,6 +128,26 @@ The AI rotation mode - feeding a combat regression model's per-tick yaw/pitch
 deltas into the rotation pipeline - was ported from this project to Epsilon's
 Minecraft 26.2 module and rotation systems.
 
+## Yes Steve Model (YSM) / OpenZen
+
+- Project: Yes Steve Model (YSM) model format and rendering, as extracted and
+  reorganised by the OpenZen client (`shit.zen.*` source structure).
+- Reference: local `ysmmodel` source tree (`main/java/ysm/**`,
+  `main/java/elfmcys/yesstevemodel/**`), Minecraft 1.20.1 Forge / mojmap.
+- Used in Epsilon: the `改人物模型` (`Ysm Model`) render module - model file
+  deserialisation (folder `.json` and binary `.ysm` formats, including the
+  bundled pure-Java Zstandard codec, xxHash, XChaCha20/ChaCha20, AES and the
+  legacy YSGP container), the bone/quad mesh builder, the keyframe/Molang/
+  physics animation player, and the vertex pipeline.
+
+The original code has been modified and adapted for Epsilon's Minecraft 26.2
+module, setting, Mixin and submit-node rendering systems: packages were renamed
+to `com.github.epsilon.ysm.*`, the custom `asm.patchify` patch classes were
+replaced by Mixins, the immediate-mode `MultiBufferSource` vertex path was
+ported to `SubmitNodeCollector.submitCustomGeometry`, `ResourceLocation` became
+`Identifier`, and the TACZ gun-animation integration was rewritten as an
+optional reflective bridge (`com.github.epsilon.ysm.compat.TaczCompat`).
+
 ## OpenOpal
 
 - Repository: [ZSZ7/OpenOpal](https://github.com/ZSZ7/OpenOpal)

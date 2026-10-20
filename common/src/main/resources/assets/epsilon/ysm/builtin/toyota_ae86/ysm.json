@@ -1,0 +1,50 @@
+{
+  "spec": 2,
+  "metadata": {
+    "name": "Toyota Sprinter Trueno",
+    "tips": "Toyota AE86",
+    "license": {
+      "type": "CC 0"
+    },
+    "authors": [
+      {
+        "name": "Nervonment",
+        "role": "模型",
+        "avatar": "avatar/401603096.png",
+        "contact": {
+          "Bilibili": "https://space.bilibili.com/401603096"
+        },
+        "comment": "看我主页"
+      }
+    ]
+  },
+  "properties": {
+    "height_scale": 1.6,
+    "width_scale": 1.6,
+    "extra_animation": {
+      "extra0": "前灯切换"
+    },
+    "extra_animation_classify": [],
+    "preview_animation": "idle",
+    "disable_preview_rotation": false,
+    "default_texture": "texture",
+    "render_layers_first": false,
+    "free": true
+  },
+  "files": {
+    "player": {
+      "model": {
+        "main": "models/main.json",
+        "arm": "models/arm.json"
+      },
+      "animation": {
+        "main": "animations/main.animation.json",
+        "extra": "animations/extra.animation.json"
+      },
+      "texture": [
+        "textures/texture.png"
+      ],
+      "sound_path": "sounds"
+    }
+  }
+}

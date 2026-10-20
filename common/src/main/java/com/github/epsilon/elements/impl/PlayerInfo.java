@@ -156,6 +156,8 @@ public class PlayerInfo extends HudModule {
 
     @EventHandler
     private void onPlayerTick(PlayerTickEvent.Post event) {
+        // 世界加载期 mc.level 可能还没建立（而 mc.player 已经有了）⇒ 必须判空。
+        if (nullCheck()) return;
         refreshRows();
     }
 

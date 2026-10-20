@@ -90,7 +90,13 @@ public final class YsmAnimationPlayer {
 
     public YsmAnimationPlayer(RawYsmModel raw, Map<String, Integer> boneIndex, boolean firstPerson) {
         this.firstPerson = firstPerson;
-        this.boneCount = boneIndex.size();
+        // 数组必须按「最大骨骼序号 + 1」分配：boneIndex 的值是骨骼在列表中的位置，
+        // 重名骨骼会让 map.size() < bones.size() ⇒ 按 size 分配会越界（模型加载失败）。
+        int maxIndex = -1;
+        for (int index : boneIndex.values()) {
+            maxIndex = Math.max(maxIndex, index);
+        }
+        this.boneCount = Math.max(boneIndex.size(), maxIndex + 1);
         this.rotationX = new float[this.boneCount];
         this.rotationY = new float[this.boneCount];
         this.rotationZ = new float[this.boneCount];

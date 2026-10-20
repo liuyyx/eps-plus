@@ -1,0 +1,46 @@
+{
+	"format_version": "1.8.0",
+	"animations": {
+		"extra0": {
+			"loop": "hold_on_last_frame",
+			"animation_length": 0.5417,
+			"timeline": {
+				"0.0": ["v.roaming.to_be_closed = v.roaming.is_open;", "v.roaming.to_be_open = !v.roaming.is_open;"]
+			}
+		},
+		"parallel0": {
+			"loop": "hold_on_last_frame",
+			"animation_length": 0.5,
+			"bones": {
+				"light_l": {
+					"rotation": {
+						"0.0": ["v.roaming.is_open?-90:0", 0, 0],
+						"0.5": [
+							"(v.roaming.is_open && v.roaming.to_be_closed) ? 0 : ( (!v.roaming.is_open && v.roaming.to_be_open) ? -90 : (v.roaming.is_open ?  -90 : 0))",
+							0,
+							0
+						]
+					}
+				},
+				"light_r": {
+					"rotation": {
+						"0.0": ["v.roaming.is_open?-90:0", 0, 0],
+						"0.5": [
+							"(v.roaming.is_open && v.roaming.to_be_closed) ? 0 : ( (!v.roaming.is_open && v.roaming.to_be_open) ? -90 : (v.roaming.is_open ?  -90 : 0))",
+							0,
+							0
+						]
+					}
+				}
+			},
+			"timeline": {
+				"0.5": [
+					"v.roaming.is_open = v.roaming.to_be_closed ? false : v.roaming.is_open;",
+					"v.roaming.to_be_closed = false;",
+					"v.roaming.is_open = v.roaming.to_be_open ? true : v.roaming.is_open;",
+					"v.roaming.to_be_open = false;"
+				]
+			}
+		}
+	}
+}
