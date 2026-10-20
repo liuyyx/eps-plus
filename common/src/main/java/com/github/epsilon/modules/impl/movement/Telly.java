@@ -1949,6 +1949,12 @@ public class Telly extends Module {
 
     private boolean isUsableBlockStack(ItemStack stack) {
         if (stack == null || stack.isEmpty() || !(stack.getItem() instanceof BlockItem)) return false;
+        // 名称黑名单永远列不全（wall/bars/chain/candle/lantern…）；先按碰撞形状排除非完整方块。
+        net.minecraft.world.level.block.state.BlockState state =
+                ((BlockItem) stack.getItem()).getBlock().defaultBlockState();
+        if (!state.isCollisionShapeFullBlock(net.minecraft.world.level.EmptyBlockGetter.INSTANCE, BlockPos.ZERO)) {
+            return false;
+        }
         String name = BuiltInRegistries.ITEM.getKey(stack.getItem()).getPath().toLowerCase(Locale.ROOT);
         for (String bad : UNPLACEABLE_EXACT) {
             if (name.equals(bad)) return false;
@@ -2024,12 +2030,9 @@ public class Telly extends Module {
             return;
         }
 
-        if (!isBlockBelowPlayerReplaceable(player)) {
-            clearCachedCandidate();
-            if (useSuppressed) restoreUseToPhysicalState();
-            return;
-        }
-
+        // 不再用「脚下那一格」做全局门：实际目标来自 3x3 邻域/朝向偏移，
+        // 脚下实心不代表没有合法目标（实测 curY 与 feetY-1 83% 不一致）。
+        // 目标格是否可替换由 attemptPlacement 的 target-not-replaceable 检查负责。
         float yaw = player.getYRot();
         float basePitch = sanitizePitch(player.getXRot(), player.getXRot());
         Object[] candidate = resolveCandidateWithOffCursorSilentPitch(player, yaw, basePitch, heldStack);
@@ -2122,9 +2125,6 @@ public class Telly extends Module {
         if (!isStraightTellyTarget(placedPos)) {
             return placementFail("not-straight", placedPos, supportPos, face, player);
         }
-        if (!isBlockBelowPlayerReplaceable(player)) {
-            return placementFail("below-not-empty", placedPos, supportPos, face, player);
-        }
         if (!isUsableBlockStack(player.getMainHandItem())) {
             return placementFail("no-block", placedPos, supportPos, face, player);
         }
@@ -2206,7 +2206,8 @@ public class Telly extends Module {
 
     private Object[] resolveCandidateWithOffCursorSilentPitch(LocalPlayer player, float yaw, float basePitch, ItemStack heldStack) {
         float safeBasePitch = sanitizePitch(basePitch, player.getXRot());
-        Object[] previousCandidate = cachedCandidate;
+        // 只有本刻解析出的候选才能复用；跨刻候选的位置/角度已过期，重新打时间戳会把它伪装成“本刻已解析”。
+        Object[] previousCandidate = cachedCandidateTick == currentClientTick ? cachedCandidate : null;
         Object[] baseCandidate = resolveCandidateForCurrentTick(player, yaw, safeBasePitch, heldStack);
         if (baseCandidate == null) {
             if (previousCandidate != null) {

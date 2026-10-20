@@ -547,11 +547,11 @@ public final class ScaffoldPolarCoordinator implements RequestHandler.Provider {
 
         BlockHitResult currentCrosshairTarget = technique.getCrosshairTarget(target, currentRotation);
 
-        // [适配] LB 的 delay 决定放置节奏（1 = 不额外节流）。
-        //   `Place Delay`(Classic 那套) 仍作为**用户可调的上限**叠加：默认 1/0 时不会额外拖慢
-        //   （`nextPlaceDelayTicks()` = placeDelay + rand(0..random) = 1 = 不等待），
-        //   想压 Matrix `sfd.dly` 时上调它即可 —— 代价是桥速下降，调到 3 以上就会跟不上走路速度。
-        int currentDelay = Math.max(randomDelay(), module.nextPlaceDelayTicks());
+        // [适配] LB 的 delay 决定放置节奏（0 = 每刻都放）。
+        //   Place Delay（Classic 那套）作为**上限**：取两者较小值。
+        //   之前用 Math.max 把它变成下界 —— 极地 Delay 调到 0 也永远降不下来（LB 的 0..0 不可达），
+        //   且其默认 placeDelayRandom=2 会把默认节奏抬到 1..3 刻（注释里却按 1/0 推理）。
+        int currentDelay = Math.min(randomDelay(), module.nextPlaceDelayTicks());
 
         // LB: hasBlockInMainHand / hasBlockInOffHand / handleSilentBlockSelection
         //     [适配] 用 Epsilon 的 findBlockResult()/Swap Mode 设施（用户决策）。
@@ -887,8 +887,10 @@ public final class ScaffoldPolarCoordinator implements RequestHandler.Provider {
         ScaffoldEagleFeature.setEdgeDistanceMax(module.polarEdgeDistanceMax.getValue().floatValue());
         ScaffoldEagleFeature.setOnlyOnGround(module.polarOnlyOnGround.getValue());
 
-        int cpsMin = module.polarClickCpsMin.getValue();
-        int cpsMax = module.polarClickCpsMax.getValue();
+        // 两个设置互相独立：Min > Max 时 IntRange.random() 会抛 NoSuchElementException，
+        // 异常会中断整段 syncSettings/tickPolar 并让 Clicker 永久不可用。
+        int cpsMin = Math.min(module.polarClickCpsMin.getValue(), module.polarClickCpsMax.getValue());
+        int cpsMax = Math.max(module.polarClickCpsMin.getValue(), module.polarClickCpsMax.getValue());
         if (clicker.getCps().first() != cpsMin || clicker.getCps().last() != cpsMax) {
             clicker.setCps(cpsMin, cpsMax);
         }
