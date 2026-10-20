@@ -207,6 +207,11 @@ public class PlayerAlarms extends Module {
 
     @EventHandler
     private void onReceivePacket(PacketEvent.Receive event) {
+        // PacketEvent.Receive 由 netty 线程派发；共享的 HashSet/HashMap 只在客户端线程改。
+        if (!mc.isSameThread()) {
+            mc.execute(() -> onReceivePacket(event));
+            return;
+        }
         if (nullCheck()) return;
 
         // Player Join

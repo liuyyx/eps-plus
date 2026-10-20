@@ -61,7 +61,8 @@ public class Xray extends Module {
     private final BoolSetting lava = boolSetting("Lava", false);
 
     private final TimerUtils delayTimer = new TimerUtils();
-    private final java.util.Set<BlockPos> ores = new java.util.LinkedHashSet<>();
+    // PacketEvent.Receive 在 netty IO 线程派发，而客户端线程会遍历/removeIf：必须并发安全。
+    private final java.util.Set<BlockPos> ores = java.util.Collections.newSetFromMap(new java.util.concurrent.ConcurrentHashMap<>());
     private final ArrayList<BlockPos> toCheck = new ArrayList<>();
     private final ArrayList<BlockMemory> checked = new ArrayList<>();
     private BlockPos displayBlock;
