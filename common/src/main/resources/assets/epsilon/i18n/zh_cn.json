@@ -16,7 +16,7 @@
       "visible": "可见",
       "hidden": "隐藏",
       "state": {
-        "prefix": "",
+        "prefix": "已",
         "enabled": "开启",
         "disabled": "关闭"
       }

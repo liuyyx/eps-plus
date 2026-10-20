@@ -178,7 +178,7 @@ public class ModuleManager {
 
     private void addModule(Module module) {
         modules.add(module);
-        module.initI18n(EpsilonTranslateComponent.create("modules", module.getName().toLowerCase()));
+        module.initI18n(EpsilonTranslateComponent.create("modules", module.getName().toLowerCase(java.util.Locale.ROOT)));
     }
 
     public List<Module> getModules() {

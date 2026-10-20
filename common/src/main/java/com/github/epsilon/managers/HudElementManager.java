@@ -46,7 +46,7 @@ public class HudElementManager {
 
     private void addElement(HudModule module) {
         elements.add(module);
-        module.initI18n(EpsilonTranslateComponent.create("elements", module.getName().toLowerCase()));
+        module.initI18n(EpsilonTranslateComponent.create("elements", module.getName().toLowerCase(java.util.Locale.ROOT)));
     }
 
     public List<HudModule> getElements() {

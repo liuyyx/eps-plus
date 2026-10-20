@@ -54,7 +54,7 @@ public class Module implements SettingHost {
             initGroupI18n(moduleComponent, group);
         }
         for (Setting<?> setting : settings) {
-            setting.initTranslateComponent(moduleComponent.createChild(setting.getName().toLowerCase()));
+            setting.initTranslateComponent(moduleComponent.createChild(setting.getName().toLowerCase(java.util.Locale.ROOT)));
         }
     }
 
@@ -62,7 +62,7 @@ public class Module implements SettingHost {
      * 递归初始化分组翻译组件；子分组 key 逐级拼接在父分组 key 之下。
      */
     private static void initGroupI18n(TranslateComponent parentComponent, SettingGroup group) {
-        TranslateComponent component = parentComponent.createChild(group.getName().toLowerCase());
+        TranslateComponent component = parentComponent.createChild(group.getName().toLowerCase(java.util.Locale.ROOT));
         group.initTranslateComponent(component);
         for (SettingGroup child : group.getChildren()) {
             initGroupI18n(component, child);

@@ -80,7 +80,7 @@ public class I18NFileGenerator {
     private static void addEpsilonKeys(JsonObject root) {
         I18NJson.addTranslation(root, EPSILON_OWNER, "");
         for (Category category : Category.values()) {
-            String catKey = PREFIX + "categories." + category.toString().toLowerCase();
+            String catKey = PREFIX + "categories." + category.toString().toLowerCase(java.util.Locale.ROOT);
             I18NJson.addTranslation(root, catKey, "");
         }
 
@@ -121,7 +121,7 @@ public class I18NFileGenerator {
 
         if (setting instanceof EnumSetting<?> enumSetting) {
             for (final var mode : enumSetting.getModes()) {
-                I18NJson.addTranslation(root, settingKey + "." + mode.toString().toLowerCase(), "");
+                I18NJson.addTranslation(root, settingKey + "." + mode.toString().toLowerCase(java.util.Locale.ROOT), "");
             }
         }
     }

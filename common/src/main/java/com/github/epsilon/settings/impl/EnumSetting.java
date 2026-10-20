@@ -30,7 +30,7 @@ public class EnumSetting<E extends Enum<E>> extends Setting<E> {
         super.initTranslateComponent(component);
         modeTranslations.clear();
         for (E m : constants) {
-            modeTranslations.put(m, component.createChild(m.toString().toLowerCase()));
+            modeTranslations.put(m, component.createChild(m.toString().toLowerCase(java.util.Locale.ROOT)));
         }
     }
 
