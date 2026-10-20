@@ -41,7 +41,7 @@ public class NormalMode implements PlaceModeHandler {
                 && engine.jumpSprint()
                 && !engine.sneakRequested()) {
             // 原：module.j.Z(RotationUtils.i(module.v(), module.j.H, module.c()))
-            engine.currentRotation.setYaw(ElowenScaffold.stepTo(engine.currentRotation.getYaw(), engine.serverYaw(), engine.backRotationSpeed()));
+            engine.currentRotation.setYaw(ElowenScaffold.stepTo(engine.currentRotation.getYaw(), engine.cameraYaw(), engine.backRotationSpeed()));
             return;
         }
         Rot2f targetRotation = engine.getTargetRotation();

@@ -89,7 +89,6 @@ public class Scaffold extends Module {
                         BlockPos elowenTarget = elowenScaffold.getRenderBlock();
                         if (render.getValue() && elowenTarget != null) {
                             AABB elowenBox = new AABB(elowenTarget).inflate(0.002);
-                            Render3DScheduler.INSTANCE.addFilledBox(elowenBox, sideColor.getValue());
                             Render3DScheduler.INSTANCE.addOutlineBox(elowenBox, lineColor.getValue());
                         }
                     }
@@ -99,7 +98,6 @@ public class Scaffold extends Module {
                         BlockPos ravenTarget = ravenScaffold.getRenderBlock();
                         if (ravenTarget != null) {
                             AABB ravenBox = new AABB(ravenTarget).inflate(0.002);
-                            Render3DScheduler.INSTANCE.addFilledBox(ravenBox, sideColor.getValue());
                             Render3DScheduler.INSTANCE.addOutlineBox(ravenBox, lineColor.getValue());
                         }
                         if (ravenHighlightBlocks.getValue() && !ravenScaffold.getPlacedBlocks().isEmpty()) {
@@ -110,7 +108,7 @@ public class Scaffold extends Module {
                                 int alpha = (int) (255.0f - progress * 255.0f);
                                 if (alpha <= 0) continue;
                                 AABB box = new AABB(entry.getKey()).inflate(0.002);
-                                Render3DScheduler.INSTANCE.addFilledBox(box, new Color(sideColor.getValue().getRed(),
+                                Render3DScheduler.INSTANCE.addOutlineBox(box, new Color(lineColor.getValue().getRed(),
                                         sideColor.getValue().getGreen(), sideColor.getValue().getBlue(), alpha));
                             }
                         }
@@ -136,10 +134,8 @@ public class Scaffold extends Module {
 
                         float alphaFactor = box.fade() ? Mth.clamp(1.0f - progress, 0.0f, 1.0f) : 1.0f;
 
-                        Color sideColor = box.sideColor();
                         Color lineColor = box.lineColor();
 
-                        Color side = new Color(sideColor.getRed(), sideColor.getGreen(), sideColor.getBlue(), (int) (sideColor.getAlpha() * alphaFactor));
                         Color line = new Color(lineColor.getRed(), lineColor.getGreen(), lineColor.getBlue(), (int) (lineColor.getAlpha() * alphaFactor));
 
                         AABB renderBox = box.aabb;
@@ -149,7 +145,6 @@ public class Scaffold extends Module {
                             renderBox = AABB.ofSize(renderBox.getCenter(), renderBox.getXsize() * scale, renderBox.getYsize() * scale, renderBox.getZsize() * scale);
                         }
 
-                        Render3DScheduler.INSTANCE.addFilledBox(renderBox, side);
                         Render3DScheduler.INSTANCE.addOutlineBox(renderBox, line);
                     }
                 }

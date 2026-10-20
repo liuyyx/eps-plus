@@ -227,6 +227,16 @@ public final class ElowenScaffold {
         return module.elowenRotationSpeed.getValue();
     }
 
+    /** 玩家真实视角 yaw（相机）：旋转求解的稳定基准，不能用托管角（会形成反馈自旋）。 */
+    public float cameraYaw() {
+        return mc.player != null ? mc.player.getYRot() : serverYaw();
+    }
+
+    /** 玩家真实视角 pitch。 */
+    public float cameraPitch() {
+        return mc.player != null ? mc.player.getXRot() : serverPitch();
+    }
+
     /** elowen 的 {@code module.v()}（Back Rotation Speed）。 */
     public float backRotationSpeed() {
         return module.elowenBackRotationSpeed.getValue();
@@ -460,7 +470,14 @@ public final class ElowenScaffold {
             }
         }
         jumpKeyPhysicallyDown = physicalKeyDown(mc.options.keyJump);
-        placeModeHandler.onTick(this, targetBlock);
+        // 没有可放置目标时不求解旋转：否则 getTargetRotation 会持续把托管角当基准偏移，表现成原地转圈。
+        if (targetBlock != null) {
+            placeModeHandler.onTick(this, targetBlock);
+        } else if (!isMoving()) {
+            // 站定时回到玩家视角，避免脚本角把准星钉在最后一次放置方向上。
+            currentRotation.setYaw(ElowenScaffold.stepTo(currentRotation.getYaw(), cameraYaw(), backRotationSpeed()));
+            currentRotation.setPitch(ElowenScaffold.stepTo(currentRotation.getPitch(), cameraPitch(), backRotationSpeed()));
+        }
         if (motionCooldown > 0) {
             motionCooldown--;
         }
@@ -753,15 +770,15 @@ public final class ElowenScaffold {
     /** [elowen o/Y/Z/Scaffold.java:638-643] getTargetRotation() */
     public Rot2f getTargetRotation() {
         if (isJumpingWithoutMoving() && mc.hitResult != null) {
-            return new Rot2f(serverYaw() - 180.0f, 90.0f);
+            return new Rot2f(cameraYaw() - 180.0f, 90.0f);
         }
         return computeTargetRotation();
     }
 
     /** [elowen o/Y/Z/Scaffold.java:646-698] computeTargetRotation() */
     public Rot2f computeTargetRotation() {
-        Rot2f rotation = new Rot2f(serverYaw() - 180.0f, 82.0f);
-        float yaw = serverYaw();
+        Rot2f rotation = new Rot2f(cameraYaw() - 180.0f, 82.0f);
+        float yaw = cameraYaw();
         float jitter = MathUtils.getRandom(0.0f, 0.5f) - 0.25f;
         if (!mc.options.keyDown.isDown()) {
             yaw += 180.0f;

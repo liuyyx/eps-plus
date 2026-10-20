@@ -33,7 +33,7 @@ public class TellyBridgeMode implements PlaceModeHandler {
             return;
         }
         if (mc.player.onGround() && engine.isMoving()) {
-            float baseYaw = engine.serverYaw();
+            float baseYaw = engine.cameraYaw();
             Rot2f stepTarget = new Rot2f(baseYaw, engine.currentRotation.getPitch());
             engine.currentRotation = engine.rotationHandler().apply(engine, engine.currentRotation, stepTarget, engine.backRotationSpeed());
             // 原：float f5 = Math.abs(RotationUtils.e(j.H, f4)) - 1.0f; 再把「负号」折成 1 / 0
