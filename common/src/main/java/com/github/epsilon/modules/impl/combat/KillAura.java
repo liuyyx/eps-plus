@@ -358,8 +358,9 @@ public class KillAura extends Module {
     private void onPlayerTick(PlayerTickEvent.Pre event) {
         HitResult hitResult = RotationManager.INSTANCE.getHitResult();
         while (attacks > 0) {
-            attacks--;
+            // 先判暂停再出队：原先先 attacks-- 再 return，进食/NoSlowdown 期间会白丢一次排队攻击。
             if (pauseOnEat.getValue() && PlayerUtils.isEating() || NoSlowdown.INSTANCE.isWorking()) return;
+            attacks--;
             if (hitResult instanceof EntityHitResult entityHitResult) {
                 Entity entity = entityHitResult.getEntity();
                 // 只打本刻目标列表内的实体：TargetManager 已过滤假人/队友/护甲架/类型。
