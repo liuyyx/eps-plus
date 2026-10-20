@@ -2,14 +2,15 @@ package com.github.epsilon.utils.network;
 
 import net.minecraft.network.protocol.Packet;
 
-import java.util.HashSet;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.Set;
 
 import static com.github.epsilon.Constants.mc;
 
 public class NetworkUtils {
 
-    public static final Set<Packet<?>> bypassedPackets = new HashSet<>();
+    // netty 线程（FakeLag.releaseAll）与发送线程会并发 add/contains/remove。
+    public static final Set<Packet<?>> bypassedPackets = ConcurrentHashMap.newKeySet();
 
     /**
      * 发送网络包，并使该包绕过 Epsilon 的发送事件。

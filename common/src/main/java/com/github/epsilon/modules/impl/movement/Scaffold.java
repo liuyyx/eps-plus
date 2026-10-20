@@ -1072,6 +1072,11 @@ public class Scaffold extends Module {
 
     @EventHandler
     private void onPacketReceive(PacketEvent.Receive event) {
+        // 收包在 netty 线程派发：通知与 setEnabled 都会碰 i18n/模块状态，必须搬回客户端线程。
+        if (!mc.isSameThread()) {
+            mc.execute(() -> onPacketReceive(event));
+            return;
+        }
         if (!nullCheck() && toggleOnTeleport.getValue() && pearlUsePacketSent && event.getPacket() instanceof ClientboundPlayerPositionPacket) {
             pearlUsePacketSent = false;
             NotificationManager.INSTANCE.error(this.getTranslatedName(), EpsilonTranslations.Notifications.SCAFFOLD_TOGGLE_ON_TELEPORT.getTranslatedName());
