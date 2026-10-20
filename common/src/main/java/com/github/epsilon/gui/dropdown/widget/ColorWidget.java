@@ -62,6 +62,8 @@ public class ColorWidget extends SettingWidget<ColorSetting> {
 
     @Override
     public void draw(UiTree.Scope scope, UiTextMetrics textMetrics, int mouseX, int mouseY) {
+        // -1 / Integer.MIN_VALUE 是框架的「无 hover」哨兵；直接当坐标会把颜色改成白色。
+        if (mouseX < 0 || mouseY < 0) return;
         syncAlphaAvailability();
         openAnim.run(opened ? 1.0f : 0.0f);
         float t = openAnim.getValue();

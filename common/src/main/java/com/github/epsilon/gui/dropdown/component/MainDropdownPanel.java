@@ -25,6 +25,8 @@ public class MainDropdownPanel extends AbstractDropdownPanel {
     private static final float ICON_GAP = 7.0f;
     private static final float ICON_SCALE = 0.88f;
     private static final float CONTENT_PADDING = 7.0f;
+    /** 分类图标块与设置区之间的间距：绘制与命中检测必须共用。 */
+    private static final float SETTINGS_GAP = 4.0f;
     private static final int ICON_COLUMNS = 4;
 
     private final List<Entry> entries = new ArrayList<>();
@@ -69,7 +71,7 @@ public class MainDropdownPanel extends AbstractDropdownPanel {
     @Override
     protected float computeContentHeight() {
         int rows = getIconRows();
-        return CONTENT_PADDING + rows * ICON_SIZE + Math.max(0, rows - 1) * ICON_GAP + 8.0f + CONTENT_PADDING + settingsContent.computeContentHeight(getRenderFrameId());
+        return CONTENT_PADDING + rows * ICON_SIZE + Math.max(0, rows - 1) * ICON_GAP + SETTINGS_GAP + CONTENT_PADDING + settingsContent.computeContentHeight(getRenderFrameId());
     }
 
     @Override
@@ -100,7 +102,7 @@ public class MainDropdownPanel extends AbstractDropdownPanel {
             }
         }
         int rows = getIconRows();
-        currentY += rows * ICON_SIZE + Math.max(0, rows - 1) * ICON_GAP + 4.0f + CONTENT_PADDING;
+        currentY += rows * ICON_SIZE + Math.max(0, rows - 1) * ICON_GAP + SETTINGS_GAP + CONTENT_PADDING;
         scope.rect(x + CONTENT_PADDING, currentY - 3.0f, width - CONTENT_PADDING * 2.0f, 0.7f, MD3Theme.withAlpha(MD3Theme.OUTLINE, 55));
         settingsContent.draw(scope, textMetrics, mouseX, mouseY, x, currentY, width, getRenderFrameId());
     }
@@ -120,7 +122,7 @@ public class MainDropdownPanel extends AbstractDropdownPanel {
             }
         }
         int rows = getIconRows();
-        float settingsY = currentY + rows * ICON_SIZE + Math.max(0, rows - 1) * ICON_GAP + 8.0f + CONTENT_PADDING;
+        float settingsY = currentY + rows * ICON_SIZE + Math.max(0, rows - 1) * ICON_GAP + SETTINGS_GAP + CONTENT_PADDING;
         return settingsContent.mouseClicked(mouseX, mouseY, button, x, settingsY, width);
     }
 
@@ -147,7 +149,7 @@ public class MainDropdownPanel extends AbstractDropdownPanel {
 
     private float getSettingsY() {
         int rows = getIconRows();
-        return y + DropdownTheme.PANEL_HEADER_HEIGHT - scroll + CONTENT_PADDING + rows * ICON_SIZE + Math.max(0, rows - 1) * ICON_GAP + 8.0f + CONTENT_PADDING;
+        return y + DropdownTheme.PANEL_HEADER_HEIGHT - scroll + CONTENT_PADDING + rows * ICON_SIZE + Math.max(0, rows - 1) * ICON_GAP + SETTINGS_GAP + CONTENT_PADDING;
     }
 
     private int getIconRows() {

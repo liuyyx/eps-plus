@@ -348,7 +348,10 @@ public class DropdownScreen extends Screen implements ListSettingPopupScreen {
             return true;
         }
 
-        for (DropdownPanel panel : panels) {
+        // 与 mouseClicked 一样从最上层（列表末尾）开始：否则未收到按下的面板可能先吞掉 release，
+        // 真正按下的面板 dragging 永远不复位。
+        for (int i = panels.size() - 1; i >= 0; i--) {
+            DropdownPanel panel = panels.get(i);
             if (!panel.isVisible()) continue;
             if (panel.mouseReleased(mx, my, button)) {
                 DropdownLayoutState.save(panels);
