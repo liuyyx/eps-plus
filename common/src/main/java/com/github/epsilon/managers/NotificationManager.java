@@ -25,8 +25,9 @@ public class NotificationManager {
 
     private static final int MAX_NOTIFICATIONS = 5;
 
-    private final Queue<Notification> notifications = new ArrayDeque<>();
-    private final Map<Integer, Notification> hashCodeMap = new HashMap<>();
+    // 网络线程（PacketEvent.Receive）也会投递通知，而渲染线程在遍历/清理：必须并发安全。
+    private final Queue<Notification> notifications = new java.util.concurrent.ConcurrentLinkedQueue<>();
+    private final Map<Integer, Notification> hashCodeMap = new java.util.concurrent.ConcurrentHashMap<>();
 
     private NotificationManager() {
     }
@@ -172,13 +173,13 @@ public class NotificationManager {
      * 移除已完成显示及退出动画的通知，并同步清理可替换通知索引。
      */
     public void update() {
-        Iterator<Notification> iterator = notifications.iterator();
-        while (iterator.hasNext()) {
-            Notification notification = iterator.next();
-            if (notification.isExpired()) {
-                iterator.remove();
-                unregister(notification);
-            }
+        List<Notification> expired = new ArrayList<>();
+        for (Notification notification : notifications) {
+            if (notification.isExpired()) expired.add(notification);
+        }
+        for (Notification notification : expired) {
+            notifications.remove(notification);
+            unregister(notification);
         }
     }
 
@@ -190,7 +191,8 @@ public class NotificationManager {
      * @return 当前活动通知队列
      */
     public Queue<Notification> getNotifications() {
-        return notifications;
+        // 返回快照：调用方（NVIDIANotification）会直接遍历，实时视图在并发投递下不安全。
+        return new ArrayDeque<>(notifications);
     }
 
     /**

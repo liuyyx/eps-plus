@@ -172,10 +172,14 @@ public class ModuleDetailPanel implements AutoCloseable {
 
         KeybindSetting listeningKeybindSetting = state.getListeningKeybindSetting();
         if (listeningKeybindSetting != null) {
-            listeningKeybindSetting.setValue(KeybindUtils.encodeMouseButton(event.button()));
+            // 与下拉框的 KeybindWidget 一致：左键只取消捕获，不把 "Mouse 1" 绑上去；
+            // 右侧键才写入设置。取消后继续走正常点击流程，不要吞掉整块面板的点击。
+            if (event.button() != 0) {
+                listeningKeybindSetting.setValue(KeybindUtils.encodeMouseButton(event.button()));
+            }
             state.setListeningKeybindSetting(null);
             markDirty();
-            return true;
+            return event.button() != 0;
         }
 
         if (event.button() != 0) {

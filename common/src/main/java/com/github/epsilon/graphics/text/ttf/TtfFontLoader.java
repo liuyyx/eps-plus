@@ -41,6 +41,7 @@ public class TtfFontLoader implements IFontLoader {
     private final List<TtfGlyphAtlas> atlases = new ArrayList<>();
 
     private TtfGlyphAtlas currentAtlas;
+    private volatile boolean destroyed;
     private int atlasId = 0;
     // 缺字占位字形（口字形方框）与 atlas 同生命周期：首次需要时生成并上传，之后所有缺字共用一个 atlas 单元。
     private TtfGlyphAtlas fallbackAtlas;
@@ -219,6 +220,10 @@ public class TtfFontLoader implements IFontLoader {
     }
 
     private void appendGlyph(int codepoint, TtfGlyph glyph) {
+        if (this.destroyed) {
+            freeGlyph(glyph);
+            return;
+        }
         if (glyph == null) return;
         if (glyph.glyphData() == null || glyph.alphaData() == null) {
             freeGlyph(glyph);
@@ -284,6 +289,7 @@ public class TtfFontLoader implements IFontLoader {
 
     /** 写入当前 atlas，写不下时新开一张重试；返回 null 表示两张都写不下。 */
     private TtfGlyphAtlas.GlyphUV appendToAtlas(TtfGlyph glyph) {
+        if (this.destroyed) return null;
         if (currentAtlas == null) {
             createNewAtlas();
         }
@@ -314,6 +320,7 @@ public class TtfFontLoader implements IFontLoader {
 
     @Override
     public void destroy() {
+        this.destroyed = true;
         fontFile.destroy();
         for (TtfGlyphAtlas atlas : atlases) {
             atlas.destroy();
@@ -324,6 +331,7 @@ public class TtfFontLoader implements IFontLoader {
         Arrays.fill(asciiGlyphMap, null);
         Arrays.fill(asciiAdvanceMap, ADVANCE_UNSET);
         Arrays.fill(asciiPendingGlyphs, false);
+        currentAtlas = null;
         fallbackAtlas = null;
         fallbackUv = null;
         fallbackWidth = 0;

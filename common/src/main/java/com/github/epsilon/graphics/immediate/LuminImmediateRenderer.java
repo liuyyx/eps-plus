@@ -295,17 +295,10 @@ public class LuminImmediateRenderer {
             if (!this.building || this.vertexBaseAddr == 0L) {
                 return;
             }
-            long completedVertexBaseAddr = this.vertexBaseAddr;
             this.currentOffset += this.stride;
             this.vertexCount++;
-
-            if (this.mode == PrimitiveTopology.LINES) {
-                long duplicateVertexBaseAddr = MemoryUtil.memAddress(this.ringBuffer.getMappedBuffer()) + this.currentOffset;
-                MemoryUtil.memCopy(completedVertexBaseAddr, duplicateVertexBaseAddr, this.stride);
-                this.currentOffset += this.stride;
-                this.vertexCount++;
-            }
-
+            // 不要再复制 LINES 顶点：调用方已按 [start, end] 成对提交，原版 line shader
+            // 用 gl_VertexID % 2 决定法线偏移方向。复制会把线段变成 (from,from)+(to,to) 两个退化图元。
             this.vertexBaseAddr = 0L;
         }
 
@@ -316,7 +309,7 @@ public class LuminImmediateRenderer {
             if (this.vertexBaseAddr != 0L) {
                 return true;
             }
-            long requiredBytes = this.mode == PrimitiveTopology.LINES ? this.stride * 2L : this.stride;
+            long requiredBytes = this.stride;
             this.ringBuffer.ensureCapacity(this.currentOffset + requiredBytes);
             if (!this.ringBuffer.isMapped()) {
                 this.ringBuffer.tryMap();

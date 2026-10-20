@@ -15,6 +15,7 @@ import java.nio.file.Path;
 public class TtfFontFile {
 
     private final ByteBuffer fontData;
+    private volatile boolean destroyed;
     private final STBTTFontinfo fontInfo;
 
     private final int padding;
@@ -87,6 +88,7 @@ public class TtfFontFile {
     }
 
     public synchronized TtfGlyph generateGlyph(int codepoint) {
+        if (this.destroyed) return null;
         final var glyphIndex = STBTruetype.stbtt_FindGlyphIndex(fontInfo, codepoint);
 
         // (byte) 128 溢出为 -128，于是 pixelDistScale 为负：墨迹落在 128 以下（暗），外部落在 128 以上（亮），
@@ -229,6 +231,7 @@ public class TtfFontFile {
     }
 
     public synchronized int getAdvance(int codepoint) {
+        if (this.destroyed) return 0;
         final var glyphIndex = STBTruetype.stbtt_FindGlyphIndex(fontInfo, codepoint);
 
         try (MemoryStack stack = MemoryStack.stackPush()) {
@@ -277,7 +280,10 @@ public class TtfFontFile {
         }
     }
 
-    public void destroy() {
+    /** 释放原生字体数据；与 generateGlyph/getAdvance 同锁，避免在渲染线程使用时被释放。 */
+    public synchronized void destroy() {
+        if (this.destroyed) return;
+        this.destroyed = true;
         MemoryUtil.memFree(fontData);
     }
 
