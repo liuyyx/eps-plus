@@ -383,6 +383,8 @@ public class Render3DScheduler {
 
     private void vertexLine(LuminImmediateRenderer.Lines builder, Matrix4f matrix, PoseStack.Pose pose, float x1, float y1, float z1, float x2, float y2, float z2, int color, float thickness) {
         Vector3f normal = getNormal(x1, y1, z1, x2, y2, z2);
+        // 零长度边（例如 shrink 到 0 的盒体）normalize 出 NaN，line shader 会吐出整屏三角面。
+        if (normal == null) return;
         builder.vertex(matrix, pose, x1, y1, z1, color, normal.x, normal.y, normal.z, thickness);
         builder.vertex(matrix, pose, x2, y2, z2, color, normal.x, normal.y, normal.z, thickness);
     }
@@ -392,6 +394,7 @@ public class Render3DScheduler {
         float yNormal = y2 - y1;
         float zNormal = z2 - z1;
         float normalSqrt = Mth.sqrt(xNormal * xNormal + yNormal * yNormal + zNormal * zNormal);
+        if (normalSqrt < 1.0e-6f) return null;
         return new Vector3f(xNormal / normalSqrt, yNormal / normalSqrt, zNormal / normalSqrt);
     }
 

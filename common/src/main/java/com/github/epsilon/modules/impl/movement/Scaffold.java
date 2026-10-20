@@ -144,6 +144,8 @@ public class Scaffold extends Module {
 
                         AABB renderBox = box.aabb;
                         if (box.shrink()) {
+                            // scale 收敛到 0 时盒体退化成点：既无可见面积，还会让线段的 normal 变 NaN。
+                            if (scale <= 1.0e-4) continue;
                             renderBox = AABB.ofSize(renderBox.getCenter(), renderBox.getXsize() * scale, renderBox.getYsize() * scale, renderBox.getZsize() * scale);
                         }
 

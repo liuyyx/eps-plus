@@ -111,9 +111,10 @@ public abstract class RotationManager {
             return;
         }
 
-        this.targetRotations = rotations;
+        // lastRotations 必须是独立实例：与 rotations 同引用会让「上一刻基准」恒等于当前值。
+        this.targetRotations = new Rot2f(rotations.getYaw(), rotations.getPitch());
         this.rotations = rotations;
-        this.lastRotations = rotations;
+        this.lastRotations = new Rot2f(rotations.getYaw(), rotations.getPitch());
         this.rotationSpeed = 0.0;
         this.raytrace = null;
         this.priority = priority.priority;
@@ -234,11 +235,14 @@ public abstract class RotationManager {
     }
 
     public Rot2f getRotation() {
-        return active ? rotations : new Rot2f(mc.player.getYRot(), mc.player.getXRot());
+        if (active) return rotations;
+        if (mc.player == null) return rotations != null ? rotations : new Rot2f(0.0f, 0.0f);
+        return new Rot2f(mc.player.getYRot(), mc.player.getXRot());
     }
 
     public Rot2f getLastRotation() {
-        return lastRotations != null ? lastRotations : new Rot2f(mc.player.yRotO, mc.player.xRotO);
+        if (lastRotations != null) return lastRotations;
+        return mc.player != null ? new Rot2f(mc.player.yRotO, mc.player.xRotO) : new Rot2f(0.0f, 0.0f);
     }
 
     /**
@@ -309,7 +313,10 @@ public abstract class RotationManager {
     @EventHandler(priority = -1000)
     protected void onPlayerTick(PlayerTickEvent.Pre event) {
         if (!active || rotations == null || lastRotations == null || targetRotations == null) {
-            rotations = lastRotations = targetRotations = new Rot2f(mc.player.getYRot(), mc.player.getXRot());
+            Rot2f reset = new Rot2f(mc.player.getYRot(), mc.player.getXRot());
+            rotations = new Rot2f(reset.getYaw(), reset.getPitch());
+            lastRotations = new Rot2f(reset.getYaw(), reset.getPitch());
+            targetRotations = new Rot2f(reset.getYaw(), reset.getPitch());
         }
 
         if (hasActiveRotation()) {
@@ -357,7 +364,7 @@ public abstract class RotationManager {
                 this.correctDisabledRotations(player);
             }
 
-            lastRotations = rotations;
+            lastRotations = new Rot2f(rotations.getYaw(), rotations.getPitch());
         } else {
             lastRotations = new Rot2f(player.getYRot(), player.getXRot());
         }
