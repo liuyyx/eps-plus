@@ -6,6 +6,8 @@ import net.minecraft.network.chat.MutableComponent;
 import java.util.List;
 import java.util.Locale;
 
+import static com.github.epsilon.assets.i18n.EpsilonTranslateComponent.create;
+
 /**
  * Epsilon 内置界面文案的集中注册表。
  * <p>
@@ -460,8 +462,5 @@ public class EpsilonTranslations {
         return Component.literal(text);
     }
 
-    private static TranslateComponent create(String prefix, String suffix) {
-        return EpsilonTranslateComponent.create(prefix, suffix);
-    }
 
 }
