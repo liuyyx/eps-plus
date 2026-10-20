@@ -46,7 +46,7 @@ public class MyModule extends Module {
 
 ## Setting DSL
 
-`Module` 与 `EpsilonAddon` 都实现 `SettingHost`，共享同一套 DSL，也都支持适用类型的 `onChanged` 重载。
+`Module` 实现 `SettingHost`，提供统一的设置 DSL，并支持适用类型的 `onChanged` 重载。
 
 可用设置：
 
@@ -90,20 +90,4 @@ private final IntSetting minLevel = intSetting("Min Level", 1, 1, 5, 1).group(sg
 
 ## Addon
 
-`EpsilonAddon` 提供元信息、Addon 自身设置和模块注册能力：
-
-- 必须重写 `onSetup()`。
-- 可选重写 `getDisplayName()`、`getDescription()`、`getVersion()`、`getAuthors()`。
-- 在 `onSetup()` 中通过受保护的 `registerModule(module)` 注册 Addon 模块；注册会把模块交给
-  `ModuleManager.registerAddonModule(...)` 并绑定 Addon 的翻译前缀。
-
-`AddonManager` 按 ID 去重并只执行一次 setup，空 ID 和重复 ID 的注册会被忽略并记录警告；晚注册对象不会
-自动初始化。`AddonManager.setupAddons()` 逐个隔离异常，单个 Addon 失败不会阻断其他 Addon。
-
-平台收集方式：
-
-- Fabric 使用自定义 entrypoint key `epsilon:addon`，入口实现 `FabricEpsilonAddonEntrypoint`。
-- NeoForge 通过 `NeoForge.EVENT_BUS` 发布平台 `EpsilonAddonSetupEvent` 收集 Addon。
-
-接入细节见 [Addon 开发](../addon-development.md)。强制注册、状态恢复和事件包前缀约束见
-[`AGENTS.md`](../../AGENTS.md)。
+Addon 系统已移除（提交 675fe80），当前版本不支持第三方 Addon。详情见 [Addon 开发](../addon-development.md)。

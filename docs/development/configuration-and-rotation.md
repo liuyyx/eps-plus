@@ -50,7 +50,7 @@ boolean active = RotationManager.INSTANCE.isActive();
 ```
 
 旋转值类型为 `com.github.epsilon.utils.rotation.Rot2f`。`getHitResult()` 返回按当前托管旋转计算的逻辑
-命中结果；没有活动旋转时返回 `null`。
+命中结果；没有活动旋转时回退为原版准星结果（`mc.hitResult`），可能为 `null`。
 
 Rotation priority 与 EventBus priority 是两套系统：
 

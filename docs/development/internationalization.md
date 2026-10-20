@@ -83,13 +83,12 @@ Fabric 通过 `ResourceLoader.registerReloadListener`、NeoForge 通过 `AddClie
    python scripts/complete_i18n.py --source neoforge --owner epsilon
    ```
 
-   脚本支持 `--source fabric|neoforge|custom`、`--empty-i18n`、`--target`、`--owner`（本体用
-   `epsilon`，Addon 用其 addonId）、`--dry-run` 与 `--no-backup`；未指定参数时进入交互选择。
+   脚本支持 `--source fabric|neoforge|custom`、`--empty-i18n`、`--target`、`--owner`（当前仅支持
+   `epsilon`；Addon 系统已移除）、`--dry-run` 与 `--no-backup`；未指定参数时进入交互选择。
 3. 人工填写新增翻译，确认 `en_us.json` 与 `zh_cn.json` 都是合法嵌套 object。
 4. 通过完整构建验证资源处理。
 
-注意：26.2.x 的 `I18NFileGenerator` 目前只遍历本体 key、分类、静态 `EpsilonTranslations` 以及已注册
-模块/HUD（含带 addonId 的 Addon 模块），Addon 自身 setting 的模板生成尚未启用；这部分 key 需要按
-`{addonId}.settings.*` 约定手工维护。
+注意：26.2.x 的 `I18NFileGenerator` 只遍历本体 key、分类、静态 `EpsilonTranslations` 以及已注册
+模块/HUD；Addon 系统已移除，不再有 `addonId` 维度。
 
 Key、`_value` 和叶节点类型的强制约束见 [`AGENTS.md`](../../AGENTS.md)。

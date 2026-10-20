@@ -67,7 +67,8 @@ final class I18NJson {
     }
 
     private static void readNode(String key, JsonElement node, BiConsumer<String, JsonElement> output) {
-        if (node != null && node.isJsonPrimitive()) {
+        // AGENTS.md：叶节点只能是字符串；数字/布尔虽也是 JsonPrimitive，必须拒绝。
+        if (node != null && node.isJsonPrimitive() && node.getAsJsonPrimitive().isString()) {
             output.accept(key, node);
             return;
         }
@@ -78,7 +79,7 @@ final class I18NJson {
         for (Map.Entry<String, JsonElement> entry : node.getAsJsonObject().entrySet()) {
             if (VALUE_PROPERTY.equals(entry.getKey())) {
                 JsonElement value = entry.getValue();
-                if (!value.isJsonPrimitive()) {
+                if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isString()) {
                     throw new JsonParseException("Expected an i18n string at " + key + "." + VALUE_PROPERTY);
                 }
                 output.accept(key, value);
