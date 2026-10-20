@@ -207,12 +207,13 @@ public class RotationUtils {
         Vec3 basePos = entity.position();
 
         for (double yPercent = 1; yPercent >= 0; yPercent -= 0.25 + Math.random() * 0.1) {
-            for (double xPercent = 1; xPercent >= -0.5; xPercent -= 0.5) {
-                for (double zPercent = 1; zPercent >= -0.5; zPercent -= 0.5) {
+            // x/z 以包围盒中心为基准，只能用半宽；原先用整宽会让采样点落到盒外半个身位。
+            for (double xPercent = 1; xPercent >= -1; xPercent -= 0.5) {
+                for (double zPercent = 1; zPercent >= -1; zPercent -= 0.5) {
 
-                    double offsetX = (maxX - minX) * xPercent;
+                    double offsetX = (maxX - minX) * xPercent * 0.5;
                     double offsetY = (maxY - minY) * yPercent;
-                    double offsetZ = (maxZ - minZ) * zPercent;
+                    double offsetZ = (maxZ - minZ) * zPercent * 0.5;
 
                     Vec3 targetPoint = basePos.add(offsetX, offsetY, offsetZ);
 

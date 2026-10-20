@@ -216,8 +216,11 @@ public abstract class RotationManager {
     protected void correctDisabledRotations(LocalPlayer player) {
         Rot2f playerRotation = new Rot2f(player.getYRot(), player.getXRot());
         Rot2f fixedRotations = RotationUtils.applySensitivityPatch(playerRotation, lastRotations);
-        float fixedYaw = fixedRotations.getYaw() + Mth.wrapDegrees(player.getYRot() - fixedRotations.getYaw());
+        // 保留玩家的整圈数，只把角度对齐到鼠标网格（wrapDegrees 对 <0.83° 残差恒为恒等，原先等于没写）。
+        float fixedYaw = fixedRotations.getYaw()
+                + 360.0f * Math.round((player.getYRot() - fixedRotations.getYaw()) / 360.0f);
         player.setYRot(fixedYaw);
+        player.setXRot(clampPitch(fixedRotations.getPitch()));
     }
 
     public float getYaw() {
@@ -344,7 +347,9 @@ public abstract class RotationManager {
         if (active && rotations != null) {
             handleSendPosition(event);
 
-            if (Math.abs((rotations.getYaw() - player.getYRot()) % 360) < 1 && Math.abs((rotations.getPitch() - player.getXRot())) < 1) {
+            // yaw 是无限增长的量：必须用角度差归一化，不能用 Java 取余（±360 边界处永不释放）。
+            if (Math.abs(Mth.wrapDegrees(rotations.getYaw() - player.getYRot())) < 1
+                    && Math.abs(rotations.getPitch() - player.getXRot()) < 1) {
                 active = false;
                 priority = 0;
                 this.correctDisabledRotations(player);
