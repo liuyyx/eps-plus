@@ -74,7 +74,9 @@ public class Phase extends Module {
 
         if (!nullCheck() && mc.player.onGround() && mode.is(Mode.CCClip)) {
             double[] diagonalOffset = MoveUtils.forwardWithoutStrafe(0.44);
-            boolean diagonal = mc.player.getYRot() % 90 > 35 && mc.player.getYRot() % 90 < 55;
+            // Java % 保留被除数符号：yaw=-45/-135 时余数是 -45 => 原先两条对角线被判成直线。
+            double diagonalRemainder = ((mc.player.getYRot() % 90.0) + 90.0) % 90.0;
+            boolean diagonal = diagonalRemainder > 35.0 && diagonalRemainder < 55.0;
 
             mc.getConnection().send(new ServerboundPlayerCommandPacket(mc.player, ServerboundPlayerCommandPacket.Action.START_SPRINTING));
 

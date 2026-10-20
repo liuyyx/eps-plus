@@ -30,8 +30,14 @@ public final class YsmPhysics {
 
         @Override
         public void update(float timeStep) {
-            float t = this.response <= 0.0f ? 1.0f : timeStep / this.response;
-            this.lastSimulation = (1.0f - t) * this.lastSimulation + t * this.input;
+            // response 来自模型文件（外部输入）：NaN/Inf/denormal 会让 t 变成 NaN/Inf，
+            // 且 NaN 会粘在 lastSimulation 上污染后续所有帧。与 SecondOrder 同样做校验。
+            float resp = !Float.isFinite(this.response) || this.response < 0.001f
+                    ? 1.0f : Math.min(this.response, 1000.0f);
+            float dt = Float.isFinite(timeStep) ? Math.max(0.0f, timeStep) : 0.0f;
+            float t = Mth.clamp(dt / resp, 0.0f, 1.0f);
+            float next = (1.0f - t) * this.lastSimulation + t * this.input;
+            this.lastSimulation = Float.isFinite(next) ? next : this.input;
         }
 
         @Override

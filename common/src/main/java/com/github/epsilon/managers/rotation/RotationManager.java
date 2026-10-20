@@ -139,7 +139,9 @@ public abstract class RotationManager {
             float targetYaw = targetRotations.getYaw();
             float targetPitch = targetRotations.getPitch();
 
-            if (raytrace != null && (Math.abs(targetYaw - rotations.getYaw()) > 5 || Math.abs(targetPitch - rotations.getPitch()) > 5)) {
+            // 目标角归一化到 [-180,180]，托管角未归一化：必须用角度差，否则 ±180 接缝处误判为大幅转向。
+            if (raytrace != null && (Math.abs(Mth.wrapDegrees(targetYaw - rotations.getYaw())) > 5
+                    || Math.abs(targetPitch - rotations.getPitch()) > 5)) {
                 final Rot2f trueTargetRotations = new Rot2f(targetRotations.getYaw(), targetRotations.getPitch());
 
                 double speed = (Math.random() * Math.random() * Math.random()) * 20;
