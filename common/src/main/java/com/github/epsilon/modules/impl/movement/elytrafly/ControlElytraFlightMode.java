@@ -219,7 +219,13 @@ public class ControlElytraFlightMode extends ElytraFlightMode {
     }
 
     private void jiaFei(int elytraSlot) {
-        int elytra = elytraSlot < 9 ? elytraSlot + 36 : elytraSlot;
+        // 已经穿在胸甲槽时不需要（也不能）再点击容器槽。
+        if (mc.player.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.CHEST).is(Items.ELYTRA)) {
+            if (startFallFlying()) shouldJump = true;
+            useTimedFirework();
+            return;
+        }
+        int elytra = com.github.epsilon.utils.player.InvUtils.toContainerSlot(elytraSlot);
 
         swapArmor(elytra);
         if (startFallFlying()) {

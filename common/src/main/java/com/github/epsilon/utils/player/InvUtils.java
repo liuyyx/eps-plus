@@ -85,7 +85,26 @@ public class InvUtils {
      * @return 操作结果
      */
     public static FindItemResult find(Predicate<ItemStack> isGood) {
-        return find(isGood, 0, mc.player.getInventory().getContainerSize());
+        // 26.2 的 getContainerSize() = 36 + 装备槽数（36..42 是 FEET/LEGS/CHEST/HEAD/OFFHAND/...）。
+        // 默认只扫真正的背包/快捷栏 0..35；装备请用 getItemBySlot。
+        return find(isGood, 0, 35);
+    }
+
+    /**
+     * 把 Inventory 索引映射为 InventoryMenu 容器槽：
+     * 快捷栏 0..8 -> 36..44；背包 9..35 原样；装备 36..40 -> 8/7/6/5/45(副手)。
+     */
+    public static int toContainerSlot(int inventoryIndex) {
+        if (inventoryIndex >= 0 && inventoryIndex < 9) return inventoryIndex + 36;
+        if (inventoryIndex <= 35) return inventoryIndex;
+        return switch (inventoryIndex) {
+            case 36 -> 8;  // FEET
+            case 37 -> 7;  // LEGS
+            case 38 -> 6;  // CHEST
+            case 39 -> 5;  // HEAD
+            case 40 -> 45; // OFFHAND
+            default -> inventoryIndex;
+        };
     }
 
     /**

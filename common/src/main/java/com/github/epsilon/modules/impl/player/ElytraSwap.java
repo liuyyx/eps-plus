@@ -93,8 +93,7 @@ public class ElytraSwap extends Module {
                     int invSlot = InvUtils.find(predicate).slot();
                     if (invSlot != -1) {
 
-                        int containerSlot = invSlot;
-                        if (invSlot < 9) containerSlot += 36;
+                        int containerSlot = InvUtils.toContainerSlot(invSlot);
 
                         int targetHotbarSlot = elytraSlotSetting.getValue() - 1;
 

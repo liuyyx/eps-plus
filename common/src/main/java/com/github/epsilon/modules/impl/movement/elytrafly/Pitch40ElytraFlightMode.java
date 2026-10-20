@@ -205,7 +205,16 @@ public class Pitch40ElytraFlightMode extends ElytraFlightMode {
         }
         packetDelayTicks = 0;
 
-        int elytra = elytraSlot < 9 ? elytraSlot + 36 : elytraSlot;
+        // 已穿在胸甲槽时不需要换装；否则按 Inventory->容器槽 映射（0..8->36..44，装备 38->6）。
+        if (mc.player.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.CHEST).is(Items.ELYTRA)) {
+            if (!mc.player.isFallFlying() && startFallFlying()) {
+                shouldJump = true;
+            } else if (mc.player.isFallFlying()) {
+                restartFallFlying();
+            }
+            return;
+        }
+        int elytra = com.github.epsilon.utils.player.InvUtils.toContainerSlot(elytraSlot);
         swapArmor(elytra);
         if (!mc.player.isFallFlying() && startFallFlying()) {
             shouldJump = true;

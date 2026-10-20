@@ -122,9 +122,15 @@ public class AutoArmor extends Module {
                 if (mc.player.isMoving() && noMove.getValue()) return;
 
                 int inventorySlot = slot < 9 ? 36 + slot : slot;
-                // InventoryMenu 护甲槽 5..8 = HEAD,CHEST,LEGS,FEET；
-                // EquipmentSlot.getIndex(): FEET=2,LEGS=3,CHEST=4,HEAD=5 ⇒ 目标槽 = 10 - index。
-                int armorSlot = 10 - armorPiece.getEquipmentSlot().getIndex();
+                // 26.2 的 EquipmentSlot.getIndex() 已改为“同类型内序号”(FEET=0..HEAD=3)，
+                // 不能再按 1.20 的全局序号算 10-index。容器槽固定为 HEAD=5,CHEST=6,LEGS=7,FEET=8。
+                int armorSlot = switch (armorPiece.getEquipmentSlot()) {
+                    case HEAD -> 5;
+                    case CHEST -> 6;
+                    case LEGS -> 7;
+                    case FEET -> 8;
+                    default -> -1;
+                };
 
                 if (strict.getValue()) {
                     mc.getConnection().send(new ServerboundPlayerCommandPacket(
