@@ -216,8 +216,22 @@ public class KillAura extends Module {
     @Override
     protected void onDisable() {
         resetState();
-        releaseAiRotation();
+        releaseManagedRotation();
         DeobfESP.retainRisingEffects();
+    }
+
+    /**
+     * 关闭/暂停时把托管角交还给玩家视角。
+     * 不这样做，RotationManager 仍持有最后一次瞄准角：服务端继续看到伪装朝向，
+     * 表现为“关了杀戮光环还在瞄人”。
+     */
+    private void releaseManagedRotation() {
+        if (mc.player == null) return;
+        RotationManager.INSTANCE.setRotations(
+                new Rot2f(mc.player.getYRot(), mc.player.getXRot()),
+                180.0f,
+                rotationPriority.getValue()
+        );
     }
 
     /**
@@ -250,6 +264,7 @@ public class KillAura extends Module {
 
         if (pauseOnScaffold.getValue() && Scaffold.INSTANCE.isEnabled()) {
             resetState();
+            releaseManagedRotation();
             return;
         }
 
