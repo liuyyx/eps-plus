@@ -31,6 +31,7 @@ import com.github.epsilon.utils.timer.TimerUtils;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.client.multiplayer.PlayerInfo;
+import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 import net.minecraft.network.protocol.game.ServerboundSwingPacket;
 import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
@@ -366,6 +367,7 @@ public class KillAura extends Module {
                 // 只打本刻目标列表内的实体：TargetManager 已过滤假人/队友/护甲架/类型。
                 if (!isAttackable(entity)) continue;
 
+                syncServerRotationBeforeAttack();
                 mc.gameMode.attack(mc.player, entity);
 
                 if (espMode.is(ESPMode.Deobf)) DeobfESP.markHit(entity);
@@ -377,6 +379,24 @@ public class KillAura extends Module {
                 }
             }
         }
+    }
+
+    private int lastRotationSyncTick = -1;
+
+    /**
+     * 攻击包在 PlayerTickEvent.Pre 里发出，早于本刻的 sendPosition：
+     * 服务端此刻看到的仍是上一刻的旋转，会判「攻击时未看向目标」（Vulcan/Matrix BadPackets）。
+     * 出刀前补发一次本刻托管角的 Rot 包（Scaffold 放置路径同此做法），同刻只补一次。
+     */
+    private void syncServerRotationBeforeAttack() {
+        if (!RotationManager.INSTANCE.isActive() || mc.getConnection() == null || mc.player == null) return;
+        if (lastRotationSyncTick == mc.player.tickCount) return;
+        Rot2f rotation = RotationManager.INSTANCE.getRotation();
+        float yaw = rotation.getYaw();
+        float pitch = Mth.clamp(rotation.getPitch(), -90.0f, 90.0f);
+        if (!Float.isFinite(yaw) || !Float.isFinite(pitch)) return;
+        mc.getConnection().send(new ServerboundMovePlayerPacket.Rot(yaw, pitch, mc.player.onGround(), mc.player.horizontalCollision));
+        lastRotationSyncTick = mc.player.tickCount;
     }
 
     @EventHandler

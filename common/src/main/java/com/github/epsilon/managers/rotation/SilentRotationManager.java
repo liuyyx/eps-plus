@@ -26,7 +26,7 @@ public class SilentRotationManager extends RotationManager {
 
         float yaw = rotations.getYaw();
         float pitch = clampPitch(rotations.getPitch());
-        if (!Float.isNaN(yaw) && !Float.isNaN(pitch)) {
+        if (!Float.isFinite(yaw) && Float.isFinite(pitch)) {
             event.setYaw(yaw);
             event.setPitch(pitch);
         }
@@ -105,7 +105,7 @@ public class SilentRotationManager extends RotationManager {
         } else if (hasActiveRotation() && event.getPacket() instanceof ServerboundUseItemPacket packet) {
             float yaw = rotations.getYaw();
             float pitch = clampPitch(rotations.getPitch());
-            if (!Float.isNaN(yaw) && !Float.isNaN(pitch)) {
+            if (Float.isFinite(yaw) && Float.isFinite(pitch)) {
                 useItemRotation = new Rot2f(yaw, pitch);
                 if (packet.getYRot() != yaw || packet.getXRot() != pitch) {
                     event.setPacket(new ServerboundUseItemPacket(

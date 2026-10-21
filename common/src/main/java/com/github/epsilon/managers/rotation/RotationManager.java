@@ -175,10 +175,15 @@ public abstract class RotationManager {
                     offset.set(0, 0);
 
                     targetYaw = (float) (targetRotations.getYaw() + Math.random() * 2);
-                    targetPitch = (float) (targetRotations.getPitch() + Math.random() * 2);
+                    targetPitch = Mth.clamp((float) (targetRotations.getPitch() + Math.random() * 2), -90.0f, 90.0f);
                 }
+
+            } else {
+                offset.set(0.0f, 0.0f);
             }
 
+            // offset 是逐刻累加的伪装偏移：不夹住会让 pitch 越过 ±90，直接写进移动包。
+            targetPitch = Mth.clamp(targetPitch, -90.0f, 90.0f);
             rotations = RotationUtils.smooth(new Rot2f(targetYaw, targetPitch), rotationSpeed + Math.random());
         }
 

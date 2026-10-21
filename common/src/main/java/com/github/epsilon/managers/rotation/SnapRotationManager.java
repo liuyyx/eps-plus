@@ -1,5 +1,6 @@
 package com.github.epsilon.managers.rotation;
 
+import net.minecraft.util.Mth;
 import com.github.epsilon.events.impl.PlayerTickEvent;
 import com.github.epsilon.events.impl.SendPositionEvent;
 import com.github.epsilon.utils.rotation.Rot2f;
@@ -42,8 +43,8 @@ public class SnapRotationManager extends RotationManager {
         if (rotation == null) return;
 
         float yaw = rotation.getYaw();
-        float pitch = rotation.getPitch();
-        if (Float.isNaN(yaw) || Float.isNaN(pitch)) return;
+        float pitch = Mth.clamp(rotation.getPitch(), -90.0f, 90.0f);
+        if (!Float.isFinite(yaw) || !Float.isFinite(pitch)) return;
 
         mc.getConnection().send(new ServerboundMovePlayerPacket.PosRot(
                 mc.player.position(), yaw, pitch,
