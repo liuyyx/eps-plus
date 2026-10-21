@@ -18,20 +18,17 @@ public class SilentRotationManager extends RotationManager {
 
     @Override
     protected void handleSendPosition(SendPositionEvent event) {
-        // Item use is sent before LocalPlayer ticks; keep both packets on the same server rotation.
-        if (useItemRotation != null) {
-            rotations = useItemRotation;
-            useItemRotation = null;
-        }
-
-        float yaw = rotations.getYaw();
-        float pitch = clampPitch(rotations.getPitch());
+        // useItemRotation 只对「本刻这一个位置包」生效，不能写回 rotations 字段：
+        // 那会把托管角永久改成物品使用时的角，后续刻继续沿用。
+        Rot2f packetRotation = useItemRotation != null ? useItemRotation : rotations;
+        useItemRotation = null;
+        float yaw = packetRotation.getYaw();
+        float pitch = clampPitch(packetRotation.getPitch());
         if (Float.isFinite(yaw) && Float.isFinite(pitch)) {
             event.setYaw(yaw);
             event.setPitch(pitch);
         }
     }
-
     @EventHandler(priority = EventPriority.HIGH)
     private void onMoveInput(KeyboardInputEvent event) {
         MovementFix moveFix = MovementFix.INSTANCE;
