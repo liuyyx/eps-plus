@@ -242,7 +242,9 @@ public class ServerGuard extends Module {
         Vec3 local = mc.player.position();
         double distance = local.distanceTo(target);
 
-        if (distance > rubberbandRange.getValue()) return;
+        // 0 距离是服务端确认位置的常规同步包（Grim/Matrix 都会发），不是回弹；
+        // 原先只判上界，导致每个位置包都告警。
+        if (distance < 0.05 || distance > rubberbandRange.getValue()) return;
 
         alert(KEY_RUBBERBAND, "服务器回弹", String.format(Locale.ROOT,
                 "被拉回 (%.2f, %.2f, %.2f)，与本地相差 %.2f 格",
