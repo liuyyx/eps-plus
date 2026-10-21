@@ -7,6 +7,7 @@ import com.github.epsilon.events.impl.MousePressEvent;
 import com.github.epsilon.events.impl.PacketEvent;
 import com.github.epsilon.events.impl.PlayerTickEvent;
 import com.github.epsilon.events.impl.SendPositionEvent;
+import com.github.epsilon.managers.rotation.RotationManager;
 import com.github.epsilon.modules.Category;
 import com.github.epsilon.modules.Module;
 import com.github.epsilon.modules.impl.combat.KillAura;
@@ -25,6 +26,8 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.protocol.game.ClientboundPlayerPositionPacket;
+import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
+import net.minecraft.util.Mth;
 import net.minecraft.network.protocol.game.ServerboundPlayerActionPacket;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
@@ -1112,11 +1115,29 @@ public class AutoBuild extends Module {
         if (player == null || mc.gameMode == null) return false;
         int f = faceFromName(face);
         if (f < 0) return false;
+        // 放置包会先于本刻的位置/旋转包上网；服务端只能用上一刻的角校验落点，先补一次本刻朝向。
+        syncRotationBeforePlacement();
         Vec3 hitAbs = support.add(offsetInBlock);
         BlockHitResult result = new BlockHitResult(hitAbs, Direction.from3DDataValue(f),
                 new BlockPos((int) Math.floor(support.x), (int) Math.floor(support.y), (int) Math.floor(support.z)), false);
         InteractionResult interaction = mc.gameMode.useItemOn(player, InteractionHand.MAIN_HAND, result);
         return interaction != null && interaction.consumesAction();
+    }
+
+    private int lastRotationSyncTick = -1;
+
+    /** 放置前把本刻朝向送到服务端（与 Scaffold/Raven 的放置前 Rot 同一做法）。 */
+    private void syncRotationBeforePlacement() {
+        if (mc.player == null || mc.getConnection() == null) return;
+        if (lastRotationSyncTick == mc.player.tickCount) return;
+        Rot2f rotation = RotationManager.INSTANCE.isActive()
+                ? RotationManager.INSTANCE.getRotation()
+                : new Rot2f(mc.player.getYRot(), mc.player.getXRot());
+        float yaw = rotation.getYaw();
+        float pitch = Mth.clamp(rotation.getPitch(), -90.0f, 90.0f);
+        if (!Float.isFinite(yaw) || !Float.isFinite(pitch)) return;
+        mc.getConnection().send(new ServerboundMovePlayerPacket.Rot(yaw, pitch, mc.player.onGround(), mc.player.horizontalCollision));
+        lastRotationSyncTick = mc.player.tickCount;
     }
 
     /** 脚本 {@code new C07(pos, action, facing)}（C07 = PlayerAction 包）。 */
