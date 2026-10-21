@@ -99,7 +99,6 @@ public class Scaffold extends Module {
                         BlockPos ravenTarget = ravenScaffold.getRenderBlock();
                         if (ravenTarget != null) {
                             AABB ravenBox = new AABB(ravenTarget).inflate(0.002);
-                            Render3DScheduler.INSTANCE.addFilledBox(ravenBox, sideColor.getValue());
                             Render3DScheduler.INSTANCE.addOutlineBox(ravenBox, lineColor.getValue());
                         }
                         if (ravenHighlightBlocks.getValue() && !ravenScaffold.getPlacedBlocks().isEmpty()) {
@@ -112,8 +111,6 @@ public class Scaffold extends Module {
                                 AABB box = new AABB(entry.getKey()).inflate(0.002);
                                 Color fade = new Color(lineColor.getValue().getRed(), lineColor.getValue().getGreen(),
                                         lineColor.getValue().getBlue(), alpha);
-                                Render3DScheduler.INSTANCE.addFilledBox(box, new Color(sideColor.getValue().getRed(),
-                                        sideColor.getValue().getGreen(), sideColor.getValue().getBlue(), alpha));
                                 Render3DScheduler.INSTANCE.addOutlineBox(box, fade);
                             }
                         }
