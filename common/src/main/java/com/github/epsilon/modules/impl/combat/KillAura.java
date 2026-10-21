@@ -357,26 +357,30 @@ public class KillAura extends Module {
 
     @EventHandler
     private void onPlayerTick(PlayerTickEvent.Pre event) {
+        if (attacks <= 0) return;
+        // 暂停期间直接丢弃积压：原先只 return 不消费，进食结束会在同一刻把 N 个攻击包全部发出
+        // （Vulcan/Matrix 的 BadPackets 与 Intave 的 computer-like 都抓这个）。
+        if (pauseOnEat.getValue() && PlayerUtils.isEating() || NoSlowdown.INSTANCE.isWorking()) {
+            attacks = 0;
+            return;
+        }
+        // 每刻最多一刀：上游 OpenB4 同样有 attackedThisTick 单刻上限。
+        attacks = 0;
         HitResult hitResult = RotationManager.INSTANCE.getHitResult();
-        while (attacks > 0) {
-            // 先判暂停再出队：原先先 attacks-- 再 return，进食/NoSlowdown 期间会白丢一次排队攻击。
-            if (pauseOnEat.getValue() && PlayerUtils.isEating() || NoSlowdown.INSTANCE.isWorking()) return;
-            attacks--;
-            if (hitResult instanceof EntityHitResult entityHitResult) {
-                Entity entity = entityHitResult.getEntity();
-                // 只打本刻目标列表内的实体：TargetManager 已过滤假人/队友/护甲架/类型。
-                if (!isAttackable(entity)) continue;
+        if (hitResult instanceof EntityHitResult entityHitResult) {
+            Entity entity = entityHitResult.getEntity();
+            // 只打本刻目标列表内的实体：TargetManager 已过滤假人/队友/护甲架/类型。
+            if (!isAttackable(entity)) return;
 
-                syncServerRotationBeforeAttack();
-                mc.gameMode.attack(mc.player, entity);
+            syncServerRotationBeforeAttack();
+            mc.gameMode.attack(mc.player, entity);
 
-                if (espMode.is(ESPMode.Deobf)) DeobfESP.markHit(entity);
+            if (espMode.is(ESPMode.Deobf)) DeobfESP.markHit(entity);
 
-                if (swingHand.getValue()) {
-                    mc.player.swing(InteractionHand.MAIN_HAND);
-                } else {
-                    mc.getConnection().send(new ServerboundSwingPacket(InteractionHand.MAIN_HAND));
-                }
+            if (swingHand.getValue()) {
+                mc.player.swing(InteractionHand.MAIN_HAND);
+            } else {
+                mc.getConnection().send(new ServerboundSwingPacket(InteractionHand.MAIN_HAND));
             }
         }
     }
