@@ -615,7 +615,7 @@ public final class RavenB4Scaffold {
             // [联机必需] 放置包必须跟在旋转包之后：托管角只在 SendPositionEvent 才会搭车发出，
             // 而那时放置包已经上网。先发一次 Rot，服务端才会用本刻瞄准角校验放置（否则吞方块）。
             sendPlacementRotation(aimYaw, aimPitch);
-            if (placeAtBlock(against, facing, hit.getLocation(), itemStack)) {
+            if (placeAtBlock(against, facing, faceConsistentLocation(against, facing, hit), itemStack)) {
                 if (searchMode == 1 || searchMode == 2 && fastScaffold.keepY) {
                     fastScaffold.ticks = mc.player.tickCount;
                 }
@@ -1323,7 +1323,7 @@ public final class RavenB4Scaffold {
         // 与 place() 主路径保持一致：用解算出的 facing 落块（而不是射线自身的面），
         // 否则落块位置与 lastPlaced/placed 记录不同源，下一 tick 会贴着没放过的方块找目标。
         sendRotationNow(r[0], r[1]);
-        if (!placeAtBlock(against, facing, hit.getLocation(), itemStack)) {
+        if (!placeAtBlock(against, facing, faceConsistentLocation(against, facing, hit), itemStack)) {
             return false;
         }
         lastPlaced = target;
@@ -1882,6 +1882,21 @@ public final class RavenB4Scaffold {
             mc.player.swing(InteractionHand.MAIN_HAND);
         }
         return true;
+    }
+
+    /**
+     * 命中点必须落在我们要点击的那个面上：
+     * 射线允许命中 against 的任意面，若把别的面的命中点配上 faceFor 的逻辑面，
+     * BlockHitResult 就是几何上不可能的组合，服务端会按自己的规则落到另一格。
+     */
+    private static Vec3 faceConsistentLocation(BlockPos against, Direction face, BlockHitResult hit) {
+        if (hit.getDirection() == face) {
+            return hit.getLocation();
+        }
+        return new Vec3(
+                against.getX() + 0.5 + face.getStepX() * 0.5,
+                against.getY() + 0.5 + face.getStepY() * 0.5,
+                against.getZ() + 0.5 + face.getStepZ() * 0.5);
     }
 
     /** 原 {@code PlayerUtils.place(hit, stack)}：方块与面都取射线自身的。 */
