@@ -26,7 +26,7 @@ public class SilentRotationManager extends RotationManager {
 
         float yaw = rotations.getYaw();
         float pitch = clampPitch(rotations.getPitch());
-        if (!Float.isFinite(yaw) && Float.isFinite(pitch)) {
+        if (Float.isFinite(yaw) && Float.isFinite(pitch)) {
             event.setYaw(yaw);
             event.setPitch(pitch);
         }
