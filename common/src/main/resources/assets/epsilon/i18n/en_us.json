@@ -1959,6 +1959,21 @@
         "activation time": "Activation Time",
         "snap degrees": "Snap Degrees"
       },
+      "great wall": {
+        "_value": "Great Wall",
+        "motion": "Motion",
+        "fast scaffold motion": "Fast Scaffold Motion",
+        "precision": {
+          "_value": "Precision",
+          "low": "Low",
+          "medium": "Medium",
+          "high": "High",
+          "veryhigh": "Very High"
+        },
+        "sneak every": "Sneak Every",
+        "auto swap": "Auto Swap",
+        "highlight blocks": "Highlight Blocks"
+      },
       "scaffold": {
         "_value": "Scaffold",
         "blacklisted blocks": "Blacklisted Blocks",

@@ -123,6 +123,7 @@ public class ModuleManager {
         addModule(ReverseStep.INSTANCE);
         addModule(SafeWalk.INSTANCE);
         addModule(Scaffold.INSTANCE);
+        addModule(GreatWall.INSTANCE);
         addModule(Speed.INSTANCE);
         addModule(Step.INSTANCE);
         addModule(Strafe.INSTANCE);
