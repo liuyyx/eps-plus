@@ -1961,18 +1961,17 @@
       },
       "great wall": {
         "_value": "长城搭",
-        "motion": "水平速度",
-        "fast scaffold motion": "侧向搭路速度",
-        "precision": {
-          "_value": "精度",
-          "low": "低",
-          "medium": "中",
-          "high": "高",
-          "veryhigh": "极高"
+        "mode": {
+          "_value": "模式",
+          "greatwall": "长城搭",
+          "sy": "Sy",
+          "clutch": "Clutch"
         },
-        "sneak every": "每 N 次潜行",
-        "auto swap": "自动换槽",
-        "highlight blocks": "高亮方块"
+        "extra clicks": "额外点击",
+        "auto switch": "自动切换",
+        "show count": "显示数量",
+        "hide on look": "注视时隐藏",
+        "debug": "调试"
       },
       "scaffold": {
         "_value": "自动搭路",

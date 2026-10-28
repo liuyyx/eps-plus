@@ -3,6 +3,7 @@ package com.github.epsilon.modules.impl.movement.scaffold.ravenb4;
 import com.github.epsilon.events.impl.KeyboardInputEvent;
 import com.github.epsilon.events.impl.StartUseItemEvent;
 import com.github.epsilon.managers.rotation.RotationManager;
+import com.github.epsilon.modules.impl.movement.Scaffold;
 import com.github.epsilon.modules.impl.movement.scaffold.ravenb4.RavenB4Scaffold.RavenFastScaffold;
 import com.github.epsilon.modules.impl.movement.scaffold.ravenb4.RavenB4Scaffold.RavenMultiPlace;
 import com.github.epsilon.modules.impl.movement.scaffold.ravenb4.RavenB4Scaffold.RavenPrecision;
@@ -44,7 +45,8 @@ import static com.github.epsilon.Constants.mc;
  * Raven B4 的 Scaffold 引擎（逐行移植自 {@code xyz.daikirai.module.player.ScaffoldModule}，1.8.9 Forge）。
  *
  * <p>Raven B4 里「模块」与「算法」同处一个类；本移植把算法整段搬进本类，
- * 宿主负责设置、生命周期与事件接线；引擎通过 Host 读取配置。
+ * Epsilon 的 {@link Scaffold} 只保留设置、生命周期与事件接线（照 {@code scaffold/elowen/ElowenScaffold} 的骨架）。
+ * 所有设置都从 {@code module} 读，本类自己不持 Setting。</p>
  *
  * <p>移植纪律（与 elowen 引擎一致）：</p>
  * <ul>
@@ -120,9 +122,9 @@ public final class RavenB4Scaffold {
                 if (mc.player.tickCount == startTick && jumpState == 2) {
                     return false;
                 }
-                return host.ravenMovementFix();
+                return module.ravenMovementFix.getValue();
             }
-            if (host.ravenLegitMotion() && (this.jump || this.keepY)) {
+            if (module.ravenLegitMotion.getValue() && (this.jump || this.keepY)) {
                 return legitTicks > 0;
             }
             if (!this.sprint) {
@@ -304,51 +306,18 @@ public final class RavenB4Scaffold {
     /** 原 {@code RotationManager.lastYaw/lastPitch}：上一次真正提交出去的角，作为本刻解算的基准。 */
     private static Rot2f lastSentRotation = new Rot2f(0.0f, 0.0f);
 
-    public interface Host {
-        boolean ravenMovementFix();
-        boolean ravenLegitMotion();
-        boolean ravenJumpFacingForward();
-        boolean ravenAutoSwap();
-        boolean ravenSlowOnEnable();
-        boolean ravenSlowSpeedPotion();
-        boolean ravenSafeWalk();
-        boolean ravenSilentSwing();
-        boolean ravenTower();
-        int ravenSneakEvery();
-        double ravenSpeedBoost();
-        double ravenMotion();
-        double ravenFastScaffoldMotion();
-        RavenRotation ravenRotationMode();
-        RavenFastScaffold ravenFastScaffold();
-        RavenFastScaffold ravenFastScaffoldRmb();
-        RavenMultiPlace ravenMultiPlace();
-        RavenPrecision ravenPrecision();
-        int getBlockCount();
-        boolean isValidStack(ItemStack stack);
-        boolean isPlaceOnCooldown();
-        void tickPlaceCooldown();
-        void markPlaceCooldown(int minTicks);
-    }
-
-    private static Host host;
-    private final Host owner;
+    private static Scaffold module;
     private int savedSlot = -1;
 
-    public RavenB4Scaffold(Host owner) {
-        this.owner = owner;
-        bindHost();
+    public RavenB4Scaffold(Scaffold module) {
+        RavenB4Scaffold.module = module;
         instance = this;
-    }
-
-    public void bindHost() {
-        host = owner;
     }
 
     // ===== 生命周期（原 ScaffoldModule 的 Module 回调）=====
 
     /** 原 {@code onEnable()}。 */
     public void onEnable() {
-        bindHost();
         if (mc.player == null) {
             return;
         }
@@ -366,7 +335,7 @@ public final class RavenB4Scaffold {
         if (!safeWalkActive()) {
             if (!mc.player.onGround()) {
                 delay = 3;
-            } else if (potionLevel(MobEffects.JUMP_BOOST) <= 3 && nearEdge(0.2) && host.getBlockCount() > 0) {
+            } else if (potionLevel(MobEffects.JUMP_BOOST) <= 3 && nearEdge(0.2) && module.getBlockCount() > 0) {
                 jumpState = 2;
                 jumpTick = mc.player.tickCount;
                 delay = 4;
@@ -384,7 +353,6 @@ public final class RavenB4Scaffold {
      * stale `startTick` 让 {@code tickCount - startTick} 变负。故必须在入世界事件与禁用路径都复位。</p>
      */
     public void resetState() {
-        bindHost();
         active = false;
         keptY = -1;
         lastPlaced = null;
@@ -427,7 +395,6 @@ public final class RavenB4Scaffold {
 
     /** 原 {@code onDisable()}。 */
     public void onDisable() {
-        bindHost();
         // [适配·必须] 参考/Elowen 的托管角释放在 player==null 检查之外：
         // 否则在主菜单/切维度瞬间禁用模块会漏掉释放，RotationManager 永久 active。
         jumpInput = false;
@@ -459,14 +426,13 @@ public final class RavenB4Scaffold {
 
     /** 原宿主每帧入口：{@code onPreUpdate()}（update）→ 旋转发包路径（getRotations）。 */
     public void onPreTick() {
-        bindHost();
         if (mc.player == null || mc.level == null) {
             return;
         }
         groundTicks = mc.player.onGround() ? groundTicks + 1 : 0;
         syncSettings();
         // 共享放置节流（Place Delay + 随机量）：每刻只自减一次。
-        host.tickPlaceCooldown();
+        module.tickPlaceCooldown();
         // placed 每刻按参考的 500ms 窗口淘汰（不能只靠高亮渲染路径，否则默认配置下会一直涨）。
         long now = System.currentTimeMillis();
         placed.entrySet().removeIf(entry -> now - Math.abs(entry.getValue()) > PLACED_TTL_MS);
@@ -506,16 +472,16 @@ public final class RavenB4Scaffold {
         }
         // 原 {@code AutoSwapModule.swap(SwapSlot.Scaffold)}：Epsilon 无 AutoSwap 模块，
         // 改为扫 0..8 热键槽把可放置方块切到手上（与 ElowenScaffold.autoSelectBlock 同一做法；可见切槽，非静默）。
-        if (host.ravenAutoSwap()) {
+        if (module.ravenAutoSwap.getValue()) {
             autoSelectBlock();
         }
         ItemStack itemStack = mc.player.getMainHandItem();
-        if (!host.isValidStack(itemStack)) {
+        if (!module.isValidStack(itemStack)) {
             // 副手也可能是可放置方块（getPlacementHand 支持 OFF_HAND）；原实现直接 return，
             // 会让 active 残留 true（右键劫持 + 托管角不停），而 getBlockCount 又把副手算进总数。
-            boolean offhandPlaceable = host.isValidStack(mc.player.getOffhandItem());
+            boolean offhandPlaceable = module.isValidStack(mc.player.getOffhandItem());
             if (!offhandPlaceable) {
-                if (!host.ravenAutoSwap() || host.getBlockCount() == 0) {
+                if (!module.ravenAutoSwap.getValue() || module.getBlockCount() == 0) {
                     stop();
                 }
                 return;
@@ -529,7 +495,7 @@ public final class RavenB4Scaffold {
             startPitch = mc.player.getXRot();
             // 不再写 mc.options.keyAttack/keyUse（KeyMapping 持久键态，写后无人复位会卡住玩家按键）。
             // 抑制右键已由 StartUseItemEvent 取消完成。
-            if (host.ravenSlowOnEnable()) {
+            if (module.ravenSlowOnEnable.getValue()) {
                 multiplyMotion(0.2, true);
             }
         }
@@ -545,13 +511,13 @@ public final class RavenB4Scaffold {
         BlockPos below = below(1.0);
         airBelowTicks = isReplaceable(below) ? ++airBelowTicks : 0;
         // 放置节流：冷却未结束本刻不放置（逐刻连续放置会被 Vulcan/Matrix 直接判定）。
-        if (host.isPlaceOnCooldown()) {
+        if (module.isPlaceOnCooldown()) {
             return;
         }
         BlockPos pos = place(null, itemStack);
         if (pos != null) {
             ++placedCount;
-            int sneakEvery = host.ravenSneakEvery();
+            int sneakEvery = module.ravenSneakEvery.getValue();
             if (sneakEvery > 0 && placedCount % sneakEvery == 0) {
                 sneakQueued = true;
             }
@@ -561,17 +527,17 @@ public final class RavenB4Scaffold {
             }
             // 本刻所有放置（含 afterPlace 的追加放置）结束后再置冷却。
             // 若在 afterPlace 之前置，afterPlace 内的冷却查询恒为 true，Side 模式的追加放置永远是死代码。
-            host.markPlaceCooldown(2);
+            module.markPlaceCooldown(2);
         }
     }
 
     /** 原 {@code AutoSwapModule.swap(SwapSlot.Scaffold)} 的等价实现：把第一个可放置方块切到选中槽。 */
     private static void autoSelectBlock() {
-        if (mc.player == null || host.isValidStack(mc.player.getMainHandItem())) {
+        if (mc.player == null || module.isValidStack(mc.player.getMainHandItem())) {
             return;
         }
         for (int slot = 0; slot < 9; ++slot) {
-            if (host.isValidStack(mc.player.getInventory().getItem(slot))) {
+            if (module.isValidStack(mc.player.getInventory().getItem(slot))) {
                 mc.player.getInventory().setSelectedSlot(slot);
                 return;
             }
@@ -584,7 +550,6 @@ public final class RavenB4Scaffold {
      * 「模块已启用但引擎尚未 active」的窗口内的吃喝/射箭被误取消。</p>
      */
     public void onUseItem(StartUseItemEvent event) {
-        bindHost();
         if (!active) {
             return;
         }
@@ -833,7 +798,7 @@ public final class RavenB4Scaffold {
         if (jumpRotation) {
             float f7 = -180.0f;
             float f8 = aimPitch == 100.0f ? mc.player.getXRot() : aimPitch;
-            if (host.ravenLegitMotion()) {
+            if (module.ravenLegitMotion.getValue()) {
                 if (legitTicks == 4) {
                     if ((double) (mc.player.getYRot() - lastYaw()) < -0.7) {
                         f7 = -f7;
@@ -962,7 +927,7 @@ public final class RavenB4Scaffold {
         // 原 {@code Mouse.isButtonDown(1)}：物理右键。用 mouseHandler 的物理键态，
         // 不用 keyUse.isDown()（本模块自己会抑制 keyUse，写后即读不可靠）。
         rightHeld = mc.gui.screen() == null && mc.mouseHandler.isRightPressed();
-        fastScaffold = rightHeld ? host.ravenFastScaffoldRmb() : host.ravenFastScaffold();
+        fastScaffold = rightHeld ? module.ravenFastScaffoldRmb.getValue() : module.ravenFastScaffold.getValue();
         boolean moving = isMoving();
         boolean groundMoving = mc.player.onGround() && moving;
         boolean can = fastScaffold.canFastScaffold();
@@ -1017,10 +982,10 @@ public final class RavenB4Scaffold {
                 case Jump_C:
                 case Jump_D:
                     if (!groundMoving) {
-                        if (moving && host.ravenJumpFacingForward() && mc.player.getDeltaMovement().y < 0.0) {
+                        if (moving && module.ravenJumpFacingForward.getValue() && mc.player.getDeltaMovement().y < 0.0) {
                             d = Math.floor(mc.player.getY());
                             if (d - 2.0 == (double) keptY && mc.player.getY() + mc.player.getDeltaMovement().y < d) {
-                                legitTicks = !host.ravenLegitMotion() ? 1 : 5;
+                                legitTicks = !module.ravenLegitMotion.getValue() ? 1 : 5;
                             }
                         }
                         break;
@@ -1031,10 +996,10 @@ public final class RavenB4Scaffold {
                             keptY = (int) Math.floor(mc.player.getY()) - 1;
                             newY = true;
                         }
-                        if ((host.ravenJumpFacingForward()
+                        if ((module.ravenJumpFacingForward.getValue()
                                 || RavenFastScaffold.Float_A.state == 1 || RavenFastScaffold.Float_B.state == 1) && newY) {
-                            if (host.ravenJumpFacingForward()) {
-                                legitTicks = !host.ravenLegitMotion() ? 1 : 5;
+                            if (module.ravenJumpFacingForward.getValue()) {
+                                legitTicks = !module.ravenLegitMotion.getValue() ? 1 : 5;
                             }
                             fastScaffold.state = 1;
                         }
@@ -1057,10 +1022,10 @@ public final class RavenB4Scaffold {
                 case Keep_Y_A:
                 case Keep_Y_B:
                     if (!groundMoving) {
-                        if (moving && host.ravenJumpFacingForward() && mc.player.getDeltaMovement().y < 0.0) {
+                        if (moving && module.ravenJumpFacingForward.getValue() && mc.player.getDeltaMovement().y < 0.0) {
                             d = Math.floor(mc.player.getY());
                             if (d - 1.0 == (double) keptY && mc.player.getY() + mc.player.getDeltaMovement().y < d) {
-                                legitTicks = !host.ravenLegitMotion() ? 1 : 5;
+                                legitTicks = !module.ravenLegitMotion.getValue() ? 1 : 5;
                             }
                         }
                     } else {
@@ -1070,10 +1035,10 @@ public final class RavenB4Scaffold {
                                 keptY = (int) Math.floor(mc.player.getY()) - 1;
                                 newY = true;
                             }
-                            if ((host.ravenJumpFacingForward()
+                            if ((module.ravenJumpFacingForward.getValue()
                                     || RavenFastScaffold.Float_A.state == 1 || RavenFastScaffold.Float_B.state == 1) && newY) {
-                                if (host.ravenJumpFacingForward() && legitTicks == 0) {
-                                    legitTicks = !host.ravenLegitMotion() ? 1 : 5;
+                                if (module.ravenJumpFacingForward.getValue() && legitTicks == 0) {
+                                    legitTicks = !module.ravenLegitMotion.getValue() ? 1 : 5;
                                 }
                                 fastScaffold.state = 1;
                                 multiplyMotion(speedLevel() <= 0 ? 0.8 : 0.4, false);
@@ -1100,8 +1065,8 @@ public final class RavenB4Scaffold {
                         mc.player.getDeltaMovement().z);
             }
             if (groundMoving) {
-                d = host.ravenFastScaffoldMotion();
-                if (!host.ravenLegitMotion() && direction().diagonal()) {
+                d = module.ravenFastScaffoldMotion.getValue();
+                if (!module.ravenLegitMotion.getValue() && direction().diagonal()) {
                     d -= 0.02;
                 }
                 multiplyMotion(d, true);
@@ -1109,9 +1074,9 @@ public final class RavenB4Scaffold {
             }
         }
         if (!applied && groundMoving) {
-            d = host.ravenMotion();
-            if (!host.ravenLegitMotion()) {
-                if (host.ravenSlowSpeedPotion()) {
+            d = module.ravenMotion.getValue();
+            if (!module.ravenLegitMotion.getValue()) {
+                if (module.ravenSlowSpeedPotion.getValue()) {
                     d -= perSpeedLevel(0.17);
                 }
                 if (direction().diagonal()) {
@@ -1127,7 +1092,6 @@ public final class RavenB4Scaffold {
 
     /** 原 {@code preMotion(MotionEvent)}（在发包（位置包）之前调整运动）。 */
     public void onPreMotion() {
-        bindHost();
         boolean floatWasSet = RavenFastScaffold.Float_A.state == 1 || RavenFastScaffold.Float_B.state == 1;
         RavenFastScaffold.Float_A.state = 0;
         RavenFastScaffold.Float_B.state = 0;
@@ -1162,7 +1126,7 @@ public final class RavenB4Scaffold {
                 strafe(d);
             }
         } else if ((fastScaffold.jump || fastScaffold.keepY) && mc.player.onGround()
-                && (host.ravenJumpFacingForward() || floatWasSet)) {
+                && (module.ravenJumpFacingForward.getValue() || floatWasSet)) {
             if (fastScaffold.state == 1) {
                 fastScaffold.state = 2;
                 double d = fastScaffold.sprint && direction().forward() ? 0.25 : (fastScaffold.keepY ? 0.54 : 0.4);
@@ -1181,7 +1145,6 @@ public final class RavenB4Scaffold {
      * 保证注入只持续一刻 —— 写 {@code KeyMapping.setDown(...)} 会造成永久跳/永久潜行。</p>
      */
     public void onKeyboardInput(KeyboardInputEvent event) {
-        bindHost();
         postPlayerInput();
         if (jumpInput) {
             event.setJump(true);
@@ -1214,7 +1177,7 @@ public final class RavenB4Scaffold {
             if (!fastScaffold.canFastScaffold() && fastScaffold.state == 1) {
                 fastScaffold.state = 0;
             }
-        } else if ((fastScaffold.jump || fastScaffold.keepY) && host.ravenLegitMotion()
+        } else if ((fastScaffold.jump || fastScaffold.keepY) && module.ravenLegitMotion.getValue()
                 && fastScaffold.canFastScaffold() && mc.player.onGround() && fastScaffold.state == 0) {
             setJump(true);
         }
@@ -1223,7 +1186,7 @@ public final class RavenB4Scaffold {
     /** 原 {@code stopOnEdge()}：供 SafeWalk 集成；此处仅暴露状态。 */
     public static boolean stopOnEdge() {
         if (active) {
-            if (host.ravenSafeWalk()) {
+            if (module.ravenSafeWalk.getValue()) {
                 if (fastScaffold.jump || fastScaffold.keepY) {
                     return !fastScaffold.canFastScaffold();
                 }
@@ -1554,7 +1517,7 @@ public final class RavenB4Scaffold {
 
     /** 原 {@code PlayerUtils.multiplyMotion(d)}。 */
     private static void multiplyMotion(double d, boolean always) {
-        if (!always && host.ravenLegitMotion()) {
+        if (!always && module.ravenLegitMotion.getValue()) {
             return;
         }
         Vec3 v = mc.player.getDeltaMovement();
@@ -1582,7 +1545,7 @@ public final class RavenB4Scaffold {
 
     /** 原 {@code PlayerUtils.jump(double speed)} → {@code jumpWith}。 */
     private static void jumpWith(double d) {
-        if (host.ravenLegitMotion()) {
+        if (module.ravenLegitMotion.getValue()) {
             return;
         }
         strafe(boosted(d));
@@ -1602,7 +1565,7 @@ public final class RavenB4Scaffold {
         return switch (n) {
             case 0 -> 0.0;
             case 1 -> 0.05;
-            case 2 -> host.ravenSpeedBoost() / 10.0;
+            case 2 -> module.ravenSpeedBoost.getValue() / 10.0;
             default -> 0.06 * (double) n;
         };
     }
@@ -1772,13 +1735,13 @@ public final class RavenB4Scaffold {
     }
 
     private static boolean safeWalkActive() {
-        return host.ravenSafeWalk();
+        return module.ravenSafeWalk.getValue();
     }
 
     private static boolean towerActive() {
         // Epsilon 无 Raven B4 的 TowerModule；用本模块的 "Raven Tower" 设置近似
         // （原先恒 false ⇒ 该设置全仓无读取点，且 Raven Multi Place 在默认档位下永不生效）。
-        return host.ravenTower();
+        return module.ravenTower.getValue();
     }
 
     /** 1.8.9 FALL_MOTION 的现代 double 等价区间（精确相等在现代物理下不可达）。 */
@@ -1870,9 +1833,9 @@ public final class RavenB4Scaffold {
 
     /** 原 {@code ScaffoldModule.guiUpdate()}：每刻把设置读进静态模式字段。 */
     private void syncSettings() {
-        rotation = host.ravenRotationMode();
-        multiPlace = host.ravenMultiPlace();
-        precision = host.ravenPrecision();
+        rotation = module.ravenRotationMode.getValue();
+        multiPlace = module.ravenMultiPlace.getValue();
+        precision = module.ravenPrecision.getValue();
     }
 
     /** 当前手上（主手优先）的可放置手，都没有返回 null（照 elowen {@code getPlacementHand()}）。 */
@@ -1880,10 +1843,10 @@ public final class RavenB4Scaffold {
         if (mc.player == null) {
             return null;
         }
-        if (host.isValidStack(mc.player.getMainHandItem())) {
+        if (module.isValidStack(mc.player.getMainHandItem())) {
             return InteractionHand.MAIN_HAND;
         }
-        if (host.isValidStack(mc.player.getOffhandItem())) {
+        if (module.isValidStack(mc.player.getOffhandItem())) {
             return InteractionHand.OFF_HAND;
         }
         return null;
@@ -1911,7 +1874,7 @@ public final class RavenB4Scaffold {
         if (!result.consumesAction()) {
             return false;
         }
-        if (host.ravenSilentSwing()) {
+        if (module.ravenSilentSwing.getValue()) {
             if (mc.getConnection() != null) {
                 mc.getConnection().send(new ServerboundSwingPacket(InteractionHand.MAIN_HAND));
             }

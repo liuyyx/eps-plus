@@ -6,6 +6,7 @@ import com.github.epsilon.events.impl.*;
 import com.github.epsilon.graphics.LuminRenderSystem;
 import com.github.epsilon.graphics.video.VideoPlayer;
 import com.github.epsilon.gui.screen.MainMenuScreen;
+import com.github.epsilon.interfaces.MinecraftAccessor;
 import com.github.epsilon.managers.sound.SoundKey;
 import com.github.epsilon.managers.sound.SoundManager;
 import com.github.epsilon.modules.impl.ClientSetting;
@@ -34,7 +35,11 @@ import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(Minecraft.class)
-public abstract class MixinMinecraft {
+public abstract class MixinMinecraft implements MinecraftAccessor {
+
+    @Override
+    @org.spongepowered.asm.mixin.gen.Invoker("startUseItem")
+    public abstract void epsilon$startUseItem();
 
     @Shadow
     private int rightClickDelay;

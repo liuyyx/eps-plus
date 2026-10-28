@@ -73,7 +73,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
-public class Scaffold extends Module implements RavenB4Scaffold.Host {
+public class Scaffold extends Module {
 
     public static final Scaffold INSTANCE = new Scaffold();
 
@@ -629,25 +629,6 @@ public class Scaffold extends Module implements RavenB4Scaffold.Host {
     /** 原 {@code canSprint()} 里 {@code SettingsModule.movementFix}：非快速搭路时的移动修正开关。 */
     public final BoolSetting ravenMovementFix = boolSetting("Raven Movement Fix", true, ravenDependency).group(sgRaven);
 
-    @Override public boolean ravenMovementFix() { return ravenMovementFix.getValue(); }
-    @Override public boolean ravenLegitMotion() { return ravenLegitMotion.getValue(); }
-    @Override public boolean ravenJumpFacingForward() { return ravenJumpFacingForward.getValue(); }
-    @Override public boolean ravenAutoSwap() { return ravenAutoSwap.getValue(); }
-    @Override public boolean ravenSlowOnEnable() { return ravenSlowOnEnable.getValue(); }
-    @Override public boolean ravenSlowSpeedPotion() { return ravenSlowSpeedPotion.getValue(); }
-    @Override public boolean ravenSafeWalk() { return ravenSafeWalk.getValue(); }
-    @Override public boolean ravenSilentSwing() { return ravenSilentSwing.getValue(); }
-    @Override public boolean ravenTower() { return ravenTower.getValue(); }
-    @Override public int ravenSneakEvery() { return ravenSneakEvery.getValue(); }
-    @Override public double ravenSpeedBoost() { return ravenSpeedBoost.getValue(); }
-    @Override public double ravenMotion() { return ravenMotion.getValue(); }
-    @Override public double ravenFastScaffoldMotion() { return ravenFastScaffoldMotion.getValue(); }
-    @Override public RavenB4Scaffold.RavenRotation ravenRotationMode() { return ravenRotationMode.getValue(); }
-    @Override public RavenB4Scaffold.RavenFastScaffold ravenFastScaffold() { return ravenFastScaffold.getValue(); }
-    @Override public RavenB4Scaffold.RavenFastScaffold ravenFastScaffoldRmb() { return ravenFastScaffoldRmb.getValue(); }
-    @Override public RavenB4Scaffold.RavenMultiPlace ravenMultiPlace() { return ravenMultiPlace.getValue(); }
-    @Override public RavenB4Scaffold.RavenPrecision ravenPrecision() { return ravenPrecision.getValue(); }
-
     private final RavenB4Scaffold ravenScaffold = new RavenB4Scaffold(this);
 
     /** 上一次生效的 Raven 状态，用于驱动引擎的 {@code onEnable/onDisable}（照 {@link #syncElowenModeLifecycle}）。 */
@@ -667,7 +648,6 @@ public class Scaffold extends Module implements RavenB4Scaffold.Host {
      * 必须在引擎 {@code onPreTick()} 之前执行。
      */
     private void syncRavenB4ModeLifecycle() {
-        ravenScaffold.bindHost();
         final boolean raven = isRavenB4Mode();
         if (raven == lastRavenActive) return;
 
@@ -728,7 +708,6 @@ public class Scaffold extends Module implements RavenB4Scaffold.Host {
 
     @Override
     protected void onEnable() {
-        if (GreatWall.INSTANCE.isEnabled()) GreatWall.INSTANCE.setEnabled(false);
         airTicks = 0;
         blockPos = null;
         direction = null;
@@ -1215,7 +1194,6 @@ public class Scaffold extends Module implements RavenB4Scaffold.Host {
         }
     }
 
-    @Override
     public int getBlockCount() {
         if (nullCheck()) return 91;
 
@@ -1399,13 +1377,11 @@ public class Scaffold extends Module implements RavenB4Scaffold.Host {
     }
 
     /** 放置节流闸门：冷却中返回 true（Elowen / Raven B4 引擎在放置前查询，不改变计数）。 */
-    @Override
     public boolean isPlaceOnCooldown() {
         return placeDelayCounter > 0;
     }
 
     /** 每刻自减一次放置冷却（Elowen / Raven B4 引擎在 onPreTick 开头调用，保证每刻只减一次）。 */
-    @Override
     public void tickPlaceCooldown() {
         if (placeDelayCounter > 0) placeDelayCounter--;
     }
@@ -1417,7 +1393,6 @@ public class Scaffold extends Module implements RavenB4Scaffold.Host {
      * <p>下限是为反作弊留的最小间隔：默认值下若用户把 Place Delay 调到 0/1，
      * 逐刻连发会被 Vulcan（Type C/K/M）与 Matrix（bridge quickly）直接判定。</p>
      */
-    @Override
     public void markPlaceCooldown(int minTicks) {
         placeDelayCounter = Math.max(minTicks, nextPlaceDelayTicks());
     }
@@ -1644,7 +1619,6 @@ public class Scaffold extends Module implements RavenB4Scaffold.Host {
     }
 
     /** Elowen 引擎也要用它（原 elowen {@code Scaffold.s(ItemStack)}）。 */
-    @Override
     public boolean isValidStack(ItemStack stack) {
         if (stack == null || stack.isEmpty() || !(stack.getItem() instanceof BlockItem)) {
             return false;

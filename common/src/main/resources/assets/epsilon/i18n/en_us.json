@@ -1961,18 +1961,17 @@
       },
       "great wall": {
         "_value": "Great Wall",
-        "motion": "Motion",
-        "fast scaffold motion": "Fast Scaffold Motion",
-        "precision": {
-          "_value": "Precision",
-          "low": "Low",
-          "medium": "Medium",
-          "high": "High",
-          "veryhigh": "Very High"
+        "mode": {
+          "_value": "Mode",
+          "greatwall": "GreatWall",
+          "sy": "Sy",
+          "clutch": "Clutch"
         },
-        "sneak every": "Sneak Every",
-        "auto swap": "Auto Swap",
-        "highlight blocks": "Highlight Blocks"
+        "extra clicks": "Extra Clicks",
+        "auto switch": "Auto Switch",
+        "show count": "Show Count",
+        "hide on look": "Hide On Look",
+        "debug": "Debug"
       },
       "scaffold": {
         "_value": "Scaffold",
