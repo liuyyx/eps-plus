@@ -49,7 +49,7 @@ import static com.github.epsilon.Constants.mc;
  *
  * <p>这是独立脚本模块，不是 {@link Scaffold} 或 RavenB4Scaffold 的模式。原脚本的
  * {@code onPreUpdate/onPostPlayerInput/onPreMotion/onMouse/onRenderTick/onRenderWorld}
- * 分别映射到 Epsilon 对应事件；除本机实测要求的激活面/容差与首次点击延迟修复外，
+ * 分别映射到 Epsilon 对应事件；除本机实测要求的激活与持续放置修复外，
  * 判定顺序、阈值、状态机与时间常量保持不变。
  *
  * <p>脚本会直接驱动玩家真实视角，并通过原版 {@code Minecraft.startUseItem()} 放置；
@@ -127,11 +127,11 @@ public final class GreatWall extends Module {
     private int[] aimPos = null;
     private int aimFace = -1;
 
-    /** 激活只检查射线命中，不检查源脚本的小框；显示范围必须覆盖同样可触发的整面。 */
-    private static final double ACT_ACROSS_MIN = 0.0;
-    private static final double ACT_ACROSS_MAX = 1.0;
-    private static final double ACT_HEIGHT_MIN = 0.0;
-    private static final double ACT_HEIGHT_MAX = 1.0;
+    /** 判定与绘制共用的面内激活区域；不能放大成整面来掩盖坐标错位。 */
+    private static final double ACT_ACROSS_MIN = 0.35;
+    private static final double ACT_ACROSS_MAX = 0.65;
+    private static final double ACT_HEIGHT_MIN = 0.35;
+    private static final double ACT_HEIGHT_MAX = 0.65;
     private static final float ACTIVATION_PITCH_TOLERANCE = 6.0f;
 
     private boolean debug = false;
@@ -333,9 +333,9 @@ public final class GreatWall extends Module {
             if (syStartupClicks) {
                 if (clientTime() >= useStartAt) {
                     if (!placing) {
-                        placeBlock();
                         placing = true;
                         placeTick = 0;
+                        placeBlock();
                     } else {
                         placeTick++;
                         if (placeTick >= 4) {
@@ -386,9 +386,9 @@ public final class GreatWall extends Module {
             }
         } else if (clientTime() >= useStartAt) {
             if (!placing) {
-                placeBlock();
                 placing = true;
                 placeTick = 0;
+                placeBlock();
             } else {
                 placeTick++;
                 if (placeTick >= 4) {
@@ -473,7 +473,7 @@ public final class GreatWall extends Module {
             return;
         }
         updateActivatePromptFade();
-        if (promptAlpha < 0.05f || aimPos == null || aimFace < 0) return;
+        if (aimPos == null || aimFace < 0) return;
         drawActivationFace(aimPos, aimFace);
     }
 
@@ -678,7 +678,12 @@ public final class GreatWall extends Module {
     // ===== 脚本 585-688：放置、验证与桥线 =====
 
     private void placeBlock() {
-        Vec3 target = raycastTarget();
+        Vec3 target = raycastTarget(bridgeMode == BridgeMode.GreatWall);
+        if (target == null && bridgeMode == BridgeMode.GreatWall) {
+            // 顶/底面会把桥面抬高一格，后续侧面放置又与玩家碰撞；不点击，下一刻重试。
+            placeTick = 3;
+            return;
+        }
         if (target != null) {
             syPendingFill = target;
             syPendingFillAt = clientTime();
@@ -789,13 +794,26 @@ public final class GreatWall extends Module {
     }
 
     private Vec3 raycastTarget() {
+        return raycastTarget(false);
+    }
+
+    private Vec3 raycastTarget(boolean sideOnly) {
         Object[] info = raycastInfo();
         if (info == null) {
             logPlaceMiss();
             return null;
         }
+        String face = (String) info[2];
+        if (sideOnly && !isSideFace(face)) {
+            debugLog("S " + (face == null ? "?" : face.substring(0, 1)));
+            return null;
+        }
         logPlaceHit(info);
         return (Vec3) info[0];
+    }
+
+    private boolean isSideFace(String face) {
+        return faceFromName(face) >= 2;
     }
 
     private void logPlaceHit(Object[] info) {
@@ -1018,7 +1036,9 @@ public final class GreatWall extends Module {
         float curPitch = player.getXRot();
         if (hideOnLook && lastActLookInit) {
             if (Math.abs(curYaw - lastActYaw) > 0.01f || Math.abs(curPitch - lastActPitch) > 0.01f) {
-                clearActivation();
+                // Hide On Look 只重置激活计时；候选面和范围继续显示，才能用来对准。
+                activateAt = 0;
+                promptRgb = 0xFF5555;
                 lastActLookInit = false;
                 return;
             }
@@ -1031,23 +1051,47 @@ public final class GreatWall extends Module {
             if (activateAt == 0) activateAt = clientTime();
             promptRgb = promptReady() ? 0x55FF55 : 0xFF5555;
         } else {
-            clearActivation();
+            // 有命中面但不在区域内时保留 aimPos/aimFace，继续绘制红色引导框。
+            activateAt = 0;
+            promptRgb = 0xFF5555;
         }
     }
 
     private boolean isAimingForBridge(LocalPlayer player) {
         float pitch = player.getXRot();
         float base = basePitch();
-        if (pitch < base - ACTIVATION_PITCH_TOLERANCE || pitch > base + ACTIVATION_PITCH_TOLERANCE) return false;
+        if (pitch < base - ACTIVATION_PITCH_TOLERANCE || pitch > base + ACTIVATION_PITCH_TOLERANCE) {
+            aimPos = null;
+            aimFace = -1;
+            return false;
+        }
         return updateAimFromHit(hostRaycast(4.5));
     }
 
     private boolean updateAimFromHit(Object[] hit) {
-        if (hit == null || hit.length < 3) return false;
-        if (hit[0] == null || hit[2] == null) return false;
+        if (hit == null || hit.length < 3 || hit[0] == null || hit[1] == null || hit[2] == null) {
+            aimPos = null;
+            aimFace = -1;
+            return false;
+        }
         aimPos = posFromVec((Vec3) hit[0]);
         aimFace = faceFromName((String) hit[2]);
-        return aimPos != null && aimFace >= 0;
+        return aimPos != null && aimFace >= 0 && isInActivationRegion((Vec3) hit[1], aimFace);
+    }
+
+    /** 返回当前命中点是否位于 drawActivationFace 所画的同一区域。 */
+    private boolean isInActivationRegion(Vec3 local, int face) {
+        if (face == 0 || face == 1) {
+            return inRange(local.x, ACT_ACROSS_MIN, ACT_ACROSS_MAX)
+                    && inRange(local.z, ACT_ACROSS_MIN, ACT_ACROSS_MAX);
+        }
+        double across = face == 4 || face == 5 ? local.z : local.x;
+        return inRange(across, ACT_ACROSS_MIN, ACT_ACROSS_MAX)
+                && inRange(local.y, ACT_HEIGHT_MIN, ACT_HEIGHT_MAX);
+    }
+
+    private boolean inRange(double value, double min, double max) {
+        return value >= min && value <= max;
     }
 
     private void clearActivation() {
@@ -1128,8 +1172,9 @@ public final class GreatWall extends Module {
         int r = (promptRgb >> 16) & 0xFF;
         int g = (promptRgb >> 8) & 0xFF;
         int b = promptRgb & 0xFF;
-        int fillAlpha = Math.max(4, (int) (60.0f * promptAlpha));
-        int lineAlpha = Math.max(16, (int) (220.0f * promptAlpha));
+        float visibility = Math.max(promptAlpha, 0.35f);
+        int fillAlpha = Math.max(4, (int) (60.0f * visibility));
+        int lineAlpha = Math.max(16, (int) (220.0f * visibility));
         AABB box = new AABB(Math.min(x1, x2), Math.min(yMin, yMax), Math.min(z1, z2),
                 Math.max(x1, x2), Math.max(yMin, yMax), Math.max(z1, z2));
         Direction direction = Direction.from3DDataValue(face);
