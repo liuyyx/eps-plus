@@ -49,7 +49,8 @@ import static com.github.epsilon.Constants.mc;
  *
  * <p>这是独立脚本模块，不是 {@link Scaffold} 或 RavenB4Scaffold 的模式。原脚本的
  * {@code onPreUpdate/onPostPlayerInput/onPreMotion/onMouse/onRenderTick/onRenderWorld}
- * 分别映射到 Epsilon 对应事件；判定顺序、阈值、状态机与时间常量保持不变。
+ * 分别映射到 Epsilon 对应事件；除本机实测要求的激活面/容差与首次点击延迟修复外，
+ * 判定顺序、阈值、状态机与时间常量保持不变。
  *
  * <p>脚本会直接驱动玩家真实视角，并通过原版 {@code Minecraft.startUseItem()} 放置；
  * 不要改成 RotationManager 静默角或直接发放置包。唯一量化适配是使用本机实时
@@ -105,6 +106,8 @@ public final class GreatWall extends Module {
     private static final long RELEASE_S_MS = 70;
     private long releaseSUntil = 0;
     private long useStartAt = 0;
+    /** 本机日志：原 320ms 时三次运行均在首次点击前结束；起跳后 120ms 即可开始放置。 */
+    private static final long FIRST_USE_DELAY_MS = 120L;
     private boolean placing = false;
     private long noPromptUntil = 0;
 
@@ -124,10 +127,12 @@ public final class GreatWall extends Module {
     private int[] aimPos = null;
     private int aimFace = -1;
 
-    private static final double ACT_ACROSS_MIN = 0.35;
-    private static final double ACT_ACROSS_MAX = 0.65;
-    private static final double ACT_HEIGHT_MIN = 0.35;
-    private static final double ACT_HEIGHT_MAX = 0.65;
+    /** 激活只检查射线命中，不检查源脚本的小框；显示范围必须覆盖同样可触发的整面。 */
+    private static final double ACT_ACROSS_MIN = 0.0;
+    private static final double ACT_ACROSS_MAX = 1.0;
+    private static final double ACT_HEIGHT_MIN = 0.0;
+    private static final double ACT_HEIGHT_MAX = 1.0;
+    private static final float ACTIVATION_PITCH_TOLERANCE = 6.0f;
 
     private boolean debug = false;
     private boolean hideOnLook = true;
@@ -242,6 +247,7 @@ public final class GreatWall extends Module {
         }
 
         if (!physicalRightMouseDown()) {
+            debugForce("RIGHT-RELEASE", "&c");
             stopBridge();
             return;
         }
@@ -562,7 +568,7 @@ public final class GreatWall extends Module {
         phase = next;
         phaseStart = clientTime();
         if (next == PHASE_BRIDGE) {
-            useStartAt = clientTime() + 320;
+            useStartAt = clientTime() + FIRST_USE_DELAY_MS;
             clutchSecondAt = 0;
             clutchNextAt = useStartAt;
             clutchLastPlaceAt = 0;
@@ -1032,13 +1038,16 @@ public final class GreatWall extends Module {
     private boolean isAimingForBridge(LocalPlayer player) {
         float pitch = player.getXRot();
         float base = basePitch();
-        if (pitch < base - 2.0f || pitch > base + 2.0f) return false;
-        Object[] hit = hostRaycast(4.5);
+        if (pitch < base - ACTIVATION_PITCH_TOLERANCE || pitch > base + ACTIVATION_PITCH_TOLERANCE) return false;
+        return updateAimFromHit(hostRaycast(4.5));
+    }
+
+    private boolean updateAimFromHit(Object[] hit) {
         if (hit == null || hit.length < 3) return false;
-        if (hit[0] == null) return false;
+        if (hit[0] == null || hit[2] == null) return false;
         aimPos = posFromVec((Vec3) hit[0]);
-        aimFace = 1;
-        return aimPos != null;
+        aimFace = faceFromName((String) hit[2]);
+        return aimPos != null && aimFace >= 0;
     }
 
     private void clearActivation() {
