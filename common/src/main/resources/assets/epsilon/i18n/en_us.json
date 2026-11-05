@@ -1971,6 +1971,7 @@
         "auto switch": "Auto Switch",
         "show count": "Show Count",
         "hide on look": "Hide On Look",
+        "activation time": "Green Wait Time (s)",
         "debug": "Debug"
       },
       "scaffold": {

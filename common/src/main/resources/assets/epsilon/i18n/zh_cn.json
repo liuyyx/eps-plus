@@ -1971,6 +1971,7 @@
         "auto switch": "自动切换",
         "show count": "显示数量",
         "hide on look": "注视时隐藏",
+        "activation time": "变绿等待时间（秒）",
         "debug": "调试"
       },
       "scaffold": {

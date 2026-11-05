@@ -15,6 +15,7 @@ import com.github.epsilon.interfaces.MinecraftAccessor;
 import com.github.epsilon.modules.Category;
 import com.github.epsilon.modules.Module;
 import com.github.epsilon.settings.impl.BoolSetting;
+import com.github.epsilon.settings.impl.DoubleSetting;
 import com.github.epsilon.settings.impl.EnumSetting;
 import com.github.epsilon.utils.player.ChatUtils;
 import com.github.epsilon.utils.rotation.RotationUtils;
@@ -80,6 +81,7 @@ public final class GreatWall extends Module {
     private final BoolSetting autoSwitchSetting = boolSetting("Auto Switch", true);
     private final BoolSetting showCountSetting = boolSetting("Show Count", true);
     private final BoolSetting hideOnLookSetting = boolSetting("Hide On Look", true);
+    private final DoubleSetting activationTimeSetting = doubleSetting("Activation Time", 0.5, 0.0, 1.0, 0.1);
     private final BoolSetting debugSetting = boolSetting("Debug", false);
 
     private final Supplier<TextRenderer> textRenderer = Suppliers.memoize(() -> TextRenderer.create(64 * 1024));
@@ -106,8 +108,6 @@ public final class GreatWall extends Module {
     private static final long RELEASE_S_MS = 70;
     private long releaseSUntil = 0;
     private long useStartAt = 0;
-    /** 本机日志：原 320ms 时三次运行均在首次点击前结束；起跳后 120ms 即可开始放置。 */
-    private static final long FIRST_USE_DELAY_MS = 120L;
     private boolean placing = false;
     private long noPromptUntil = 0;
 
@@ -218,6 +218,12 @@ public final class GreatWall extends Module {
 
     /** 本 tick 正在派发的输入事件，对应脚本 client.setForward/setStrafe/... 的写入目标。 */
     private KeyboardInputEvent activeInputEvent = null;
+
+    /** 自救搭（Clutch）的点击硬节流：26.2 startUseItem 不检查 rightClickDelay。 */
+    private long lastRightClickAt = 0;
+
+    /** 本刻脚本射线命中的面，用于长城限定桥面/垛口两层。 */
+    private String placementFace = null;
 
     // ===== 生命周期与事件接线 =====
 
@@ -568,7 +574,7 @@ public final class GreatWall extends Module {
         phase = next;
         phaseStart = clientTime();
         if (next == PHASE_BRIDGE) {
-            useStartAt = clientTime() + FIRST_USE_DELAY_MS;
+            useStartAt = clientTime() + 320;
             clutchSecondAt = 0;
             clutchNextAt = useStartAt;
             clutchLastPlaceAt = 0;
@@ -678,10 +684,8 @@ public final class GreatWall extends Module {
     // ===== 脚本 585-688：放置、验证与桥线 =====
 
     private void placeBlock() {
-        Vec3 target = raycastTarget(bridgeMode == BridgeMode.GreatWall);
-        if (target == null && bridgeMode == BridgeMode.GreatWall) {
-            // 顶/底面会把桥面抬高一格，后续侧面放置又与玩家碰撞；不点击，下一刻重试。
-            placeTick = 3;
+        Vec3 target = raycastTarget();
+        if (target != null && bridgeMode == BridgeMode.GreatWall && !isGreatWallLayer(target, placementFace)) {
             return;
         }
         if (target != null) {
@@ -788,32 +792,28 @@ public final class GreatWall extends Module {
         if (hit == null || hit.length < 3 || hit[0] == null || hit[2] == null) return null;
         Vec3 support = (Vec3) hit[0];
         String face = (String) hit[2];
+        placementFace = face;
         Vec3 target = targetFromFace(support, face);
         if (target == null) return null;
         return new Object[]{target, support, face};
     }
 
     private Vec3 raycastTarget() {
-        return raycastTarget(false);
-    }
-
-    private Vec3 raycastTarget(boolean sideOnly) {
         Object[] info = raycastInfo();
         if (info == null) {
             logPlaceMiss();
-            return null;
-        }
-        String face = (String) info[2];
-        if (sideOnly && !isSideFace(face)) {
-            debugLog("S " + (face == null ? "?" : face.substring(0, 1)));
             return null;
         }
         logPlaceHit(info);
         return (Vec3) info[0];
     }
 
-    private boolean isSideFace(String face) {
-        return faceFromName(face) >= 2;
+    /** 长城只允许两层：侧面把桥面锁在 startY-1，顶面把垛口锁在 startY。 */
+    private boolean isGreatWallLayer(Vec3 target, String face) {
+        int f = faceFromName(face);
+        if (f <= 0) return false;
+        if (f == 1) return target.y == startY;
+        return target.y == startY - 1.0;
     }
 
     private void logPlaceHit(Object[] info) {
@@ -998,11 +998,15 @@ public final class GreatWall extends Module {
     // ===== 脚本 951-1058：激活与 HUD =====
 
     private boolean promptShown() {
-        return activateAt != 0 && clientTime() - activateAt >= 500;
+        return activateAt != 0 && clientTime() - activateAt >= Math.min(500L, activationWaitMs());
     }
 
     private boolean promptReady() {
-        return activateAt != 0 && clientTime() - activateAt >= 2000;
+        return activateAt != 0 && clientTime() - activateAt >= activationWaitMs();
+    }
+
+    private long activationWaitMs() {
+        return Math.round(activationTimeSetting.getValue() * 1000.0);
     }
 
     private void updateActivation() {
@@ -1279,6 +1283,11 @@ public final class GreatWall extends Module {
     }
 
     private void rightClick() {
+        if (bridgeMode == BridgeMode.Clutch) {
+            long now = clientTime();
+            if (now - lastRightClickAt < 50) return;
+            lastRightClickAt = now;
+        }
         ((MinecraftAccessor) mc).epsilon$startUseItem();
     }
 

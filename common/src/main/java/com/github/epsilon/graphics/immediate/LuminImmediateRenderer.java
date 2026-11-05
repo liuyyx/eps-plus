@@ -295,9 +295,17 @@ public class LuminImmediateRenderer {
             if (!this.building || this.vertexBaseAddr == 0L) {
                 return;
             }
+            long completedVertexBaseAddr = this.vertexBaseAddr;
             this.currentOffset += this.stride;
             this.vertexCount++;
-            // 调用方已按 [start, end] 成对提交；shader 用 gl_VertexID % 2 决定法线偏移方向。
+
+            // 恢复 beta4 的 LINES 顶点复制与描边混合效果（9e79370）。
+            if (this.mode == PrimitiveTopology.LINES) {
+                long duplicateVertexBaseAddr = MemoryUtil.memAddress(this.ringBuffer.getMappedBuffer()) + this.currentOffset;
+                MemoryUtil.memCopy(completedVertexBaseAddr, duplicateVertexBaseAddr, this.stride);
+                this.currentOffset += this.stride;
+                this.vertexCount++;
+            }
             this.vertexBaseAddr = 0L;
         }
 
@@ -308,7 +316,7 @@ public class LuminImmediateRenderer {
             if (this.vertexBaseAddr != 0L) {
                 return true;
             }
-            long requiredBytes = this.stride;
+            long requiredBytes = this.mode == PrimitiveTopology.LINES ? this.stride * 2L : this.stride;
             this.ringBuffer.ensureCapacity(this.currentOffset + requiredBytes);
             if (!this.ringBuffer.isMapped()) {
                 this.ringBuffer.tryMap();
